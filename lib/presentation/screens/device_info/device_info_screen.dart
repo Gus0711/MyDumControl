@@ -1,0 +1,319 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mydumcontrol/l10n/app_localizations.dart';
+import '../../../application/providers/active_connection_provider.dart';
+import '../../../core/theme/app_colors.dart';
+
+/// Écran d'informations détaillées sur l'appareil connecté
+class DeviceInfoScreen extends ConsumerWidget {
+  const DeviceInfoScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final connectionState = ref.watch(activeConnectionProvider);
+    final device = connectionState.deviceInfo;
+    final connection = connectionState.connection;
+    final summary = connectionState.objectsSummary;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.deviceInfo),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: connectionState.isLoading
+                ? null
+                : () => ref.read(activeConnectionProvider.notifier).refresh(),
+          ),
+        ],
+      ),
+      body: connectionState.isLoading && device == null
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Carte principale de l'appareil
+                _buildDeviceCard(context, device, connection),
+                const SizedBox(height: 16),
+
+                // Informations de connexion
+                _buildConnectionCard(context, l10n, connection),
+                const SizedBox(height: 16),
+
+                // Résumé des objets BACnet
+                _buildObjectsSummaryCard(context, l10n, summary, connectionState.isLoadingSummary),
+                const SizedBox(height: 16),
+
+                // Informations techniques
+                if (device != null) _buildTechnicalCard(context, device),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildDeviceCard(BuildContext context, dynamic device, dynamic connection) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.settings_remote,
+                size: 40,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              device?.objectName ?? connection?.name ?? 'ECLYPSE Controller',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            if (device?.modelName != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                device!.modelName!,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Colors.grey.shade600,
+                    ),
+              ),
+            ],
+            if (connection?.apiVersion != null) ...[
+              const SizedBox(height: 12),
+              Chip(
+                label: Text('API ${connection!.apiVersion}'),
+                backgroundColor: Colors.blue.shade100,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectionCard(BuildContext context, AppLocalizations l10n, dynamic connection) {
+    if (connection == null) return const SizedBox.shrink();
+
+    final protocol = connection.useHttps ? 'HTTPS' : 'HTTP';
+    final url = '${connection.host}:${connection.port}';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.link, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Connexion',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildInfoRow(context, 'Protocole', protocol),
+            _buildInfoRow(context, 'Hôte', url),
+            _buildInfoRow(context, 'Utilisateur', connection.username),
+            if (connection.lastConnectedAt != null)
+              _buildInfoRow(
+                context,
+                'Dernière connexion',
+                _formatDateTime(connection.lastConnectedAt),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildObjectsSummaryCard(
+    BuildContext context,
+    AppLocalizations l10n,
+    dynamic summary,
+    bool isLoading,
+  ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.dashboard, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Objets BACnet',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+                if (isLoading)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (summary != null) ...[
+              Row(
+                children: [
+                  Expanded(child: _buildSummaryTile('Entrées', summary.totalInputs, Icons.input, Colors.blue)),
+                  Expanded(child: _buildSummaryTile('Sorties', summary.totalOutputs, Icons.output, Colors.orange)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _buildSummaryTile('Valeurs', summary.totalValues, Icons.tag, Colors.green)),
+                  Expanded(child: _buildSummaryTile('Horaires', summary.schedules, Icons.schedule, Colors.purple)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Total: ${summary.total} objets',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                  ),
+                ],
+              ),
+            ] else if (!isLoading)
+              const Center(
+                child: Text('Aucune donnée disponible'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryTile(String label, int count, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTechnicalCard(BuildContext context, dynamic device) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.info_outline, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Informations techniques',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (device.modelName != null) _buildInfoRow(context, 'Modèle', device.modelName!),
+            if (device.modelType != null) _buildInfoRow(context, 'Type', device.modelType!),
+            if (device.softwareVersion != null) _buildInfoRow(context, 'Version', device.softwareVersion!),
+            if (device.hostName != null) _buildInfoRow(context, 'Nom d\'hôte', device.hostName!),
+            if (device.hostId != null) _buildInfoRow(context, 'Host ID', device.hostId!),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(BuildContext context, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day.toString().padLeft(2, '0')}/'
+        '${dateTime.month.toString().padLeft(2, '0')}/'
+        '${dateTime.year} '
+        '${dateTime.hour.toString().padLeft(2, '0')}:'
+        '${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+}

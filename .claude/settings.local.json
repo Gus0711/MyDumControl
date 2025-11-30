@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(find:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(cmd /c \"cd /d C:\\Users\\augus\\Documents\\GitHub\\MyDumControl && flutter pub get\")",
+      "Bash(flutter run:*)",
+      "Bash(flutter gen-l10n:*)",
+      "Bash(flutter clean:*)",
+      "Bash(flutter devices:*)",
+      "Bash(dart run build_runner:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(timeout:*)",
+      "Bash(findstr:*)",
+      "WebFetch(domain:wiki.distech-controls.com)",
+      "Bash(if not exist \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\lib\\presentation\\screens\\overrides\" mkdir \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\lib\\presentation\\screens\\overrides\")",
+      "Bash(cmd /c \"if not exist C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\lib\\presentation\\screens\\overrides mkdir C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\lib\\presentation\\screens\\overrides\")",
+      "Bash(more:*)",
+      "Bash(cmd /c \"cd /d C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\docs_API_Distech && findstr /C:\"\"active-text\"\" API-V2.postman_collection.json\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

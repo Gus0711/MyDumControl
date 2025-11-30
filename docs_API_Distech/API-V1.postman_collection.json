@@ -1,0 +1,2228 @@
+{
+	"info": {
+		"_postman_id": "8b4de16c-d0fc-40ef-a045-c4afd44d6f49",
+		"name": "ECY  BACnet v10.1",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Protocols",
+			"item": [
+				{
+					"name": "BACnet",
+					"item": [
+						{
+							"name": "Communication",
+							"item": [
+								{
+									"name": "Network",
+									"item": [
+										{
+											"name": "MSTP",
+											"item": [
+												{
+													"name": "ID",
+													"item": [
+														{
+															"name": "mstp-ports-id",
+															"request": {
+																"method": "GET",
+																"header": [],
+																"url": {
+																	"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/mstp-ports/1",
+																	"protocol": "{{scheme}}",
+																	"host": [
+																		"{{ip_address}}"
+																	],
+																	"port": "{{port}}",
+																	"path": [
+																		"api",
+																		"rest",
+																		"v1",
+																		"protocols",
+																		"bacnet",
+																		"communication",
+																		"network",
+																		"mstp-ports",
+																		"1"
+																	]
+																},
+																"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1037/GET\n\nGET /protocols/bacnet/communication/network/mstp-ports/{id}\n\nThis resource allows you to view and to set the MS/TP network configuration parameters."
+															},
+															"response": []
+														},
+														{
+															"name": "mstp-ports-id",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "Content-Type",
+																		"name": "Content-Type",
+																		"value": "application/json",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n  \"enabled\": true,\n  \"networkNumber\": 16,\n  \"baudRate\": 38400,\n  \"macAddress\": 0,\n  \"maxMaster\": 127,\n  \"maxInfoFrame\": 21\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/mstp-ports/1",
+																	"protocol": "{{scheme}}",
+																	"host": [
+																		"{{ip_address}}"
+																	],
+																	"port": "{{port}}",
+																	"path": [
+																		"api",
+																		"rest",
+																		"v1",
+																		"protocols",
+																		"bacnet",
+																		"communication",
+																		"network",
+																		"mstp-ports",
+																		"1"
+																	]
+																},
+																"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1037/POST\n\nPOST /protocols/bacnet/communication/network/mstp-ports/{id}\n\nThis resource allows you to view and to set the MS/TP network configuration parameters.\n\n{\n  \"enabled\": false,\n  \"networkNumber\": 6,\n  \"baudRate\": 38400,\n  \"macAddress\": 0,\n  \"maxMaster\": 127,\n  \"maxInfoFrame\": 3\n}"
+															},
+															"response": []
+														}
+													],
+													"protocolProfileBehavior": {},
+													"_postman_isSubFolder": true
+												},
+												{
+													"name": "mstp-ports",
+													"request": {
+														"method": "GET",
+														"header": [],
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/mstp-ports",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"communication",
+																"network",
+																"mstp-ports"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1036/GET\n\nGET /protocols/bacnet/communication/network/mstp-ports\n\nThis resource lists all BACnet MS/TP ports.\n"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "IP",
+											"item": [
+												{
+													"name": "ID",
+													"item": [
+														{
+															"name": "BBMD",
+															"item": [
+																{
+																	"name": "ID",
+																	"item": [
+																		{
+																			"name": "bbmd-Id",
+																			"request": {
+																				"method": "GET",
+																				"header": [],
+																				"url": {
+																					"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports/1/bbmd-list/1",
+																					"protocol": "{{scheme}}",
+																					"host": [
+																						"{{ip_address}}"
+																					],
+																					"port": "{{port}}",
+																					"path": [
+																						"api",
+																						"rest",
+																						"v1",
+																						"protocols",
+																						"bacnet",
+																						"communication",
+																						"network",
+																						"ip-ports",
+																						"1",
+																						"bbmd-list",
+																						"1"
+																					]
+																				},
+																				"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1041/GET\n\nGET /protocols/bacnet/communication/network/ip-ports/{id}/bbmd-list/{bbmdId}"
+																			},
+																			"response": []
+																		},
+																		{
+																			"name": "bbmd-Id",
+																			"request": {
+																				"method": "DELETE",
+																				"header": [],
+																				"url": {
+																					"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports/1/bbmd-list/1",
+																					"protocol": "{{scheme}}",
+																					"host": [
+																						"{{ip_address}}"
+																					],
+																					"port": "{{port}}",
+																					"path": [
+																						"api",
+																						"rest",
+																						"v1",
+																						"protocols",
+																						"bacnet",
+																						"communication",
+																						"network",
+																						"ip-ports",
+																						"1",
+																						"bbmd-list",
+																						"1"
+																					]
+																				},
+																				"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1041/DELETE\n\nDELETE /protocols/bacnet/communication/network/ip-ports/{id}/bbmd-list/{bbmdId}\n\nThis is the details of a specific BBMD.\n\nNo body is needed.\n"
+																			},
+																			"response": []
+																		},
+																		{
+																			"name": "bbmd-Id",
+																			"request": {
+																				"method": "PUT",
+																				"header": [
+																					{
+																						"key": "Content-Type",
+																						"name": "Content-Type",
+																						"value": "application/json",
+																						"type": "text"
+																					}
+																				],
+																				"body": {
+																					"mode": "raw",
+																					"raw": "{\n  \"ip\": \"10.222.101.50\",\n  \"port\": 47808,\n  \"mask\": \"255.255.252.254\"\n}",
+																					"options": {
+																						"raw": {
+																							"language": "json"
+																						}
+																					}
+																				},
+																				"url": {
+																					"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports/1/bbmd-list/1",
+																					"protocol": "{{scheme}}",
+																					"host": [
+																						"{{ip_address}}"
+																					],
+																					"port": "{{port}}",
+																					"path": [
+																						"api",
+																						"rest",
+																						"v1",
+																						"protocols",
+																						"bacnet",
+																						"communication",
+																						"network",
+																						"ip-ports",
+																						"1",
+																						"bbmd-list",
+																						"1"
+																					]
+																				},
+																				"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1041/PUT\n\nPUT /protocols/bacnet/communication/network/ip-ports/{id}/bbmd-list/{bbmdId}\n\nThis is the details of a specific BBMD.\n\nThis method is used to edit a BBMD.\nAll fields are required.\n\n{\n  \"ip\": \"192.168.1.1\",\n  \"port\": 47807,\n  \"mask\": \"255.255.252.0\"\n}\n"
+																			},
+																			"response": []
+																		}
+																	],
+																	"protocolProfileBehavior": {},
+																	"_postman_isSubFolder": true
+																},
+																{
+																	"name": "bbmd-list",
+																	"request": {
+																		"method": "GET",
+																		"header": [],
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports/1/bbmd-list",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"communication",
+																				"network",
+																				"ip-ports",
+																				"1",
+																				"bbmd-list"
+																			]
+																		},
+																		"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1040/GET\n\nGET /protocols/bacnet/communication/network/ip-ports/{id}/bbmd-list\n\nThis resource lists all the BBMD-enabled controllers located on other subnetworks.\n\nBACnet/IP devices send broadcast discovery messages such as “Who-Is” as a means to discover other BACnet devices on the network. However, when there are two or more BACnet/IP subnetworks, broadcast messages do not pass through network routers that separate these subnetworks.\nBBMD allows broadcast message to pass through a router: on each subnet, a single device has BBMD enabled. Each BBMD device ensures BACnet/IP connectivity between subnets by forwarding broadcast messages found on its subnetwork to each other, and then onto the local subnetwork as a broadcast message.\n"
+																	},
+																	"response": []
+																},
+																{
+																	"name": "bbmd-list",
+																	"request": {
+																		"method": "POST",
+																		"header": [
+																			{
+																				"key": "Content-Type",
+																				"name": "Content-Type",
+																				"value": "application/json",
+																				"type": "text"
+																			}
+																		],
+																		"body": {
+																			"mode": "raw",
+																			"raw": "{\n  \"ip\": \"10.222.101.50\",\n  \"port\": 47808,\n  \"mask\": \"255.255.252.255\"\n}",
+																			"options": {
+																				"raw": {
+																					"language": "json"
+																				}
+																			}
+																		},
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports/1/bbmd-list",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"communication",
+																				"network",
+																				"ip-ports",
+																				"1",
+																				"bbmd-list"
+																			]
+																		},
+																		"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1040/POST\n\nPOST /protocols/bacnet/communication/network/ip-ports/{id}/bbmd-list\n\nThis resource lists all the BBMD-enabled controllers located on other subnetworks.\n\nBACnet/IP devices send broadcast discovery messages such as “Who-Is” as a means to discover other BACnet devices on the network. However, when there are two or more BACnet/IP subnetworks, broadcast messages do not pass through network routers that separate these subnetworks.\nBBMD allows broadcast message to pass through a router: on each subnet, a single device has BBMD enabled. Each BBMD device ensures BACnet/IP connectivity between subnets by forwarding broadcast messages found on its subnetwork to each other, and then onto the local subnetwork as a broadcast message.\n\nAll properties are required.\n\nIf the request is successful, the server responds with an Http Code 201 Created.\n\n\n{\n  \"ip\": \"1.1.1.1\",\n  \"port\": 47807,\n  \"mask\": \"255.255.252.0\"\n}"
+																	},
+																	"response": []
+																}
+															],
+															"protocolProfileBehavior": {},
+															"_postman_isSubFolder": true
+														},
+														{
+															"name": "Foreign-Devices",
+															"item": [
+																{
+																	"name": "IP Port {ID} FDevice List",
+																	"request": {
+																		"method": "GET",
+																		"header": [],
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports/1/foreign-devices",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"communication",
+																				"network",
+																				"ip-ports",
+																				"1",
+																				"foreign-devices"
+																			]
+																		},
+																		"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1042/GET\n\nGET /protocols/bacnet/communication/network/ip-ports/{id}/foreign-devices\n\nSome BACnet/IP devices also support a feature called Foreign Device Registration (FDR). FDR allows a BACnet/IP device to send broadcast messages to a device with BBMD enabled. The BBMD-enabled device will then forward these broadcast messages to all other BBMDs and onto all other FDR devices. If a subnet has only FDR supported devices then it does not need a local BBMD. These devices can register directly with a BBMD on another subnetwork."
+																	},
+																	"response": []
+																},
+																{
+																	"name": "IP Port {ID} FDevice {ID} Config",
+																	"request": {
+																		"method": "GET",
+																		"header": [],
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports/1/foreign-devices/1",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"communication",
+																				"network",
+																				"ip-ports",
+																				"1",
+																				"foreign-devices",
+																				"1"
+																			]
+																		},
+																		"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1043/GET\n\nGET /protocols/bacnet/communication/network/ip-ports/{id}/foreign-devices/{foreignDeviceId}\n\nThis resource shows the details of a specific foreign device."
+																	},
+																	"response": []
+																}
+															],
+															"protocolProfileBehavior": {},
+															"_postman_isSubFolder": true
+														},
+														{
+															"name": "ip-ports-id",
+															"request": {
+																"method": "GET",
+																"header": [],
+																"url": {
+																	"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports/1",
+																	"protocol": "{{scheme}}",
+																	"host": [
+																		"{{ip_address}}"
+																	],
+																	"port": "{{port}}",
+																	"path": [
+																		"api",
+																		"rest",
+																		"v1",
+																		"protocols",
+																		"bacnet",
+																		"communication",
+																		"network",
+																		"ip-ports",
+																		"1"
+																	]
+																},
+																"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1039/GET\n\nGET /protocols/bacnet/communication/network/ip-ports/{id}\n\nThis resource allows you to view and set the IP network configuration parameters including BACnet Broadcast Management Device (BBMD) and Foreign Device for intranetwork connectivity."
+															},
+															"response": []
+														},
+														{
+															"name": "ip-ports-id",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "Content-Type",
+																		"name": "Content-Type",
+																		"value": "application/json",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n  \"enabledBbmd\": true,\n  \"enabledForeignDevice\": false\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports/1",
+																	"protocol": "{{scheme}}",
+																	"host": [
+																		"{{ip_address}}"
+																	],
+																	"port": "{{port}}",
+																	"path": [
+																		"api",
+																		"rest",
+																		"v1",
+																		"protocols",
+																		"bacnet",
+																		"communication",
+																		"network",
+																		"ip-ports",
+																		"1"
+																	]
+																},
+																"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1039/POST\n\nPOST /protocols/bacnet/communication/network/ip-ports/{id}\n\nThis resource allows you to view and set the IP network configuration parameters including BACnet Broadcast Management Device (BBMD) and Foreign Device for intranetwork connectivity.\n\n{\n  \"enabled\": true,\n  \"networkNumber\": 0,\n  \"bacnetIpUdpPort\": 47809,\n  \"enabledBbmd\": true,\n  \"enabledForeignDevice\": false\n}"
+															},
+															"response": []
+														}
+													],
+													"protocolProfileBehavior": {},
+													"_postman_isSubFolder": true
+												},
+												{
+													"name": "ip-ports",
+													"request": {
+														"method": "GET",
+														"header": [],
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/ip-ports",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"communication",
+																"network",
+																"ip-ports"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1038/GET#"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "Router-Entries",
+											"item": [
+												{
+													"name": "Number",
+													"item": [
+														{
+															"name": "networkNumber",
+															"request": {
+																"method": "GET",
+																"header": [],
+																"url": {
+																	"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/router-entries/22202",
+																	"protocol": "{{scheme}}",
+																	"host": [
+																		"{{ip_address}}"
+																	],
+																	"port": "{{port}}",
+																	"path": [
+																		"api",
+																		"rest",
+																		"v1",
+																		"protocols",
+																		"bacnet",
+																		"communication",
+																		"network",
+																		"router-entries",
+																		"22202"
+																	]
+																},
+																"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1076/GET\n\nGET /protocols/bacnet/communication/network/router-entries/{networkNumber}\n\nThis resource prints all the details about a routing value."
+															},
+															"response": []
+														}
+													],
+													"protocolProfileBehavior": {},
+													"_postman_isSubFolder": true
+												},
+												{
+													"name": "router-entries",
+													"request": {
+														"method": "GET",
+														"header": [],
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network/router-entries",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"communication",
+																"network",
+																"router-entries"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1075/GET\n\nGET /protocols/bacnet/communication/network/router-entries\n\nThis resource list all the value include in the routing table."
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "network",
+											"request": {
+												"method": "GET",
+												"header": [],
+												"url": {
+													"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network",
+													"protocol": "{{scheme}}",
+													"host": [
+														"{{ip_address}}"
+													],
+													"port": "{{port}}",
+													"path": [
+														"api",
+														"rest",
+														"v1",
+														"protocols",
+														"bacnet",
+														"communication",
+														"network"
+													]
+												},
+												"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1035/GET\n\nThis resource allows you to enable the routing of BACnet packets between BACnet MS/TP controllers connected to the ECLYPSE Controller’s RS-485 port and other IP-connected controllers (for example, BACnet/IP controllers connected to the ECLYPSE Controller’s Ethernet Switch ports or controllers connected through Wi-Fi). For example, routing must be enabled for EC-NetAX to discover the BACnet MS/TP controllers connected to the ECLYPSE Connected System Controller’s RS-485 port."
+											},
+											"response": []
+										},
+										{
+											"name": "network",
+											"request": {
+												"method": "POST",
+												"header": [],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n  \"enabled\": true\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication/network",
+													"protocol": "{{scheme}}",
+													"host": [
+														"{{ip_address}}"
+													],
+													"port": "{{port}}",
+													"path": [
+														"api",
+														"rest",
+														"v1",
+														"protocols",
+														"bacnet",
+														"communication",
+														"network"
+													]
+												},
+												"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1035/POST\n\nThis resource allows you to enable the routing of BACnet packets between BACnet MS/TP controllers connected to the ECLYPSE Controller’s RS-485 port and other IP-connected controllers (for example, BACnet/IP controllers connected to the ECLYPSE Controller’s Ethernet Switch ports or controllers connected through Wi-Fi). For example, routing must be enabled for EC-NetAX to discover the BACnet MS/TP controllers connected to the ECLYPSE Connected System Controller’s RS-485 port."
+											},
+											"response": []
+										}
+									],
+									"protocolProfileBehavior": {},
+									"_postman_isSubFolder": true
+								},
+								{
+									"name": "communication",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/communication",
+											"protocol": "{{scheme}}",
+											"host": [
+												"{{ip_address}}"
+											],
+											"port": "{{port}}",
+											"path": [
+												"api",
+												"rest",
+												"v1",
+												"protocols",
+												"bacnet",
+												"communication"
+											]
+										},
+										"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1034/GET"
+									},
+									"response": []
+								},
+								{
+									"name": "local",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local",
+											"protocol": "{{scheme}}",
+											"host": [
+												"{{ip_address}}"
+											],
+											"port": "{{port}}",
+											"path": [
+												"api",
+												"rest",
+												"v1",
+												"protocols",
+												"bacnet",
+												"local"
+											]
+										},
+										"description": "GET /protocols/bacnet/local\n\nResource URL: https://{deviceIP}/api/rest/v1/protocols/bacnet/local\n\nDocumentation: http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1022/GET"
+									},
+									"response": []
+								}
+							],
+							"protocolProfileBehavior": {},
+							"_postman_isSubFolder": true
+						},
+						{
+							"name": "Local",
+							"item": [
+								{
+									"name": "Objects",
+									"item": [
+										{
+											"name": "Calendar",
+											"item": [
+												{
+													"name": "date-list",
+													"request": {
+														"method": "GET",
+														"header": [],
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/calendar/1/properties/date-list",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"calendar",
+																"1",
+																"properties",
+																"date-list"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												},
+												{
+													"name": "date-list",
+													"request": {
+														"method": "POST",
+														"header": [],
+														"body": {
+															"mode": "raw",
+															"raw": "{\n  \"value\": [\n    {\n      \"type\": \"simpleDate\",\n      \"simpleDate\": {\n        \"date\": \"2024-2-1\",\n        \"dayOfWeek\": \"***\"\n      }\n    },\n    {\n      \"type\": \"dateRange\",\n      \"dateRange\": {\n        \"startDate\": \"2019-2-2\",\n        \"endDate\": \"2026-2-22\"\n      }\n    },\n    {\n      \"type\": \"weekAndDay\",\n      \"weekAndDay\": {\n        \"month\": \"August\",\n        \"dayOfWeek\": \"***\",\n        \"week\": 1\n      }\n    }\n  ]\n}",
+															"options": {
+																"raw": {
+																	"language": "json"
+																}
+															}
+														},
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/calendar/1/properties/date-list",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"calendar",
+																"1",
+																"properties",
+																"date-list"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "Clear",
+											"item": [
+												{
+													"name": "clear-values",
+													"request": {
+														"method": "POST",
+														"header": [],
+														"body": {
+															"mode": "raw",
+															"raw": "",
+															"options": {
+																"raw": {
+																	"language": "json"
+																}
+															}
+														},
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/clear-values",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"clear-values"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "ObjectType",
+											"item": [
+												{
+													"name": "ObjectInstance",
+													"item": [
+														{
+															"name": "Properties",
+															"item": [
+																{
+																	"name": "Name",
+																	"item": [
+																		{
+																			"name": "propertyName",
+																			"request": {
+																				"method": "GET",
+																				"header": [],
+																				"url": {
+																					"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/analog-value/1/properties/objectName",
+																					"protocol": "{{scheme}}",
+																					"host": [
+																						"{{ip_address}}"
+																					],
+																					"port": "{{port}}",
+																					"path": [
+																						"api",
+																						"rest",
+																						"v1",
+																						"protocols",
+																						"bacnet",
+																						"local",
+																						"objects",
+																						"analog-value",
+																						"1",
+																						"properties",
+																						"objectName"
+																					]
+																				},
+																				"description": "This resource shows all the elements concerning a specific BACnet property and particularly the **value** attribute.\n\n&nbsp;\n\n## Resource Information:\n\n* URL:  **https://{deviceIP}/api/rest/v1/protocols/bacnet/local/objects/{objectType}/{objectInstance}/properties/{propertyName}** \n* Support Query Parameter? **YES** \n* Requires Authentication? **YES** \n\n&nbsp;\n\n## Parameters\n\n### encode (optional) \n\nUsed when you are operating a browser without access to the header parameter. This allows you to choose which encoding you want to use for the response:\n* json\n* xml \n* text\n* bin\n\nAll these resources can be used according what the resource allows.\n\n* <span style=\"color:darkred\">Located in : </span> **Query**\n* <span style=\"color:darkred\">Example values : </span> **encode=json**\n\n&nbsp;\n\n### accept (optional) \n\nIf this parameter is not in the request, the **Application/Json** will be chosen by default.\nThere are multiple possible values (according the resource): \n* Application/Json \n* Application/Xml \n* Application/Octet-stream\n* Text/Plain\n\nThe first two are the most often used.\n\n* <span style=\"color:darkred\">Located in : </span> **Header**\n* <span style=\"color:darkred\">Example values : </span> **accept:application/json**\n\n&nbsp;\n\n### objectType (required)\n\nThis is the object type string value.\n\n* <span style=\"color:darkred\">Located in : </span> **Path**\n* <span style=\"color:darkred\">Example values : </span> **analog-value**\n\n&nbsp;\n\n### objectInstance (required)\n\nThis is the instance of a specific BACnet object type.\n\n* <span style=\"color:darkred\">Located in : </span> **Path**\n* <span style=\"color:darkred\">Example values : </span> **1**\n\n&nbsp;\n\n### propertyName (required)\n\nThis is the name of the property.\n\n* <span style=\"color:darkred\">Located in : </span> **Path**\n* <span style=\"color:darkred\">Example values : </span> **object-name**\n\n&nbsp;\n\n## Object(s) Representation\n\n<span style=\"color:darkred\">Object Name: </span>**BacnetProperty** \n\n| Property Name | Type | Description | Method |\n| --- | :---: | --- | :---: |\n| **Name** | String | This property is the name of the BACnet property. | <span style=\"color:green\">GET</span> |   \n| **IsArray**  | Boolean | This property indicates if the BACnet property is an array or not. | <span style=\"color:green\">GET</span> |   \n| **Implementation** | String |  | <span style=\"color:green\">GET</span> |   \n| **AsnValue**  | String | This property is the ASN value of a BACnet property encoded in Base64. | <span style=\"color:green\">GET</span> |   \n| **Value** <br/> required | String | This property is the readable value of a BACnet property. <br/>According the  BACnet property, it's possible the type of this property vary. (See the description of the resource for more details) | <span style=\"color:green\">GET</span> <br/> <span style=\"color:orange\">POST</span> | \n\n\n&nbsp;\n\n## Example Body Response\n\n### <span style=\"color:darkblue\">Application/Json</span>\n\n\nURL Example: https://0.0.0.0/api/rest/v1/protocols/bacnet/local/objects/analog-value/1/properties/object-name\n\n```json\n\n{\n  \"value\": \"VUBH_2AS01BOWW509PC22_U_\",\n  \"asnValue\": \"dRkAVlVCSF8yQVMwMUJPV1c1MDlQQzIyX1Vf\",\n  \"isArray\": false,\n  \"implementation\": \"\",\n  \"name\": \"objectName\"\n}\n\n```\n\n&nbsp;\n\n### <span style=\"color:darkblue\">Application/Xml</span>\n\nURL Example: https://0.0.0.0/api/rest/v1/protocols/bacnet/local/objects/analog-value/1/properties/object-name\n\n```xml\n\n<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<BacnetProperty>\n\t<Name>objectName</Name>\n\t<IsArray>false</IsArray>\n\t<Implementation />\n\t<AsnValue>dRkAVlVCSF8yQVMwMUJPV1c1MDlQQzIyX1Vf</AsnValue>\n\t<Value>VUBH_2AS01BOWW509PC22_U_</Value>\n</BacnetProperty>\n\n```\n\n&nbsp;"
+																			},
+																			"response": []
+																		},
+																		{
+																			"name": "propertyName",
+																			"request": {
+																				"method": "POST",
+																				"header": [],
+																				"body": {
+																					"mode": "raw",
+																					"raw": "{\n  \"value\": \"Analog Value 1\"\n}",
+																					"options": {
+																						"raw": {
+																							"language": "json"
+																						}
+																					}
+																				},
+																				"url": {
+																					"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/analog-value/1/properties/objectName",
+																					"protocol": "{{scheme}}",
+																					"host": [
+																						"{{ip_address}}"
+																					],
+																					"port": "{{port}}",
+																					"path": [
+																						"api",
+																						"rest",
+																						"v1",
+																						"protocols",
+																						"bacnet",
+																						"local",
+																						"objects",
+																						"analog-value",
+																						"1",
+																						"properties",
+																						"objectName"
+																					]
+																				},
+																				"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+																			},
+																			"response": []
+																		}
+																	],
+																	"protocolProfileBehavior": {},
+																	"_postman_isSubFolder": true
+																},
+																{
+																	"name": "properties",
+																	"request": {
+																		"method": "GET",
+																		"header": [],
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/analog-value/1/properties",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"local",
+																				"objects",
+																				"analog-value",
+																				"1",
+																				"properties"
+																			]
+																		},
+																		"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+																	},
+																	"response": []
+																}
+															],
+															"protocolProfileBehavior": {},
+															"_postman_isSubFolder": true
+														},
+														{
+															"name": "Trend",
+															"item": [
+																{
+																	"name": "trend",
+																	"request": {
+																		"method": "GET",
+																		"header": [],
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/analog-value/1/trend?dataOnly=true",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"local",
+																				"objects",
+																				"analog-value",
+																				"1",
+																				"trend"
+																			],
+																			"query": [
+																				{
+																					"key": "dataOnly",
+																					"value": "true"
+																				}
+																			]
+																		},
+																		"description": "GET /protocols/bacnet/local/objects/{objectType}\n\nThis resource lists all object IDs for a specific object type.\n\nResource URL: https://{deviceIP}/api/rest/v1/protocols/bacnet/local/objects/{objectType}\n\nDocumentation: http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1027/GET"
+																	},
+																	"response": []
+																}
+															],
+															"protocolProfileBehavior": {},
+															"_postman_isSubFolder": true
+														},
+														{
+															"name": "objectInstance",
+															"request": {
+																"method": "GET",
+																"header": [],
+																"url": {
+																	"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/analog-value/1",
+																	"protocol": "{{scheme}}",
+																	"host": [
+																		"{{ip_address}}"
+																	],
+																	"port": "{{port}}",
+																	"path": [
+																		"api",
+																		"rest",
+																		"v1",
+																		"protocols",
+																		"bacnet",
+																		"local",
+																		"objects",
+																		"analog-value",
+																		"1"
+																	]
+																},
+																"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+															},
+															"response": []
+														}
+													],
+													"protocolProfileBehavior": {},
+													"_postman_isSubFolder": true
+												},
+												{
+													"name": "Overrides",
+													"item": [
+														{
+															"name": "overrides",
+															"request": {
+																"method": "GET",
+																"header": [],
+																"url": {
+																	"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/overrides",
+																	"protocol": "{{scheme}}",
+																	"host": [
+																		"{{ip_address}}"
+																	],
+																	"port": "{{port}}",
+																	"path": [
+																		"api",
+																		"rest",
+																		"v1",
+																		"protocols",
+																		"bacnet",
+																		"local",
+																		"objects",
+																		"overrides"
+																	]
+																},
+																"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+															},
+															"response": []
+														}
+													],
+													"protocolProfileBehavior": {},
+													"_postman_isSubFolder": true
+												},
+												{
+													"name": "objectType",
+													"request": {
+														"method": "GET",
+														"header": [],
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/analog-value",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"analog-value"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "ReadPropertyMultiple",
+											"item": [
+												{
+													"name": "Priority Array",
+													"request": {
+														"method": "POST",
+														"header": [
+															{
+																"key": "Content-Type",
+																"name": "Content-Type",
+																"value": "application/json",
+																"type": "text"
+															}
+														],
+														"body": {
+															"mode": "raw",
+															"raw": "{\n    \"encode\": \"text\",\n    \"propertyReferences\": [\n        {\n            \"type\": \"analogValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"binaryValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"multistateValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"analogOutput\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        }\n    ]\n}",
+															"options": {
+																"raw": {
+																	"language": "json"
+																}
+															}
+														},
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"read-property-multiple"
+															]
+														},
+														"description": "***\r\n> <span style=\"color:orange\">POST</span> /protocols/bacnet/local/objects/read-property-multiple\r\n{.is-warning}\r\n\r\n***\r\n\r\nRead multiple points in one request. This reduces\r\nthe amount of network traffic required to transmit data.\r\n\r\nThis resource supports three Content-types:\r\n* Application/Xml\r\n* Application/JSON\r\n* Text/Plain\r\n\r\nIn the Body request, you need to specify the encoding attributes (*asn or text*).\r\n\r\nIf you want to view all instances of one specific type use **instance=\\\"-1\\\"**.\r\n\r\nIf you want to view all properties of one specific object use **property=\\\"all\\\"**.\r\n\r\nBoth attributes can be combined.\r\n\r\nAll fields are <span class=\\\"small-warning\\\">required</span> except the **arrayIndex**.\r\n\r\n&nbsp;\r\n## Resource Information:\r\n\r\n* URL:  **https://{deviceIP}/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple** \r\n* Support Query Parameter? **NO** \r\n* Requires Authentication? **YES** \r\n\r\n&nbsp;\r\n## Parameters\r\n\r\n\r\n\r\n### accept (optional) \r\n\r\nIf this parameter is not in the request, the **Application/Json** will be chosen by default.\r\nThere are multiple possible values (according the resource): \r\n* Application/Json \r\n* Application/Xml \r\n* Application/Octet-stream\r\n* Text/Plain\r\n\r\nThe first two are the most often used.\r\n\r\n* <span style=\"color:darkred\">Located in : </span> **Header**\r\n\r\n&nbsp;\r\n* <span style=\"color:darkred\">Example values : </span> **accept:application/json**\r\n\r\n&nbsp;\r\n### content-type\r\n\r\nThere are multiple possible values according the resource: \r\n* Application/Json \r\n* Application/Xml \r\n* Application/Octet-stream\r\n* Text/Plain\r\n* Multipart/Form-data\r\n\r\nIf this parameter is not present during the request, and error **415 Unsupported Media Type** will be thrown.\r\n\r\n* <span style=\"color:darkred\">Located in : </span> **Header**\r\n\r\n&nbsp;\r\n* <span style=\"color:darkred\">Example values : </span> **content-type:application/json**\r\n\r\n&nbsp;\r\n### content-length\r\n\r\nThe Content-Length entity-header field indicates the size of the entity-body.\r\n\r\n* <span style=\"color:darkred\">Located in : </span> **Header**\r\n\r\n&nbsp;\r\n* <span style=\"color:darkred\">Example values : </span> **content-length:526**\r\n\r\n&nbsp;\r\n\r\n&nbsp;\r\n## Object(s) Representation\r\n\r\n<span style=\"color:darkred\">Object Name: </span>**ReadPropertyMultiple** \r\n\r\n| propertyName|type|description|post|\r\n|  --- |  --- |  --- |  --- | \r\n| **encode**  | String | This property is used to indicate which type is needed to recover the values, or the type you are writing the values from/in the device :\r\n* text\r\n* asn\r\n | <span style=\"color:orange\">POST</span> | \r\n**PropertyReferences**  | Array<PropertyReference> | This object is an array of PropertyReference object. | <span style=\"color:orange\">POST</span> | \r\n\r\n<span style=\"color:darkred\">Object Name: </span>**PropertyReference** \r\n\r\n| propertyName|type|description|post|\r\n|  --- |  --- |  --- |  --- | \r\n| **Type**  | <td> | This property is the name of the object type. | <span style=\"color:orange\">POST</span> | \r\n**Instance**  | <td> | This property is the object's instance. | <span style=\"color:orange\">POST</span> | \r\n**Property**  | <td> | This property is the object's property name | <span style=\"color:orange\">POST</span> | \r\n**ArrayIndex**  | <td> | This property is the index used to read a table property value.\r\nUse **-1** if there is no array index. | <span style=\"color:orange\">POST</span> | \r\n**Message**  | String | This property refers to the property value recovered. | <span style=\"color:orange\">POST</span> | \r\n**Value**  | <td> | This property is used during a write property multiple to write the value. | <span style=\"color:orange\">POST</span> | \r\n\r\n\r\n&nbsp;\r\n## Example Body Request\r\n\r\n### <span style=\"color:darkblue\">Application/Json</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```json\r\n\r\n{\r\n  \"encode\": \"asn\",\r\n  \"propertyReferences\": [\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 1,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 2,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 95959,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 4,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    }\r\n  ]\r\n}\r\n\r\n```\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Text/Plain</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```\r\n\r\nasn\r\nanalogValue¤1,2,3¤objectName,presentValue,priorityArray\r\nbinaryValue¤-1¤objectName\r\n\r\n```\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Application/Xml</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```xml\r\n\r\n<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<PropertyReferences encode=\"asn\">\r\n\t<PropertyReference type=\"analogValue\" instance=\"1\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"2\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"95959\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"4\" property=\"objectName\" arrayIndex=\"-1\" />\r\n</PropertyReferences>\r\n\r\n```\r\n\r\n&nbsp;\r\n## Example Body Response\r\n\r\n### <span style=\"color:darkblue\">Application/Json</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```json\r\n\r\n{\r\n  \"encode\": \"asn\",\r\n  \"propertyReferences\": [\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 1,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 2,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 95959,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 4,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    }\r\n  ]\r\n}\r\n\r\n```\r\n\r\n\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Application/Xml</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```xml\r\n\r\n<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<PropertyReferences encode=\"asn\">\r\n\t<PropertyReference type=\"analogValue\" instance=\"1\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"2\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"95959\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"4\" property=\"objectName\" arrayIndex=\"-1\" />\r\n</PropertyReferences>\r\n\r\n```\r\n\r\n\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Text/Plain</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```\r\n\r\nasn\r\nanalogValue¤1,2,3¤objectName,presentValue,priorityArray\r\nbinaryValue¤-1¤objectName\r\n\r\n```\r\n&nbsp;"
+													},
+													"response": [
+														{
+															"name": "Read Property Mulitple (Priority Array)",
+															"originalRequest": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "Content-Type",
+																		"name": "Content-Type",
+																		"type": "text",
+																		"value": "application/json"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n    \"encode\": \"text\",\n    \"propertyReferences\": [\n        {\n            \"type\": \"analogValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"binaryValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"multistateValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        }\n    ]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "http://10.222.103.52/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple",
+																	"protocol": "http",
+																	"host": [
+																		"10",
+																		"222",
+																		"103",
+																		"52"
+																	],
+																	"path": [
+																		"api",
+																		"rest",
+																		"v1",
+																		"protocols",
+																		"bacnet",
+																		"local",
+																		"objects",
+																		"read-property-multiple"
+																	]
+																}
+															},
+															"_postman_previewlanguage": null,
+															"header": null,
+															"cookie": [],
+															"body": null
+														}
+													]
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "WritePropertyMultiple",
+											"item": [
+												{
+													"name": "Priority Array",
+													"request": {
+														"method": "POST",
+														"header": [
+															{
+																"key": "Content-Type",
+																"name": "Content-Type",
+																"type": "text",
+																"value": "application/json"
+															}
+														],
+														"body": {
+															"mode": "raw",
+															"raw": "{\n    \"encode\": \"text\",\n    \"propertyReferences\": [\n        {\n            \"type\": \"analogValue\",\n            \"instance\": 1,\n            \"property\": \"presentValue\",\n            \"priority\": 8,\n            \"value\": \"Null\"\n        }\n    ]\n}",
+															"options": {
+																"raw": {
+																	"language": "json"
+																}
+															}
+														},
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/write-property-multiple",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"write-property-multiple"
+															]
+														},
+														"description": "Read multiple points in one request. This reduces\nthe amount of network traffic required to transmit data.\n\nhttp://eclypseapi.distech-controls.com/restApi/bacnet/resources/1024/POST"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "Schedule",
+											"item": [
+												{
+													"name": "weekly-schedule",
+													"request": {
+														"method": "GET",
+														"header": [],
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/schedule/1/properties/weekly-schedule",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"schedule",
+																"1",
+																"properties",
+																"weekly-schedule"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												},
+												{
+													"name": "exception-schedule",
+													"request": {
+														"method": "GET",
+														"header": [],
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/schedule/1/properties/exception-schedule",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"schedule",
+																"1",
+																"properties",
+																"exception-schedule"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												},
+												{
+													"name": "weekly-schedule",
+													"request": {
+														"method": "POST",
+														"header": [],
+														"body": {
+															"mode": "raw",
+															"raw": "{\n  \"value\": [\n    {\n      \"timeValues\": [\n        {\n          \"value\": 2,\n          \"type\": \"enumerated\",\n          \"time\": \"08:00:00.00\"\n        },\n        {\n          \"value\": null,\n          \"type\": \"null\",\n          \"time\": \"09:00:00.00\"\n        },\n        {\n          \"value\": 4,\n          \"type\": \"enumerated\",\n          \"time\": \"14:00:00.00\"\n        },\n        {\n          \"value\": null,\n          \"type\": \"null\",\n          \"time\": \"16:00:00.00\"\n        }\n      ]\n    }\n  ]\n}",
+															"options": {
+																"raw": {
+																	"language": "json"
+																}
+															}
+														},
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/schedule/1/properties/weekly-schedule",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"schedule",
+																"1",
+																"properties",
+																"weekly-schedule"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												},
+												{
+													"name": "exception-schedule",
+													"request": {
+														"method": "POST",
+														"header": [],
+														"body": {
+															"mode": "raw",
+															"raw": "{\n  \"value\": [\n    {\n      \"type\": \"dateRange\",\n      \"dateRange\": {\n        \"timeValues\": [\n          {\n            \"value\": 2,\n            \"type\": \"enumerated\",\n            \"time\": \"09:00:00.00\"\n          },\n          {\n            \"value\": null,\n            \"type\": \"null\",\n            \"time\": \"13:00:00.00\"\n          }\n        ],\n        \"startDate\": \"*-*-*\",\n        \"endDate\": \"*-*-*\"\n      }\n    },\n    {\n      \"type\": \"weekAndDay\",\n      \"weekAndDay\": {\n        \"timeValues\": [\n          {\n            \"value\": 4,\n            \"type\": \"enumerated\",\n            \"time\": \"12:00:00.00\"\n          },\n          {\n            \"value\": null,\n            \"type\": \"null\",\n            \"time\": \"14:00:00.00\"\n          }\n        ],\n        \"month\": \"***\",\n        \"dayOfWeek\": \"***\",\n        \"week\": 255\n      }\n    },\n    {\n      \"type\": \"simpleDate\",\n      \"simpleDate\": {\n        \"timeValues\": [\n          {\n            \"value\": 1,\n            \"type\": \"enumerated\",\n            \"time\": \"07:00:00.00\"\n          },\n          {\n            \"value\": null,\n            \"type\": \"null\",\n            \"time\": \"10:00:00.00\"\n          }\n        ],\n        \"date\": \"*-*-1\",\n        \"dayOfWeek\": \"***\"\n      }\n    },\n    {\n      \"type\": \"reference\",\n      \"reference\": {\n        \"timeValues\": [\n          {\n            \"value\": 3,\n            \"type\": \"enumerated\",\n            \"time\": \"08:00:00.00\"\n          },\n          {\n            \"value\": null,\n            \"type\": \"null\",\n            \"time\": \"16:00:00.00\"\n          }\n        ],\n        \"objectInstance\": 1,\n        \"objectType\": \"calendar\"\n      }\n    }\n  ]\n}",
+															"options": {
+																"raw": {
+																	"language": "json"
+																}
+															}
+														},
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects/schedule/1/properties/exception-schedule",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"objects",
+																"schedule",
+																"1",
+																"properties",
+																"exception-schedule"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "objects",
+											"request": {
+												"method": "GET",
+												"header": [],
+												"url": {
+													"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/objects",
+													"protocol": "{{scheme}}",
+													"host": [
+														"{{ip_address}}"
+													],
+													"port": "{{port}}",
+													"path": [
+														"api",
+														"rest",
+														"v1",
+														"protocols",
+														"bacnet",
+														"local",
+														"objects"
+													]
+												},
+												"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+											},
+											"response": []
+										}
+									],
+									"protocolProfileBehavior": {},
+									"_postman_isSubFolder": true
+								},
+								{
+									"name": "Management",
+									"item": [
+										{
+											"name": "Reinitializable",
+											"item": [
+												{
+													"name": "reinitializable",
+													"request": {
+														"method": "POST",
+														"header": [],
+														"body": {
+															"mode": "raw",
+															"raw": "",
+															"options": {
+																"raw": {
+																	"language": "json"
+																}
+															}
+														},
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/management/{reinitializable}/",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"management",
+																"{reinitializable}",
+																""
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										}
+									],
+									"protocolProfileBehavior": {},
+									"_postman_isSubFolder": true
+								},
+								{
+									"name": "Event-Notifications",
+									"item": [
+										{
+											"name": "UUID",
+											"item": [
+												{
+													"name": "uuid",
+													"request": {
+														"method": "GET",
+														"header": [],
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/event-notifications/1d794037-b0dc-47c2-b5b5-1609e3725736/",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"local",
+																"event-notifications",
+																"1d794037-b0dc-47c2-b5b5-1609e3725736",
+																""
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "event-notifications",
+											"request": {
+												"method": "GET",
+												"header": [],
+												"url": {
+													"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local/event-notifications",
+													"protocol": "{{scheme}}",
+													"host": [
+														"{{ip_address}}"
+													],
+													"port": "{{port}}",
+													"path": [
+														"api",
+														"rest",
+														"v1",
+														"protocols",
+														"bacnet",
+														"local",
+														"event-notifications"
+													]
+												},
+												"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+											},
+											"response": []
+										}
+									],
+									"protocolProfileBehavior": {},
+									"_postman_isSubFolder": true
+								},
+								{
+									"name": "local",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/local",
+											"protocol": "{{scheme}}",
+											"host": [
+												"{{ip_address}}"
+											],
+											"port": "{{port}}",
+											"path": [
+												"api",
+												"rest",
+												"v1",
+												"protocols",
+												"bacnet",
+												"local"
+											]
+										},
+										"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+									},
+									"response": []
+								}
+							],
+							"protocolProfileBehavior": {},
+							"_postman_isSubFolder": true
+						},
+						{
+							"name": "Remote",
+							"item": [
+								{
+									"name": "Devices",
+									"item": [
+										{
+											"name": "ID",
+											"item": [
+												{
+													"name": "Objects",
+													"item": [
+														{
+															"name": "Discovery",
+															"item": [
+																{
+																	"name": "start-discovery",
+																	"request": {
+																		"method": "POST",
+																		"header": [],
+																		"body": {
+																			"mode": "raw",
+																			"raw": "{\n  \"forceUpdate\": false,\n  \"aliveTimeout\": 1000\n}",
+																			"options": {
+																				"raw": {
+																					"language": "json"
+																				}
+																			}
+																		},
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001/objects/start-discovery",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"remote",
+																				"devices",
+																				"52001",
+																				"objects",
+																				"start-discovery"
+																			]
+																		},
+																		"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+																	},
+																	"response": []
+																}
+															],
+															"protocolProfileBehavior": {},
+															"_postman_isSubFolder": true
+														},
+														{
+															"name": "ObjectType",
+															"item": [
+																{
+																	"name": "ObjectInstance",
+																	"item": [
+																		{
+																			"name": "Properties",
+																			"item": [
+																				{
+																					"name": "Name",
+																					"item": [
+																						{
+																							"name": "propertyName",
+																							"request": {
+																								"method": "GET",
+																								"header": [],
+																								"url": {
+																									"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001/objects/analog-value/1/properties/objectName",
+																									"protocol": "{{scheme}}",
+																									"host": [
+																										"{{ip_address}}"
+																									],
+																									"port": "{{port}}",
+																									"path": [
+																										"api",
+																										"rest",
+																										"v1",
+																										"protocols",
+																										"bacnet",
+																										"remote",
+																										"devices",
+																										"52001",
+																										"objects",
+																										"analog-value",
+																										"1",
+																										"properties",
+																										"objectName"
+																									]
+																								},
+																								"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+																							},
+																							"response": []
+																						},
+																						{
+																							"name": "propertyName",
+																							"request": {
+																								"method": "POST",
+																								"header": [],
+																								"body": {
+																									"mode": "raw",
+																									"raw": "{\n  \"value\": \"AV1\"\n}",
+																									"options": {
+																										"raw": {
+																											"language": "json"
+																										}
+																									}
+																								},
+																								"url": {
+																									"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001/objects/analog-value/1/properties/objectName",
+																									"protocol": "{{scheme}}",
+																									"host": [
+																										"{{ip_address}}"
+																									],
+																									"port": "{{port}}",
+																									"path": [
+																										"api",
+																										"rest",
+																										"v1",
+																										"protocols",
+																										"bacnet",
+																										"remote",
+																										"devices",
+																										"52001",
+																										"objects",
+																										"analog-value",
+																										"1",
+																										"properties",
+																										"objectName"
+																									]
+																								},
+																								"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+																							},
+																							"response": []
+																						}
+																					],
+																					"protocolProfileBehavior": {},
+																					"_postman_isSubFolder": true
+																				},
+																				{
+																					"name": "properties",
+																					"request": {
+																						"method": "GET",
+																						"header": [],
+																						"url": {
+																							"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001/objects/analog-value/1/properties",
+																							"protocol": "{{scheme}}",
+																							"host": [
+																								"{{ip_address}}"
+																							],
+																							"port": "{{port}}",
+																							"path": [
+																								"api",
+																								"rest",
+																								"v1",
+																								"protocols",
+																								"bacnet",
+																								"remote",
+																								"devices",
+																								"52001",
+																								"objects",
+																								"analog-value",
+																								"1",
+																								"properties"
+																							]
+																						},
+																						"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+																					},
+																					"response": []
+																				}
+																			],
+																			"protocolProfileBehavior": {},
+																			"_postman_isSubFolder": true
+																		},
+																		{
+																			"name": "objectInstance",
+																			"request": {
+																				"method": "GET",
+																				"header": [],
+																				"url": {
+																					"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001/objects/analog-value/1",
+																					"protocol": "{{scheme}}",
+																					"host": [
+																						"{{ip_address}}"
+																					],
+																					"port": "{{port}}",
+																					"path": [
+																						"api",
+																						"rest",
+																						"v1",
+																						"protocols",
+																						"bacnet",
+																						"remote",
+																						"devices",
+																						"52001",
+																						"objects",
+																						"analog-value",
+																						"1"
+																					]
+																				},
+																				"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+																			},
+																			"response": []
+																		}
+																	],
+																	"protocolProfileBehavior": {},
+																	"_postman_isSubFolder": true
+																},
+																{
+																	"name": "objectsType",
+																	"request": {
+																		"method": "GET",
+																		"header": [],
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001/objects/analog-value",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"remote",
+																				"devices",
+																				"52001",
+																				"objects",
+																				"analog-value"
+																			]
+																		},
+																		"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+																	},
+																	"response": []
+																}
+															],
+															"protocolProfileBehavior": {},
+															"_postman_isSubFolder": true
+														},
+														{
+															"name": "ReadPropertyMultiple",
+															"item": [
+																{
+																	"name": "read-property-multiple",
+																	"request": {
+																		"method": "POST",
+																		"header": [
+																			{
+																				"key": "Content-Type",
+																				"name": "Content-Type",
+																				"type": "text",
+																				"value": "application/json"
+																			}
+																		],
+																		"body": {
+																			"mode": "raw",
+																			"raw": "{\n    \"encode\": \"text\",\n    \"propertyReferences\": [\n        {\n            \"type\": \"analogValue\",\n            \"instance\": 1,\n            \"property\": \"presentValue\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"analogValue\",\n            \"instance\": 2,\n            \"property\": \"presentValue\",\n            \"arrayIndex\": -1\n        }\n    ]\n}",
+																			"options": {
+																				"raw": {
+																					"language": "json"
+																				}
+																			}
+																		},
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001/objects/read-property-multiple",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"remote",
+																				"devices",
+																				"52001",
+																				"objects",
+																				"read-property-multiple"
+																			]
+																		},
+																		"description": "***\r\n> <span style=\"color:orange\">POST</span> /protocols/bacnet/local/objects/read-property-multiple\r\n{.is-warning}\r\n\r\n***\r\n\r\nRead multiple points in one request. This reduces\r\nthe amount of network traffic required to transmit data.\r\n\r\nThis resource supports three Content-types:\r\n* Application/Xml\r\n* Application/JSON\r\n* Text/Plain\r\n\r\nIn the Body request, you need to specify the encoding attributes (*asn or text*).\r\n\r\nIf you want to view all instances of one specific type use **instance=\\\"-1\\\"**.\r\n\r\nIf you want to view all properties of one specific object use **property=\\\"all\\\"**.\r\n\r\nBoth attributes can be combined.\r\n\r\nAll fields are <span class=\\\"small-warning\\\">required</span> except the **arrayIndex**.\r\n\r\n&nbsp;\r\n## Resource Information:\r\n\r\n* URL:  **https://{deviceIP}/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple** \r\n* Support Query Parameter? **NO** \r\n* Requires Authentication? **YES** \r\n\r\n&nbsp;\r\n## Parameters\r\n\r\n\r\n\r\n### accept (optional) \r\n\r\nIf this parameter is not in the request, the **Application/Json** will be chosen by default.\r\nThere are multiple possible values (according the resource): \r\n* Application/Json \r\n* Application/Xml \r\n* Application/Octet-stream\r\n* Text/Plain\r\n\r\nThe first two are the most often used.\r\n\r\n* <span style=\"color:darkred\">Located in : </span> **Header**\r\n\r\n&nbsp;\r\n* <span style=\"color:darkred\">Example values : </span> **accept:application/json**\r\n\r\n&nbsp;\r\n### content-type\r\n\r\nThere are multiple possible values according the resource: \r\n* Application/Json \r\n* Application/Xml \r\n* Application/Octet-stream\r\n* Text/Plain\r\n* Multipart/Form-data\r\n\r\nIf this parameter is not present during the request, and error **415 Unsupported Media Type** will be thrown.\r\n\r\n* <span style=\"color:darkred\">Located in : </span> **Header**\r\n\r\n&nbsp;\r\n* <span style=\"color:darkred\">Example values : </span> **content-type:application/json**\r\n\r\n&nbsp;\r\n### content-length\r\n\r\nThe Content-Length entity-header field indicates the size of the entity-body.\r\n\r\n* <span style=\"color:darkred\">Located in : </span> **Header**\r\n\r\n&nbsp;\r\n* <span style=\"color:darkred\">Example values : </span> **content-length:526**\r\n\r\n&nbsp;\r\n\r\n&nbsp;\r\n## Object(s) Representation\r\n\r\n<span style=\"color:darkred\">Object Name: </span>**ReadPropertyMultiple** \r\n\r\n| propertyName|type|description|post|\r\n|  --- |  --- |  --- |  --- | \r\n| **encode**  | String | This property is used to indicate which type is needed to recover the values, or the type you are writing the values from/in the device :\r\n* text\r\n* asn\r\n | <span style=\"color:orange\">POST</span> | \r\n**PropertyReferences**  | Array<PropertyReference> | This object is an array of PropertyReference object. | <span style=\"color:orange\">POST</span> | \r\n\r\n<span style=\"color:darkred\">Object Name: </span>**PropertyReference** \r\n\r\n| propertyName|type|description|post|\r\n|  --- |  --- |  --- |  --- | \r\n| **Type**  | <td> | This property is the name of the object type. | <span style=\"color:orange\">POST</span> | \r\n**Instance**  | <td> | This property is the object's instance. | <span style=\"color:orange\">POST</span> | \r\n**Property**  | <td> | This property is the object's property name | <span style=\"color:orange\">POST</span> | \r\n**ArrayIndex**  | <td> | This property is the index used to read a table property value.\r\nUse **-1** if there is no array index. | <span style=\"color:orange\">POST</span> | \r\n**Message**  | String | This property refers to the property value recovered. | <span style=\"color:orange\">POST</span> | \r\n**Value**  | <td> | This property is used during a write property multiple to write the value. | <span style=\"color:orange\">POST</span> | \r\n\r\n\r\n&nbsp;\r\n## Example Body Request\r\n\r\n### <span style=\"color:darkblue\">Application/Json</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```json\r\n\r\n{\r\n  \"encode\": \"asn\",\r\n  \"propertyReferences\": [\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 1,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 2,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 95959,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 4,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    }\r\n  ]\r\n}\r\n\r\n```\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Text/Plain</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```\r\n\r\nasn\r\nanalogValue¤1,2,3¤objectName,presentValue,priorityArray\r\nbinaryValue¤-1¤objectName\r\n\r\n```\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Application/Xml</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```xml\r\n\r\n<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<PropertyReferences encode=\"asn\">\r\n\t<PropertyReference type=\"analogValue\" instance=\"1\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"2\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"95959\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"4\" property=\"objectName\" arrayIndex=\"-1\" />\r\n</PropertyReferences>\r\n\r\n```\r\n\r\n&nbsp;\r\n## Example Body Response\r\n\r\n### <span style=\"color:darkblue\">Application/Json</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```json\r\n\r\n{\r\n  \"encode\": \"asn\",\r\n  \"propertyReferences\": [\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 1,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 2,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 95959,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 4,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    }\r\n  ]\r\n}\r\n\r\n```\r\n\r\n\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Application/Xml</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```xml\r\n\r\n<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<PropertyReferences encode=\"asn\">\r\n\t<PropertyReference type=\"analogValue\" instance=\"1\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"2\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"95959\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"4\" property=\"objectName\" arrayIndex=\"-1\" />\r\n</PropertyReferences>\r\n\r\n```\r\n\r\n\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Text/Plain</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```\r\n\r\nasn\r\nanalogValue¤1,2,3¤objectName,presentValue,priorityArray\r\nbinaryValue¤-1¤objectName\r\n\r\n```\r\n&nbsp;"
+																	},
+																	"response": [
+																		{
+																			"name": "Read Property Mulitple (Priority Array)",
+																			"originalRequest": {
+																				"method": "POST",
+																				"header": [
+																					{
+																						"key": "Content-Type",
+																						"name": "Content-Type",
+																						"type": "text",
+																						"value": "application/json"
+																					}
+																				],
+																				"body": {
+																					"mode": "raw",
+																					"raw": "{\n    \"encode\": \"text\",\n    \"propertyReferences\": [\n        {\n            \"type\": \"analogValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"binaryValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"multistateValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        }\n    ]\n}",
+																					"options": {
+																						"raw": {
+																							"language": "json"
+																						}
+																					}
+																				},
+																				"url": {
+																					"raw": "http://10.222.103.52/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple",
+																					"protocol": "http",
+																					"host": [
+																						"10",
+																						"222",
+																						"103",
+																						"52"
+																					],
+																					"path": [
+																						"api",
+																						"rest",
+																						"v1",
+																						"protocols",
+																						"bacnet",
+																						"local",
+																						"objects",
+																						"read-property-multiple"
+																					]
+																				}
+																			},
+																			"_postman_previewlanguage": null,
+																			"header": null,
+																			"cookie": [],
+																			"body": null
+																		}
+																	]
+																}
+															],
+															"protocolProfileBehavior": {},
+															"_postman_isSubFolder": true
+														},
+														{
+															"name": "WritePropertyMultiple",
+															"item": [
+																{
+																	"name": "write-property-multiple",
+																	"request": {
+																		"method": "POST",
+																		"header": [
+																			{
+																				"key": "Content-Type",
+																				"name": "Content-Type",
+																				"type": "text",
+																				"value": "application/json"
+																			}
+																		],
+																		"body": {
+																			"mode": "raw",
+																			"raw": "{\n    \"encode\": \"text\",\n    \"propertyReferences\": [\n        {\n            \"type\": \"analogValue\",\n            \"instance\": 1,\n            \"property\": \"presentValue\",\n            \"priority\": 8,\n            \"value\": \"50\"\n        },\n        {\n            \"type\": \"analogValue\",\n            \"instance\": 2,\n            \"property\": \"presentValue\",\n            \"priority\": 8,\n            \"value\": \"51\"\n        }\n    ]\n}",
+																			"options": {
+																				"raw": {
+																					"language": "json"
+																				}
+																			}
+																		},
+																		"url": {
+																			"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001/objects/write-property-multiple",
+																			"protocol": "{{scheme}}",
+																			"host": [
+																				"{{ip_address}}"
+																			],
+																			"port": "{{port}}",
+																			"path": [
+																				"api",
+																				"rest",
+																				"v1",
+																				"protocols",
+																				"bacnet",
+																				"remote",
+																				"devices",
+																				"52001",
+																				"objects",
+																				"write-property-multiple"
+																			]
+																		},
+																		"description": "***\r\n> <span style=\"color:orange\">POST</span> /protocols/bacnet/local/objects/read-property-multiple\r\n{.is-warning}\r\n\r\n***\r\n\r\nRead multiple points in one request. This reduces\r\nthe amount of network traffic required to transmit data.\r\n\r\nThis resource supports three Content-types:\r\n* Application/Xml\r\n* Application/JSON\r\n* Text/Plain\r\n\r\nIn the Body request, you need to specify the encoding attributes (*asn or text*).\r\n\r\nIf you want to view all instances of one specific type use **instance=\\\"-1\\\"**.\r\n\r\nIf you want to view all properties of one specific object use **property=\\\"all\\\"**.\r\n\r\nBoth attributes can be combined.\r\n\r\nAll fields are <span class=\\\"small-warning\\\">required</span> except the **arrayIndex**.\r\n\r\n&nbsp;\r\n## Resource Information:\r\n\r\n* URL:  **https://{deviceIP}/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple** \r\n* Support Query Parameter? **NO** \r\n* Requires Authentication? **YES** \r\n\r\n&nbsp;\r\n## Parameters\r\n\r\n\r\n\r\n### accept (optional) \r\n\r\nIf this parameter is not in the request, the **Application/Json** will be chosen by default.\r\nThere are multiple possible values (according the resource): \r\n* Application/Json \r\n* Application/Xml \r\n* Application/Octet-stream\r\n* Text/Plain\r\n\r\nThe first two are the most often used.\r\n\r\n* <span style=\"color:darkred\">Located in : </span> **Header**\r\n\r\n&nbsp;\r\n* <span style=\"color:darkred\">Example values : </span> **accept:application/json**\r\n\r\n&nbsp;\r\n### content-type\r\n\r\nThere are multiple possible values according the resource: \r\n* Application/Json \r\n* Application/Xml \r\n* Application/Octet-stream\r\n* Text/Plain\r\n* Multipart/Form-data\r\n\r\nIf this parameter is not present during the request, and error **415 Unsupported Media Type** will be thrown.\r\n\r\n* <span style=\"color:darkred\">Located in : </span> **Header**\r\n\r\n&nbsp;\r\n* <span style=\"color:darkred\">Example values : </span> **content-type:application/json**\r\n\r\n&nbsp;\r\n### content-length\r\n\r\nThe Content-Length entity-header field indicates the size of the entity-body.\r\n\r\n* <span style=\"color:darkred\">Located in : </span> **Header**\r\n\r\n&nbsp;\r\n* <span style=\"color:darkred\">Example values : </span> **content-length:526**\r\n\r\n&nbsp;\r\n\r\n&nbsp;\r\n## Object(s) Representation\r\n\r\n<span style=\"color:darkred\">Object Name: </span>**ReadPropertyMultiple** \r\n\r\n| propertyName|type|description|post|\r\n|  --- |  --- |  --- |  --- | \r\n| **encode**  | String | This property is used to indicate which type is needed to recover the values, or the type you are writing the values from/in the device :\r\n* text\r\n* asn\r\n | <span style=\"color:orange\">POST</span> | \r\n**PropertyReferences**  | Array<PropertyReference> | This object is an array of PropertyReference object. | <span style=\"color:orange\">POST</span> | \r\n\r\n<span style=\"color:darkred\">Object Name: </span>**PropertyReference** \r\n\r\n| propertyName|type|description|post|\r\n|  --- |  --- |  --- |  --- | \r\n| **Type**  | <td> | This property is the name of the object type. | <span style=\"color:orange\">POST</span> | \r\n**Instance**  | <td> | This property is the object's instance. | <span style=\"color:orange\">POST</span> | \r\n**Property**  | <td> | This property is the object's property name | <span style=\"color:orange\">POST</span> | \r\n**ArrayIndex**  | <td> | This property is the index used to read a table property value.\r\nUse **-1** if there is no array index. | <span style=\"color:orange\">POST</span> | \r\n**Message**  | String | This property refers to the property value recovered. | <span style=\"color:orange\">POST</span> | \r\n**Value**  | <td> | This property is used during a write property multiple to write the value. | <span style=\"color:orange\">POST</span> | \r\n\r\n\r\n&nbsp;\r\n## Example Body Request\r\n\r\n### <span style=\"color:darkblue\">Application/Json</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```json\r\n\r\n{\r\n  \"encode\": \"asn\",\r\n  \"propertyReferences\": [\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 1,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 2,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 95959,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 4,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    }\r\n  ]\r\n}\r\n\r\n```\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Text/Plain</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```\r\n\r\nasn\r\nanalogValue¤1,2,3¤objectName,presentValue,priorityArray\r\nbinaryValue¤-1¤objectName\r\n\r\n```\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Application/Xml</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```xml\r\n\r\n<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<PropertyReferences encode=\"asn\">\r\n\t<PropertyReference type=\"analogValue\" instance=\"1\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"2\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"95959\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"4\" property=\"objectName\" arrayIndex=\"-1\" />\r\n</PropertyReferences>\r\n\r\n```\r\n\r\n&nbsp;\r\n## Example Body Response\r\n\r\n### <span style=\"color:darkblue\">Application/Json</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```json\r\n\r\n{\r\n  \"encode\": \"asn\",\r\n  \"propertyReferences\": [\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 1,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 2,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 95959,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    },\r\n    {\r\n      \"type\": \"analogValue\",\r\n      \"instance\": 4,\r\n      \"property\": \"objectName\",\r\n      \"arrayIndex\": -1\r\n    }\r\n  ]\r\n}\r\n\r\n```\r\n\r\n\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Application/Xml</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```xml\r\n\r\n<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<PropertyReferences encode=\"asn\">\r\n\t<PropertyReference type=\"analogValue\" instance=\"1\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"2\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"95959\" property=\"objectName\" arrayIndex=\"-1\" />\r\n\t<PropertyReference type=\"analogValue\" instance=\"4\" property=\"objectName\" arrayIndex=\"-1\" />\r\n</PropertyReferences>\r\n\r\n```\r\n\r\n\r\n\r\n&nbsp;\r\n### <span style=\"color:darkblue\">Text/Plain</span>\r\n\r\n\r\n\r\nUrl Example: https://1.1.1.1/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple\r\n\r\n```\r\n\r\nasn\r\nanalogValue¤1,2,3¤objectName,presentValue,priorityArray\r\nbinaryValue¤-1¤objectName\r\n\r\n```\r\n&nbsp;"
+																	},
+																	"response": [
+																		{
+																			"name": "Read Property Mulitple (Priority Array)",
+																			"originalRequest": {
+																				"method": "POST",
+																				"header": [
+																					{
+																						"key": "Content-Type",
+																						"name": "Content-Type",
+																						"type": "text",
+																						"value": "application/json"
+																					}
+																				],
+																				"body": {
+																					"mode": "raw",
+																					"raw": "{\n    \"encode\": \"text\",\n    \"propertyReferences\": [\n        {\n            \"type\": \"analogValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"binaryValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        },\n        {\n            \"type\": \"multistateValue\",\n            \"instance\": -1,\n            \"property\": \"priorityArray\",\n            \"arrayIndex\": -1\n        }\n    ]\n}",
+																					"options": {
+																						"raw": {
+																							"language": "json"
+																						}
+																					}
+																				},
+																				"url": {
+																					"raw": "http://10.222.103.52/api/rest/v1/protocols/bacnet/local/objects/read-property-multiple",
+																					"protocol": "http",
+																					"host": [
+																						"10",
+																						"222",
+																						"103",
+																						"52"
+																					],
+																					"path": [
+																						"api",
+																						"rest",
+																						"v1",
+																						"protocols",
+																						"bacnet",
+																						"local",
+																						"objects",
+																						"read-property-multiple"
+																					]
+																				}
+																			},
+																			"_postman_previewlanguage": null,
+																			"header": null,
+																			"cookie": [],
+																			"body": null
+																		}
+																	]
+																}
+															],
+															"protocolProfileBehavior": {},
+															"_postman_isSubFolder": true
+														},
+														{
+															"name": "objects",
+															"request": {
+																"method": "GET",
+																"header": [],
+																"url": {
+																	"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001/objects",
+																	"protocol": "{{scheme}}",
+																	"host": [
+																		"{{ip_address}}"
+																	],
+																	"port": "{{port}}",
+																	"path": [
+																		"api",
+																		"rest",
+																		"v1",
+																		"protocols",
+																		"bacnet",
+																		"remote",
+																		"devices",
+																		"52001",
+																		"objects"
+																	]
+																},
+																"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+															},
+															"response": []
+														}
+													],
+													"protocolProfileBehavior": {},
+													"_postman_isSubFolder": true
+												},
+												{
+													"name": "remoteDeviceId",
+													"request": {
+														"method": "GET",
+														"header": [],
+														"url": {
+															"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices/52001",
+															"protocol": "{{scheme}}",
+															"host": [
+																"{{ip_address}}"
+															],
+															"port": "{{port}}",
+															"path": [
+																"api",
+																"rest",
+																"v1",
+																"protocols",
+																"bacnet",
+																"remote",
+																"devices",
+																"52001"
+															]
+														},
+														"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+													},
+													"response": []
+												}
+											],
+											"protocolProfileBehavior": {},
+											"_postman_isSubFolder": true
+										},
+										{
+											"name": "devices",
+											"request": {
+												"method": "GET",
+												"header": [],
+												"url": {
+													"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote/devices",
+													"protocol": "{{scheme}}",
+													"host": [
+														"{{ip_address}}"
+													],
+													"port": "{{port}}",
+													"path": [
+														"api",
+														"rest",
+														"v1",
+														"protocols",
+														"bacnet",
+														"remote",
+														"devices"
+													]
+												},
+												"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+											},
+											"response": []
+										}
+									],
+									"protocolProfileBehavior": {},
+									"_postman_isSubFolder": true
+								},
+								{
+									"name": "remote",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet/remote",
+											"protocol": "{{scheme}}",
+											"host": [
+												"{{ip_address}}"
+											],
+											"port": "{{port}}",
+											"path": [
+												"api",
+												"rest",
+												"v1",
+												"protocols",
+												"bacnet",
+												"remote"
+											]
+										},
+										"description": "http://eclypseapi.distech-controls.com/restApi/bacnet/resources/1023/GET\n\nGET /protocols/bacnet/local/objects\n\nThese objects represent physical inputs, outputs, and values used by and coming from software processes.\n\nThis resource lists all of the current objects on the device.\n"
+									},
+									"response": []
+								}
+							],
+							"protocolProfileBehavior": {},
+							"_postman_isSubFolder": true
+						},
+						{
+							"name": "bacnet",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet",
+									"protocol": "{{scheme}}",
+									"host": [
+										"{{ip_address}}"
+									],
+									"port": "{{port}}",
+									"path": [
+										"api",
+										"rest",
+										"v1",
+										"protocols",
+										"bacnet"
+									]
+								},
+								"description": "This resource is the root of all BACnet objects and properties.\n\nhttp://eclypseapi.distech-controls.com/restApi/bacnet/resources/1021/GET"
+							},
+							"response": []
+						},
+						{
+							"name": "Date TIme",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{scheme}}://{{ip_address}}:{{port}}/api/rest/v1/protocols/bacnet",
+									"protocol": "{{scheme}}",
+									"host": [
+										"{{ip_address}}"
+									],
+									"port": "{{port}}",
+									"path": [
+										"api",
+										"rest",
+										"v1",
+										"protocols",
+										"bacnet"
+									]
+								},
+								"description": "This resource is the root of all BACnet objects and properties.\n\nhttp://eclypseapi.distech-controls.com/restApi/bacnet/resources/1021/GET"
+							},
+							"response": []
+						}
+					],
+					"protocolProfileBehavior": {},
+					"_postman_isSubFolder": true
+				}
+			],
+			"protocolProfileBehavior": {}
+		}
+	],
+	"auth": {
+		"type": "basic",
+		"basic": [
+			{
+				"key": "password",
+				"value": "Distech@1234",
+				"type": "string"
+			},
+			{
+				"key": "username",
+				"value": "admin",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"id": "300a9eaa-883e-4c4d-be8d-d65970209fad",
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"id": "515f0320-938d-43f7-a4a8-78c68831e65d",
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"id": "3a54a1e7-c60f-440a-9674-0d5971bcbcef",
+			"key": "ip_address",
+			"value": "192.168.100.1"
+		},
+		{
+			"id": "7ff22f29-6280-49d4-802f-3ef8eaf3945f",
+			"key": "port",
+			"value": "443"
+		},
+		{
+			"id": "49ddf460-53fd-4bd5-9def-19e3b256cf93",
+			"key": "scheme",
+			"value": "https"
+		}
+	],
+	"protocolProfileBehavior": {}
+}
