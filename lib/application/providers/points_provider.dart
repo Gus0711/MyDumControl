@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logger/logger.dart';
 import '../../domain/models/bacnet_object.dart';
 import 'active_connection_provider.dart';
+import 'cache_provider.dart';
 
-/// État des points BACnet
+final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
+
+/// État des points BACnet avec cache des valeurs calculées
 class PointsState {
   final List<BacnetObject> points;
   final bool isLoading;
@@ -10,12 +14,28 @@ class PointsState {
   final String searchQuery;
   final BacnetObjectType? filterType;
 
-  const PointsState({
+  /// Indique si les données statiques viennent du cache local
+  final bool fromCache;
+
+  /// Catégorie actuellement sélectionnée
+  final PointCategory selectedCategory;
+
+  /// Option de tri actuelle
+  final PointSortOption sortOption;
+
+  /// IDs des points favoris (pour le tri "Favoris d'abord")
+  final Set<String> favoritePointIds;
+
+  PointsState({
     this.points = const [],
     this.isLoading = false,
     this.error,
     this.searchQuery = '',
     this.filterType,
+    this.fromCache = false,
+    this.selectedCategory = PointCategory.inputs,
+    this.sortOption = PointSortOption.nameAsc,
+    this.favoritePointIds = const {},
   });
 
   PointsState copyWith({
@@ -26,6 +46,10 @@ class PointsState {
     BacnetObjectType? filterType,
     bool clearFilter = false,
     bool clearError = false,
+    bool? fromCache,
+    PointCategory? selectedCategory,
+    PointSortOption? sortOption,
+    Set<String>? favoritePointIds,
   }) {
     return PointsState(
       points: points ?? this.points,
@@ -33,14 +57,19 @@ class PointsState {
       error: clearError ? null : (error ?? this.error),
       searchQuery: searchQuery ?? this.searchQuery,
       filterType: clearFilter ? null : (filterType ?? this.filterType),
+      fromCache: fromCache ?? this.fromCache,
+      selectedCategory: selectedCategory ?? this.selectedCategory,
+      sortOption: sortOption ?? this.sortOption,
+      favoritePointIds: favoritePointIds ?? this.favoritePointIds,
     );
   }
 
-  /// Points filtrés selon la recherche et le type
-  List<BacnetObject> get filteredPoints {
-    var result = points;
+  /// Points filtrés selon la catégorie, la recherche et triés
+  List<BacnetObject> getFilteredAndSortedPoints({PointCategory? category}) {
+    final cat = category ?? selectedCategory;
+    var result = cat.filterPoints(points);
 
-    // Filtrer par type
+    // Filtrer par type spécifique (si défini)
     if (filterType != null) {
       result = result.where((p) => p.type == filterType).toList();
     }
@@ -50,21 +79,79 @@ class PointsState {
       final query = searchQuery.toLowerCase();
       result = result.where((p) {
         return p.objectName.toLowerCase().contains(query) ||
-            (p.description?.toLowerCase().contains(query) ?? false);
+            (p.description?.toLowerCase().contains(query) ?? false) ||
+            p.objectId.toLowerCase().contains(query);
       }).toList();
     }
+
+    // Appliquer le tri
+    result = _sortPoints(result);
 
     return result;
   }
 
-  /// Grouper les points par type
-  Map<BacnetObjectType, List<BacnetObject>> get pointsByType {
-    final grouped = <BacnetObjectType, List<BacnetObject>>{};
-    for (final point in filteredPoints) {
-      grouped.putIfAbsent(point.type, () => []);
-      grouped[point.type]!.add(point);
+  /// Trie les points selon l'option de tri actuelle
+  List<BacnetObject> _sortPoints(List<BacnetObject> pointsToSort) {
+    final sorted = List<BacnetObject>.from(pointsToSort);
+
+    switch (sortOption) {
+      case PointSortOption.nameAsc:
+        sorted.sort((a, b) => a.objectName.toLowerCase().compareTo(b.objectName.toLowerCase()));
+        break;
+      case PointSortOption.nameDesc:
+        sorted.sort((a, b) => b.objectName.toLowerCase().compareTo(a.objectName.toLowerCase()));
+        break;
+      case PointSortOption.typeAsc:
+        sorted.sort((a, b) {
+          final typeCompare = a.type.index.compareTo(b.type.index);
+          if (typeCompare != 0) return typeCompare;
+          return a.objectName.compareTo(b.objectName);
+        });
+        break;
+      case PointSortOption.valueAsc:
+        sorted.sort((a, b) => _compareValues(a.presentValue, b.presentValue));
+        break;
+      case PointSortOption.valueDesc:
+        sorted.sort((a, b) => _compareValues(b.presentValue, a.presentValue));
+        break;
+      case PointSortOption.favoritesFirst:
+        sorted.sort((a, b) {
+          final aFav = favoritePointIds.contains(a.objectId);
+          final bFav = favoritePointIds.contains(b.objectId);
+          if (aFav && !bFav) return -1;
+          if (!aFav && bFav) return 1;
+          return a.objectName.toLowerCase().compareTo(b.objectName.toLowerCase());
+        });
+        break;
     }
-    return grouped;
+
+    return sorted;
+  }
+
+  /// Compare deux valeurs pour le tri
+  int _compareValues(dynamic a, dynamic b) {
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+
+    if (a is num && b is num) {
+      return a.compareTo(b);
+    }
+
+    return a.toString().compareTo(b.toString());
+  }
+
+  /// Compte les points par catégorie
+  Map<PointCategory, int> get pointCountByCategory {
+    return {
+      PointCategory.inputs: points.where((p) => p.type.isInput).length,
+      PointCategory.outputs: points.where((p) => p.type.isOutput).length,
+      PointCategory.variables: points.where((p) => p.type.isValue).length,
+      PointCategory.others: points.where((p) =>
+        !p.type.isInput && !p.type.isOutput && !p.type.isValue
+      ).length,
+      PointCategory.all: points.length,
+    };
   }
 
   /// Points forcés (overridden via priority-array OU entrées forcées via out-of-service)
@@ -90,10 +177,11 @@ class PointsState {
 class PointsNotifier extends StateNotifier<PointsState> {
   final Ref _ref;
 
-  PointsNotifier(this._ref) : super(const PointsState());
+  PointsNotifier(this._ref) : super(PointsState());
 
   /// Charge tous les points depuis l'automate
-  Future<void> loadPoints() async {
+  /// Utilise le cache local pour les propriétés statiques (nom, unité, description)
+  Future<void> loadPoints({bool forceRefresh = false}) async {
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected || connectionState.client == null) {
       state = state.copyWith(
@@ -103,8 +191,39 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return;
     }
 
-    state = state.copyWith(isLoading: true, clearError: true);
+    final connectionId = connectionState.connection!.id;
+    final cacheService = _ref.read(cacheServiceProvider);
 
+    // ÉTAPE 1: Charger immédiatement depuis le cache (si disponible et non forcé)
+    if (!forceRefresh && state.points.isEmpty) {
+      final cachedPoints = await cacheService.getStaticPointsCache(connectionId);
+      if (cachedPoints != null && cachedPoints.isNotEmpty) {
+        // Créer des BacnetObject à partir du cache (sans valeurs live)
+        final pointsFromCache = cacheService.createFromCache(cachedPoints);
+
+        // Trier par type puis par nom
+        pointsFromCache.sort((a, b) {
+          final typeCompare = a.type.index.compareTo(b.type.index);
+          if (typeCompare != 0) return typeCompare;
+          return a.objectName.compareTo(b.objectName);
+        });
+
+        _logger.i('loadPoints: ${pointsFromCache.length} points loaded from cache (instant!)');
+
+        state = state.copyWith(
+          points: pointsFromCache,
+          isLoading: true, // Continue à charger les valeurs live
+          fromCache: true,
+          clearError: true,
+        );
+      } else {
+        state = state.copyWith(isLoading: true, clearError: true);
+      }
+    } else {
+      state = state.copyWith(isLoading: true, clearError: true);
+    }
+
+    // ÉTAPE 2: Charger les données fraîches de l'API
     try {
       final points = await connectionState.client!.getAllPointsOptimized();
 
@@ -115,15 +234,32 @@ class PointsNotifier extends StateNotifier<PointsState> {
         return a.objectName.compareTo(b.objectName);
       });
 
+      _logger.i('loadPoints: ${points.length} points loaded from API');
+
+      // ÉTAPE 3: Mettre à jour le cache des propriétés statiques (en arrière-plan)
+      cacheService.cacheStaticPoints(connectionId, points);
+
       state = state.copyWith(
         points: points,
         isLoading: false,
+        fromCache: false, // Données fraîches
       );
     } catch (e) {
-      state = state.copyWith(
-        error: 'Erreur: $e',
-        isLoading: false,
-      );
+      _logger.e('loadPoints error: $e');
+
+      // En cas d'erreur, garder les données du cache si disponibles
+      if (state.points.isNotEmpty && state.fromCache) {
+        _logger.w('loadPoints: keeping cached data due to API error');
+        state = state.copyWith(
+          error: 'Erreur API (données du cache affichées): $e',
+          isLoading: false,
+        );
+      } else {
+        state = state.copyWith(
+          error: 'Erreur: $e',
+          isLoading: false,
+        );
+      }
     }
   }
 
@@ -144,6 +280,21 @@ class PointsNotifier extends StateNotifier<PointsState> {
     } else {
       state = state.copyWith(filterType: type);
     }
+  }
+
+  /// Change la catégorie sélectionnée
+  void setCategory(PointCategory category) {
+    state = state.copyWith(selectedCategory: category);
+  }
+
+  /// Change l'option de tri
+  void setSortOption(PointSortOption option) {
+    state = state.copyWith(sortOption: option);
+  }
+
+  /// Met à jour la liste des favoris (pour le tri)
+  void updateFavoriteIds(Set<String> favoriteIds) {
+    state = state.copyWith(favoritePointIds: favoriteIds);
   }
 
   /// Écrit une valeur simple sur un point (sans priorité)

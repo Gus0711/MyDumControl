@@ -403,6 +403,46 @@ class DeviceInfo {
   }
 }
 
+/// Catégories de points pour la navigation par onglets
+enum PointCategory {
+  inputs('Entrées', [BacnetObjectType.analogInput, BacnetObjectType.binaryInput, BacnetObjectType.multiStateInput]),
+  outputs('Sorties', [BacnetObjectType.analogOutput, BacnetObjectType.binaryOutput, BacnetObjectType.multiStateOutput]),
+  variables('Valeurs', [BacnetObjectType.analogValue, BacnetObjectType.binaryValue, BacnetObjectType.multiStateValue]),
+  others('Autres', [BacnetObjectType.schedule, BacnetObjectType.calendar, BacnetObjectType.trendLog]),
+  all('Tous', []);
+
+  final String displayName;
+  final List<BacnetObjectType> types;
+
+  const PointCategory(this.displayName, this.types);
+
+  /// Vérifie si un type appartient à cette catégorie
+  bool containsType(BacnetObjectType type) {
+    if (this == PointCategory.all) return true;
+    return types.contains(type);
+  }
+
+  /// Filtre une liste de points selon cette catégorie
+  List<BacnetObject> filterPoints(List<BacnetObject> points) {
+    if (this == PointCategory.all) return points;
+    return points.where((p) => types.contains(p.type)).toList();
+  }
+}
+
+/// Options de tri pour les points
+enum PointSortOption {
+  nameAsc('Nom (A→Z)'),
+  nameDesc('Nom (Z→A)'),
+  typeAsc('Type'),
+  valueAsc('Valeur ↑'),
+  valueDesc('Valeur ↓'),
+  favoritesFirst('Favoris d\'abord');
+
+  final String displayName;
+
+  const PointSortOption(this.displayName);
+}
+
 /// Résumé des objets disponibles sur l'automate
 class ObjectsSummary {
   final int analogInputs;

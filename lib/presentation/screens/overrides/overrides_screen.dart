@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../application/providers/points_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../shared/utils/bacnet_type_utils.dart';
 
 /// Écran listant les points forcés (overrides)
 class OverridesScreen extends ConsumerStatefulWidget {
@@ -169,7 +170,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           child: Row(
             children: [
-              Icon(_getTypeIcon(type), color: _getTypeColor(type), size: 20),
+              Icon(BacnetTypeUtils.getTypeIcon(type), color: BacnetTypeUtils.getTypeColor(type), size: 20),
               const SizedBox(width: 8),
               Text(
                 type.displayName,
@@ -259,7 +260,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
                   border: Border.all(color: tileColor.shade200),
                 ),
                 child: Text(
-                  _formatOverrideValue(point),
+                  BacnetTypeUtils.formatOverrideValue(point),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: tileColor.shade700,
@@ -281,86 +282,5 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
         ],
       ),
     );
-  }
-
-  String _formatOverrideValue(BacnetObject point) {
-    // Pour les entrées forcées, utiliser presentValue (pas overrideValue)
-    final isInputForced = point.type.isInput && point.outOfService == true;
-    final value = isInputForced ? point.presentValue : point.overrideValue;
-    if (value == null) return '-';
-
-    if (point.type.isBinary) {
-      final isActive = _isBinaryActive(value);
-      if (isActive) {
-        return point.activeText ?? 'ON';
-      } else {
-        return point.inactiveText ?? 'OFF';
-      }
-    }
-
-    if (value is num) {
-      final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
-      if (point.units != null && point.units!.isNotEmpty) {
-        return '$formatted ${point.units}';
-      }
-      return formatted;
-    }
-
-    return value.toString();
-  }
-
-  bool _isBinaryActive(dynamic value) {
-    if (value == null) return false;
-    if (value == true) return true;
-    if (value == 1) return true;
-    if (value is String) {
-      final lower = value.toLowerCase();
-      return lower == 'active' || lower == 'true' || lower == '1' || lower == 'on';
-    }
-    return false;
-  }
-
-  IconData _getTypeIcon(BacnetObjectType type) {
-    switch (type) {
-      case BacnetObjectType.analogInput:
-        return Icons.input;
-      case BacnetObjectType.analogOutput:
-        return Icons.output;
-      case BacnetObjectType.analogValue:
-        return Icons.speed;
-      case BacnetObjectType.binaryInput:
-        return Icons.toggle_off;
-      case BacnetObjectType.binaryOutput:
-        return Icons.toggle_on;
-      case BacnetObjectType.binaryValue:
-        return Icons.radio_button_checked;
-      case BacnetObjectType.multiStateInput:
-        return Icons.list;
-      case BacnetObjectType.multiStateOutput:
-        return Icons.list_alt;
-      case BacnetObjectType.multiStateValue:
-        return Icons.format_list_numbered;
-      default:
-        return Icons.device_unknown;
-    }
-  }
-
-  Color _getTypeColor(BacnetObjectType type) {
-    switch (type) {
-      case BacnetObjectType.analogInput:
-      case BacnetObjectType.binaryInput:
-      case BacnetObjectType.multiStateInput:
-        return Colors.blue;
-      case BacnetObjectType.analogOutput:
-      case BacnetObjectType.binaryOutput:
-      case BacnetObjectType.multiStateOutput:
-        return Colors.orange;
-      case BacnetObjectType.analogValue:
-      case BacnetObjectType.binaryValue:
-      case BacnetObjectType.multiStateValue:
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
   }
 }

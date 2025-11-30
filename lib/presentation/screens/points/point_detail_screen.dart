@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/providers/points_provider.dart';
+import '../../../application/providers/trend_log_provider.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../shared/utils/bacnet_type_utils.dart';
+import '../../widgets/trend_log_viewer.dart';
+import '../../widgets/favorite_button.dart';
 
 /// Écran de détail d'un point BACnet
 class PointDetailScreen extends ConsumerStatefulWidget {
@@ -93,6 +97,8 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       appBar: AppBar(
         title: Text(point.objectName),
         actions: [
+          // Bouton favori
+          FavoriteButton(point: point, size: 24),
           if (_canWrite(point.type))
             IconButton(
               icon: Icon(_isEditing ? Icons.close : Icons.edit),
@@ -130,10 +136,39 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           _buildInfoCard(context, point),
           const SizedBox(height: 16),
 
+          // Historique (si disponible)
+          _buildTrendLogSection(context, point),
+
           // Propriétés techniques
           _buildPropertiesCard(context, point),
         ],
       ),
+    );
+  }
+
+  Widget _buildTrendLogSection(BuildContext context, BacnetObject point) {
+    // Clé pour le mapping : "objectType:objectInstance"
+    final pointKey = '${point.type.apiName}:${point.instance}';
+
+    return Consumer(
+      builder: (context, ref, child) {
+        final trendLogInstance = ref.watch(trendLogInstanceProvider(pointKey));
+
+        if (trendLogInstance == null) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          children: [
+            TrendLogViewer(
+              trendLogInstance: trendLogInstance,
+              pointName: point.objectName,
+              units: point.units,
+            ),
+            const SizedBox(height: 16),
+          ],
+        );
+      },
     );
   }
 
@@ -150,13 +185,13 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: _getTypeColor(point.type).withAlpha(30),
+                color: BacnetTypeUtils.getTypeColor(point.type).withAlpha(30),
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                _getTypeIcon(point.type),
+                BacnetTypeUtils.getTypeIcon(point.type),
                 size: 32,
-                color: _getTypeColor(point.type),
+                color: BacnetTypeUtils.getTypeColor(point.type),
               ),
             ),
             const SizedBox(height: 16),
@@ -381,7 +416,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
   Widget _buildBinaryEditor(BuildContext context, BacnetObject point) {
     // Normaliser la valeur pour détecter si actif
     // La valeur peut être: true, 1, 'active', 'true', 'TRUE', 'Active', etc.
-    final isActive = _isBinaryActive(_editValue);
+    final isActive = BacnetTypeUtils.isBinaryActive(_editValue);
 
     // Utiliser activeText/inactiveText si disponibles
     final activeLabel = point.activeText ?? 'ON';
@@ -926,7 +961,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     if (value == null) return '-';
 
     if (point.type.isBinary) {
-      final isActive = _isBinaryActive(value);
+      final isActive = BacnetTypeUtils.isBinaryActive(value);
       if (isActive) {
         return point.activeText ?? 'Actif';
       } else {
@@ -1087,55 +1122,10 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     if (value == null) return Colors.grey;
 
     if (point.type.isBinary) {
-      if (_isBinaryActive(value)) return Colors.green;
+      if (BacnetTypeUtils.isBinaryActive(value)) return Colors.green;
       return Colors.grey;
     }
 
     return Colors.blue;
-  }
-
-  Color _getTypeColor(BacnetObjectType type) {
-    if (type.isInput) return Colors.blue;
-    if (type.isOutput) return Colors.orange;
-    if (type.isValue) return Colors.green;
-    return Colors.grey;
-  }
-
-  IconData _getTypeIcon(BacnetObjectType type) {
-    switch (type) {
-      case BacnetObjectType.analogInput:
-        return Icons.input;
-      case BacnetObjectType.analogOutput:
-        return Icons.output;
-      case BacnetObjectType.analogValue:
-        return Icons.speed;
-      case BacnetObjectType.binaryInput:
-        return Icons.toggle_off;
-      case BacnetObjectType.binaryOutput:
-        return Icons.toggle_on;
-      case BacnetObjectType.binaryValue:
-        return Icons.radio_button_checked;
-      case BacnetObjectType.multiStateInput:
-        return Icons.list;
-      case BacnetObjectType.multiStateOutput:
-        return Icons.list_alt;
-      case BacnetObjectType.multiStateValue:
-        return Icons.format_list_numbered;
-      default:
-        return Icons.device_unknown;
-    }
-  }
-
-  /// Vérifie si une valeur binaire représente l'état "actif"
-  /// Gère tous les formats possibles: bool, int, String
-  bool _isBinaryActive(dynamic value) {
-    if (value == null) return false;
-    if (value == true) return true;
-    if (value == 1) return true;
-    if (value is String) {
-      final lower = value.toLowerCase();
-      return lower == 'active' || lower == 'true' || lower == '1' || lower == 'on';
-    }
-    return false;
   }
 }

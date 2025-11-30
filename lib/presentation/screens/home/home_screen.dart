@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mydumcontrol/l10n/app_localizations.dart';
 import '../../../application/providers/active_connection_provider.dart';
 import '../../../application/providers/points_provider.dart';
+import '../../../application/providers/favorites_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -189,6 +190,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final overrideCount = pointsState.overriddenCount;
     final hasOverrides = pointsState.hasOverrides;
 
+    // Compter les favoris
+    final favoritesAsync = ref.watch(favoritesProvider);
+    final favoritesCount = favoritesAsync.maybeWhen(
+      data: (favorites) => favorites.length,
+      orElse: () => 0,
+    );
+
     // Menu items inspirés de MyDC Control
     final menuItems = [
       _MenuItem(
@@ -221,8 +229,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _MenuItem(
         icon: Icons.star,
         title: 'Favoris',
-        color: Colors.blue.shade600,
+        // Jaune/ambre si favoris présents, bleu sinon
+        color: favoritesCount > 0 ? Colors.amber.shade600 : Colors.blue.shade600,
         route: Routes.favorites,
+        badge: favoritesCount > 0 ? favoritesCount.toString() : null,
       ),
       _MenuItem(
         icon: Icons.show_chart,

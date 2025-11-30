@@ -9,6 +9,7 @@ import '../../presentation/screens/device_info/device_info_screen.dart';
 import '../../presentation/screens/points/points_screen.dart';
 import '../../presentation/screens/points/point_detail_screen.dart';
 import '../../presentation/screens/overrides/overrides_screen.dart';
+import '../../presentation/screens/favorites/favorites_screen.dart';
 
 /// Configuration du router de l'application
 class AppRouter {
@@ -107,13 +108,11 @@ class AppRouter {
         builder: (context, state) => const OverridesScreen(),
       ),
 
-      // Favoris - À implémenter
+      // Favoris
       GoRoute(
         path: Routes.favorites,
         name: 'favorites',
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Favoris - À implémenter')),
-        ),
+        builder: (context, state) => const FavoritesScreen(),
       ),
 
       // Boucles PID - À implémenter

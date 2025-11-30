@@ -63,12 +63,27 @@ class ApiService {
     required String username,
     required String password,
   }) async {
+    // Validation des entrées
+    final trimmedHost = host.trim();
+    if (trimmedHost.isEmpty) {
+      return ConnectionTestResult(success: false, errorMessage: 'Hôte requis');
+    }
+    if (port < 1 || port > 65535) {
+      return ConnectionTestResult(success: false, errorMessage: 'Port invalide (1-65535)');
+    }
+    if (username.trim().isEmpty) {
+      return ConnectionTestResult(success: false, errorMessage: 'Nom d\'utilisateur requis');
+    }
+    if (password.isEmpty) {
+      return ConnectionTestResult(success: false, errorMessage: 'Mot de passe requis');
+    }
+
     final scheme = useHttps ? 'https' : 'http';
-    final baseUrl = '$scheme://$host:$port';
+    final baseUrl = '$scheme://$trimmedHost:$port';
 
     // Configurer pour accepter les certificats auto-signés
     if (useHttps) {
-      _configureForSelfSignedCerts(host);
+      _configureForSelfSignedCerts(trimmedHost);
     }
 
     // Créer l'en-tête Basic Auth
@@ -1675,6 +1690,436 @@ class ConnectedApiClient {
     }
 
     return value;
+  }
+
+  // ============ Méthodes Trend Log ============
+
+  /// Récupère tous les trend-logs de l'automate
+  Future<List<Map<String, dynamic>>> getTrendLogs() async {
+    if (apiVersion == 'V2') {
+      return _getTrendLogsV2();
+    }
+    return _getTrendLogsV1();
+  }
+
+  /// Récupère les trend-logs V1
+  Future<List<Map<String, dynamic>>> _getTrendLogsV1() async {
+    _logger.i('_getTrendLogsV1: fetching trend-logs');
+
+    final url = '$baseUrl$_bacnetBasePath/objects/trendLog';
+
+    try {
+      final response = await _dio.get(url, options: _authOptions);
+      _logger.d('_getTrendLogsV1: status=${response.statusCode}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+        final trendLogs = <Map<String, dynamic>>[];
+
+        if (data is List) {
+          _logger.d('_getTrendLogsV1: data is List with ${data.length} items');
+          // Liste d'objets ou d'IDs
+          for (final item in data) {
+            int? instance;
+            if (item is int) {
+              instance = item;
+            } else if (item is Map<String, dynamic>) {
+              // Format: {href: "/api/.../300672", name: "trendLog_300672"}
+              // Extraire l'instance depuis 'name' ou 'href'
+              final name = item['name']?.toString();
+              final href = item['href']?.toString();
+
+              if (name != null) {
+                // Parser "trendLog_300672" -> 300672
+                final match = RegExp(r'_(\d+)$').firstMatch(name);
+                if (match != null) {
+                  instance = int.tryParse(match.group(1)!);
+                }
+              }
+              if (instance == null && href != null) {
+                // Parser "/api/.../trend-log/300672" -> 300672
+                final match = RegExp(r'/(\d+)$').firstMatch(href);
+                if (match != null) {
+                  instance = int.tryParse(match.group(1)!);
+                }
+              }
+
+              instance ??= item['instance'] ?? item['objectInstance'];
+
+              if (instance != null) {
+                trendLogs.add({'instance': instance, ...item});
+                continue;
+              }
+            }
+
+            if (instance != null) {
+              trendLogs.add({'instance': instance});
+            }
+          }
+        }
+
+        _logger.i('_getTrendLogsV1: parsed ${trendLogs.length} trend-logs: ${trendLogs.map((t) => t['instance']).toList()}');
+        return trendLogs;
+      }
+    } catch (e) {
+      _logger.e('_getTrendLogsV1 error: $e');
+    }
+
+    return [];
+  }
+
+  /// Récupère les trend-logs V2
+  Future<List<Map<String, dynamic>>> _getTrendLogsV2() async {
+    _logger.i('_getTrendLogsV2: fetching trend-logs');
+
+    final url = '$baseUrl$_bacnetBasePath/objects/trend-logs';
+
+    try {
+      final response = await _dio.get(url, options: _authOptions);
+      _logger.d('_getTrendLogsV2: status=${response.statusCode}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+        final trendLogs = <Map<String, dynamic>>[];
+
+        if (data is Map<String, dynamic>) {
+          // Format V2: {"1": {...}, "2": {...}}
+          data.forEach((key, value) {
+            final instance = int.tryParse(key);
+            if (instance != null && value is Map<String, dynamic>) {
+              trendLogs.add({'instance': instance, ...value});
+            }
+          });
+        } else if (data is List) {
+          for (final item in data) {
+            if (item is int) {
+              trendLogs.add({'instance': item});
+            } else if (item is Map<String, dynamic>) {
+              trendLogs.add(item);
+            }
+          }
+        }
+
+        return trendLogs;
+      }
+    } catch (e) {
+      _logger.e('_getTrendLogsV2 error: $e');
+    }
+
+    return [];
+  }
+
+  /// Récupère le mapping trend-log -> objet tracké via read-property-multiple (V1)
+  /// Retourne un Map<String, int> où la clé est "objectType:objectInstance" et la valeur est l'instance du trend-log
+  Future<Map<String, int>> getTrendLogMapping() async {
+    if (apiVersion == 'V2') {
+      return _getTrendLogMappingV2();
+    }
+    return _getTrendLogMappingV1();
+  }
+
+  /// Récupère le mapping V1 via read-property-multiple
+  Future<Map<String, int>> _getTrendLogMappingV1() async {
+    _logger.i('_getTrendLogMappingV1: loading trend log mapping');
+
+    final mapping = <String, int>{};
+
+    // D'abord récupérer la liste des trend-logs
+    final trendLogs = await _getTrendLogsV1();
+    _logger.i('_getTrendLogMappingV1: got ${trendLogs.length} trend-logs');
+    if (trendLogs.isEmpty) {
+      _logger.w('_getTrendLogMappingV1: no trend-logs found, returning empty mapping');
+      return mapping;
+    }
+
+    // Utiliser read-property-multiple pour récupérer log-device-object-property
+    final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
+
+    final propertyRefs = trendLogs.map((tl) => {
+      'type': 'trendLog',
+      'instance': tl['instance'],
+      'property': 'logDeviceObjectProperty',
+      'arrayIndex': -1,
+    }).toList();
+
+    _logger.d('_getTrendLogMappingV1: requesting ${propertyRefs.length} properties');
+
+    try {
+      final response = await _dio.post(
+        rpmUrl,
+        data: {
+          'encode': 'text',
+          'propertyReferences': propertyRefs,
+        },
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      _logger.d('_getTrendLogMappingV1: status=${response.statusCode}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        List refs;
+        if (response.data is List) {
+          refs = response.data;
+        } else if (response.data is Map<String, dynamic>) {
+          refs = response.data['propertyReferences'] as List? ?? [];
+        } else {
+          refs = [];
+        }
+
+        for (final ref in refs) {
+          if (ref is! Map<String, dynamic>) continue;
+
+          final instance = ref['instance'];
+          final value = ref['value']?.toString() ?? ref['message']?.toString();
+
+          if (instance == null || instance == -1 || value == null) continue;
+
+          // Parser le format "[Analog Value 454,Present Value,,]"
+          final match = RegExp(r'\[([^,]+)\s+(\d+),').firstMatch(value);
+          if (match != null) {
+            final objectTypeRaw = match.group(1)?.trim();
+            final objectInstance = int.tryParse(match.group(2) ?? '');
+
+            if (objectTypeRaw != null && objectInstance != null) {
+              // Convertir "Analog Value" -> "analog-value"
+              final objectType = objectTypeRaw.toLowerCase().replaceAll(RegExp(r'\s+'), '-');
+              final key = '$objectType:$objectInstance';
+              final trendLogInstance = instance is int ? instance : int.tryParse(instance.toString()) ?? 0;
+              mapping[key] = trendLogInstance;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      _logger.e('_getTrendLogMappingV1 error: $e');
+    }
+
+    _logger.i('_getTrendLogMappingV1: found ${mapping.length} mappings');
+    return mapping;
+  }
+
+  /// Récupère le mapping V2
+  Future<Map<String, int>> _getTrendLogMappingV2() async {
+    _logger.i('_getTrendLogMappingV2: loading trend log mapping');
+
+    final mapping = <String, int>{};
+
+    // En V2, récupérer les trend-logs avec $select pour log-device-object-property
+    final url = '$baseUrl$_bacnetBasePath/objects/trend-logs?\$select=log-device-object-property';
+
+    try {
+      final response = await _dio.get(url, options: _authOptions);
+
+      if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
+        final data = response.data as Map<String, dynamic>;
+
+        data.forEach((key, value) {
+          final instance = int.tryParse(key);
+          if (instance == null || value is! Map<String, dynamic>) return;
+
+          final logProp = value['log-device-object-property'];
+          if (logProp == null) return;
+
+          // Parser le format - peut être un objet ou une chaîne
+          String? objectType;
+          int? objectInstance;
+
+          if (logProp is Map<String, dynamic>) {
+            // Format objet: {"object-type": "analog-value", "instance": 454}
+            objectType = logProp['object-type']?.toString();
+            objectInstance = logProp['instance'] as int?;
+          } else if (logProp is String) {
+            // Format texte: "[Analog Value 454,Present Value,,]"
+            final match = RegExp(r'\[([^,]+)\s+(\d+),').firstMatch(logProp);
+            if (match != null) {
+              objectType = match.group(1)?.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-');
+              objectInstance = int.tryParse(match.group(2) ?? '');
+            }
+          }
+
+          if (objectType != null && objectInstance != null) {
+            final objKey = '$objectType:$objectInstance';
+            mapping[objKey] = instance;
+          }
+        });
+      }
+    } catch (e) {
+      _logger.e('_getTrendLogMappingV2 error: $e');
+    }
+
+    _logger.i('_getTrendLogMappingV2: found ${mapping.length} mappings');
+    return mapping;
+  }
+
+  /// Récupère le log buffer d'un trend-log spécifique (V1)
+  Future<String?> getTrendLogBuffer(int trendLogInstance) async {
+    if (apiVersion == 'V2') {
+      return _getTrendLogBufferV2(trendLogInstance);
+    }
+    return _getTrendLogBufferV1(trendLogInstance);
+  }
+
+  /// Récupère le log buffer V1
+  /// Note: Le buffer peut être très volumineux, on utilise un timeout plus long
+  Future<String?> _getTrendLogBufferV1(int trendLogInstance) async {
+    _logger.i('_getTrendLogBufferV1: fetching log-buffer for trend-log $trendLogInstance');
+
+    final url = '$baseUrl$_bacnetBasePath/objects/trendLog/$trendLogInstance/properties/logBuffer';
+
+    try {
+      // Timeout plus long pour les gros buffers (5 minutes)
+      final response = await _dio.get(
+        url,
+        options: Options(
+          headers: {'Authorization': basicAuth},
+          receiveTimeout: const Duration(minutes: 5),
+          sendTimeout: const Duration(minutes: 1),
+        ),
+      );
+      _logger.d('_getTrendLogBufferV1: status=${response.statusCode}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        // Le buffer peut être dans 'value' ou directement la donnée
+        if (response.data is Map<String, dynamic>) {
+          final value = response.data['value']?.toString();
+          _logger.d('_getTrendLogBufferV1: got ${value?.length ?? 0} chars');
+          return value;
+        }
+        final value = response.data.toString();
+        _logger.d('_getTrendLogBufferV1: got ${value.length} chars');
+        return value;
+      }
+    } catch (e) {
+      _logger.e('_getTrendLogBufferV1 error: $e');
+    }
+
+    return null;
+  }
+
+  /// Récupère le log buffer V2 via l'API history
+  Future<String?> _getTrendLogBufferV2(int trendLogInstance) async {
+    _logger.i('_getTrendLogBufferV2: fetching history for trend-log $trendLogInstance');
+
+    // En V2, utiliser l'API history avec get-history
+    final url = '$baseUrl/api/rest/v2/services/history/groups/bacnet/histories/get-history';
+
+    // Calculer la plage de temps (7 derniers jours par défaut)
+    final now = DateTime.now();
+    final startDate = now.subtract(const Duration(days: 7));
+    final timeRange = '${startDate.toIso8601String()}/${now.toIso8601String()}';
+
+    try {
+      final response = await _dio.post(
+        url,
+        data: {
+          'history': 'trend-log-$trendLogInstance',
+          'delta': false,
+          'time-range': timeRange,
+          'interval': null,
+          'delta-timestamps': 'Leading',
+        },
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      _logger.d('_getTrendLogBufferV2: status=${response.statusCode}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        // Retourner les données JSON comme chaîne pour parsing ultérieur
+        if (response.data is List) {
+          return response.data.toString();
+        }
+        return response.data.toString();
+      }
+    } catch (e) {
+      _logger.e('_getTrendLogBufferV2 error: $e');
+    }
+
+    return null;
+  }
+
+  /// Récupère l'historique d'un trend-log avec filtre de période (V2 uniquement)
+  Future<List<Map<String, dynamic>>?> getTrendLogHistoryV2({
+    required int trendLogInstance,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    if (apiVersion != 'V2') {
+      _logger.w('getTrendLogHistoryV2: not supported in V1');
+      return null;
+    }
+
+    _logger.i('getTrendLogHistoryV2: fetching history for trend-log $trendLogInstance');
+
+    final url = '$baseUrl/api/rest/v2/services/history/groups/bacnet/histories/get-history';
+    final timeRange = '${startDate.toIso8601String()}/${endDate.toIso8601String()}';
+
+    try {
+      final response = await _dio.post(
+        url,
+        data: {
+          'history': 'trend-log-$trendLogInstance',
+          'delta': false,
+          'time-range': timeRange,
+          'interval': null,
+          'delta-timestamps': 'Leading',
+        },
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      _logger.d('getTrendLogHistoryV2: status=${response.statusCode}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        if (response.data is List) {
+          return (response.data as List).cast<Map<String, dynamic>>();
+        }
+      }
+    } catch (e) {
+      _logger.e('getTrendLogHistoryV2 error: $e');
+    }
+
+    return null;
+  }
+
+  /// Récupère le trend (historique) d'un point spécifique (V1)
+  /// Endpoint: /objects/{type}/{instance}/trend?dataOnly=true
+  Future<String?> getPointTrendV1(BacnetObjectType type, int instance) async {
+    if (apiVersion != 'V1') {
+      _logger.w('getPointTrendV1: only supported in V1');
+      return null;
+    }
+
+    final typeName = _objectTypeToCamelCase(type);
+    final url = '$baseUrl$_bacnetBasePath/objects/$typeName/$instance/trend?dataOnly=true';
+
+    _logger.i('getPointTrendV1: GET $url');
+
+    try {
+      final response = await _dio.get(url, options: _authOptions);
+      _logger.d('getPointTrendV1: status=${response.statusCode}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        return response.data.toString();
+      }
+    } catch (e) {
+      _logger.e('getPointTrendV1 error: $e');
+    }
+
+    return null;
   }
 
   /// Ferme le client

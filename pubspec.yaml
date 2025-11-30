@@ -39,6 +39,7 @@ dependencies:
   flutter_svg: ^2.0.10+1
   shimmer: ^3.0.0
   fl_chart: ^0.68.0
+  share_plus: ^10.1.4
 
   # Utils
   freezed_annotation: ^2.4.1

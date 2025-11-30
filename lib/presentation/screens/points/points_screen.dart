@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/providers/points_provider.dart';
+import '../../../application/providers/trend_log_provider.dart';
+import '../../../application/providers/favorites_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../shared/utils/bacnet_type_utils.dart';
+import '../../widgets/favorite_button.dart';
 
-/// Écran de liste des points BACnet
+/// Écran de liste des points BACnet avec navigation par catégories (TabBar)
 class PointsScreen extends ConsumerStatefulWidget {
   const PointsScreen({super.key});
 
@@ -13,107 +17,237 @@ class PointsScreen extends ConsumerStatefulWidget {
   ConsumerState<PointsScreen> createState() => _PointsScreenState();
 }
 
-class _PointsScreenState extends ConsumerState<PointsScreen> {
-  final _searchController = TextEditingController();
-  bool _isSearchVisible = false;
+class _PointsScreenState extends ConsumerState<PointsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
+  bool _showSearch = false;
+
+  /// Les catégories dans l'ordre des onglets
+  static const _categories = [
+    PointCategory.inputs,
+    PointCategory.outputs,
+    PointCategory.variables,
+    PointCategory.others,
+    PointCategory.all,
+  ];
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: _categories.length, vsync: this);
+    _tabController.addListener(_onTabChanged);
+
     // Charger les points au démarrage
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(pointsProvider.notifier).loadPoints();
+      final pointsState = ref.read(pointsProvider);
+      if (pointsState.points.isEmpty && !pointsState.isLoading) {
+        ref.read(pointsProvider.notifier).loadPoints();
+      }
+      // Mettre à jour les favoris pour le tri
+      _updateFavoriteIds();
     });
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) {
+      final category = _categories[_tabController.index];
+      ref.read(pointsProvider.notifier).setCategory(category);
+    }
+  }
+
+  void _updateFavoriteIds() {
+    final favoritesAsync = ref.read(favoritesProvider);
+    favoritesAsync.whenData((favorites) {
+      final ids = favorites.map((f) => f.pointRef).toSet();
+      ref.read(pointsProvider.notifier).updateFavoriteIds(ids);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(pointsProvider);
+    final pointsState = ref.watch(pointsProvider);
+    final counts = pointsState.pointCountByCategory;
+
+    // Écouter les changements de favoris pour mettre à jour le tri
+    ref.listen(favoritesProvider, (_, _) => _updateFavoriteIds());
 
     return Scaffold(
       appBar: AppBar(
-        title: _isSearchVisible
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Rechercher un point...',
-                  border: InputBorder.none,
-                ),
-                onChanged: (value) {
-                  ref.read(pointsProvider.notifier).setSearchQuery(value);
-                },
-              )
-            : const Text('Points'),
+        title: _showSearch ? _buildSearchField() : const Text('Points'),
         actions: [
+          // Bouton recherche
           IconButton(
-            icon: Icon(_isSearchVisible ? Icons.close : Icons.search),
+            icon: Icon(_showSearch ? Icons.close : Icons.search),
             onPressed: () {
               setState(() {
-                _isSearchVisible = !_isSearchVisible;
-                if (!_isSearchVisible) {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
                   _searchController.clear();
                   ref.read(pointsProvider.notifier).setSearchQuery('');
                 }
               });
             },
           ),
-          PopupMenuButton<BacnetObjectType?>(
-            icon: Badge(
-              isLabelVisible: state.filterType != null,
-              child: const Icon(Icons.filter_list),
-            ),
-            onSelected: (type) {
-              ref.read(pointsProvider.notifier).setFilterType(type);
+          // Menu tri
+          PopupMenuButton<PointSortOption>(
+            icon: const Icon(Icons.sort),
+            tooltip: 'Trier',
+            onSelected: (option) {
+              ref.read(pointsProvider.notifier).setSortOption(option);
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: null,
-                child: Text('Tous les types'),
-              ),
-              const PopupMenuDivider(),
-              ...BacnetObjectType.values.where((t) => _isPointType(t)).map(
-                    (type) => PopupMenuItem(
-                      value: type,
-                      child: Row(
-                        children: [
-                          Icon(
-                            _getTypeIcon(type),
-                            size: 20,
-                            color: _getTypeColor(type),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(type.displayName),
-                          if (state.filterType == type) ...[
-                            const Spacer(),
-                            const Icon(Icons.check, size: 18),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-            ],
+            itemBuilder: (context) => PointSortOption.values.map((option) {
+              final isSelected = pointsState.sortOption == option;
+              return PopupMenuItem(
+                value: option,
+                child: Row(
+                  children: [
+                    if (isSelected)
+                      const Icon(Icons.check, size: 18)
+                    else
+                      const SizedBox(width: 18),
+                    const SizedBox(width: 8),
+                    Text(option.displayName),
+                  ],
+                ),
+              );
+            }).toList(),
           ),
+          // Rafraîchir
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: state.isLoading
+            onPressed: pointsState.isLoading
                 ? null
-                : () => ref.read(pointsProvider.notifier).refresh(),
+                : () => ref.read(pointsProvider.notifier).loadPoints(forceRefresh: true),
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: _categories.map((cat) {
+            final count = counts[cat] ?? 0;
+            return Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (cat == PointCategory.all)
+                    const Icon(Icons.search, size: 16)
+                  else
+                    Text(cat.displayName),
+                  if (cat == PointCategory.all)
+                    const SizedBox(width: 4),
+                  if (cat == PointCategory.all)
+                    const Text('Tous'),
+                  if (count > 0 && cat != PointCategory.all) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        count.toString(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (cat == PointCategory.all && count > 0) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      '($count)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+      body: Column(
+        children: [
+          // Indicateur de cache
+          if (pointsState.fromCache && pointsState.isLoading)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.blue.shade50,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Chargement des valeurs en cours...',
+                    style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+                  ),
+                ],
+              ),
+            ),
+
+          // Contenu par onglet
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: _categories.map((category) {
+                return _PointsCategoryTab(category: category);
+              }).toList(),
+            ),
           ),
         ],
       ),
-      body: _buildBody(context, state),
     );
   }
 
-  Widget _buildBody(BuildContext context, PointsState state) {
-    if (state.isLoading && state.points.isEmpty) {
+  Widget _buildSearchField() {
+    return TextField(
+      controller: _searchController,
+      autofocus: true,
+      decoration: const InputDecoration(
+        hintText: 'Rechercher un point...',
+        border: InputBorder.none,
+      ),
+      onChanged: (value) {
+        ref.read(pointsProvider.notifier).setSearchQuery(value);
+      },
+    );
+  }
+}
+
+/// Tab pour afficher les points d'une catégorie
+class _PointsCategoryTab extends ConsumerWidget {
+  final PointCategory category;
+
+  const _PointsCategoryTab({required this.category});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pointsState = ref.watch(pointsProvider);
+
+    if (pointsState.isLoading && pointsState.points.isEmpty) {
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -126,14 +260,20 @@ class _PointsScreenState extends ConsumerState<PointsScreen> {
       );
     }
 
-    if (state.error != null && state.points.isEmpty) {
+    if (pointsState.error != null && pointsState.points.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
             const SizedBox(height: 16),
-            Text(state.error!),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                pointsState.error!,
+                textAlign: TextAlign.center,
+              ),
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
@@ -145,19 +285,19 @@ class _PointsScreenState extends ConsumerState<PointsScreen> {
       );
     }
 
-    final filteredPoints = state.filteredPoints;
+    final filteredPoints = pointsState.getFilteredAndSortedPoints(category: category);
 
     if (filteredPoints.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
+            Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 16),
             Text(
-              state.searchQuery.isNotEmpty || state.filterType != null
-                  ? 'Aucun point trouvé'
-                  : 'Aucun point disponible',
+              pointsState.searchQuery.isNotEmpty
+                  ? 'Aucun résultat pour "${pointsState.searchQuery}"'
+                  : 'Aucun point dans cette catégorie',
               style: TextStyle(color: Colors.grey.shade600),
             ),
           ],
@@ -165,96 +305,50 @@ class _PointsScreenState extends ConsumerState<PointsScreen> {
       );
     }
 
-    // Grouper par type
-    final pointsByType = state.pointsByType;
-
     return RefreshIndicator(
-      onRefresh: () => ref.read(pointsProvider.notifier).refresh(),
+      onRefresh: () => ref.read(pointsProvider.notifier).loadPoints(),
       child: ListView.builder(
-        padding: const EdgeInsets.only(bottom: 16),
-        itemCount: pointsByType.length,
+        itemCount: filteredPoints.length,
         itemBuilder: (context, index) {
-          final type = pointsByType.keys.elementAt(index);
-          final points = pointsByType[type]!;
-
-          return _buildTypeSection(context, type, points, state.isLoading);
+          final point = filteredPoints[index];
+          return _PointTile(point: point);
         },
       ),
     );
   }
+}
 
-  Widget _buildTypeSection(
-    BuildContext context,
-    BacnetObjectType type,
-    List<BacnetObject> points,
-    bool isLoading,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // En-tête du type
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Row(
-            children: [
-              Icon(_getTypeIcon(type), color: _getTypeColor(type), size: 20),
-              const SizedBox(width: 8),
-              Text(
-                type.displayName,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _getTypeColor(type).withAlpha(30),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${points.length}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: _getTypeColor(type),
-                  ),
-                ),
-              ),
-              if (isLoading) ...[
-                const SizedBox(width: 8),
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ],
-            ],
-          ),
-        ),
-        // Liste des points
-        ...points.map((point) => _buildPointTile(context, point)),
-      ],
-    );
-  }
+/// Tile pour afficher un point
+class _PointTile extends ConsumerWidget {
+  final BacnetObject point;
 
-  Widget _buildPointTile(BuildContext context, BacnetObject point) {
-    final valueColor = _getValueColor(point);
+  const _PointTile({required this.point});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final typeColor = BacnetTypeUtils.getTypeColor(point.type);
+    final valueColor = BacnetTypeUtils.getValueColor(point);
 
     return ListTile(
-      onTap: () => context.push(Routes.pointDetailPath('${point.type.name}:${point.instance}')),
+      onTap: () {
+        context.push(Routes.pointDetailPath('${point.type.name}:${point.instance}'));
+      },
       leading: Container(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: _getTypeColor(point.type).withAlpha(30),
+          color: typeColor.withAlpha(30),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(
-          _getTypeIcon(point.type),
-          color: _getTypeColor(point.type),
-          size: 20,
+        child: Center(
+          child: Text(
+            point.type.shortName,
+            style: TextStyle(
+              color: typeColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
         ),
       ),
       title: Text(
@@ -263,33 +357,53 @@ class _PointsScreenState extends ConsumerState<PointsScreen> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: point.description != null
-          ? Text(
-              point.description!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            )
-          : null,
+      subtitle: Row(
+        children: [
+          Text(
+            point.objectId,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+              fontFamily: 'monospace',
+            ),
+          ),
+          if (point.description != null && point.description!.isNotEmpty) ...[
+            Text(' - ', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+            Expanded(
+              child: Text(
+                point.description!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ),
+          ],
+        ],
+      ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Indicateur de forçage (override via priority-array)
+          // Bouton favori
+          FavoriteButton(point: point),
+          const SizedBox(width: 4),
+          // Indicateur de trend log
+          _TrendLogIndicator(
+            pointKey: '${point.type.apiName}:${point.instance}',
+          ),
+          // Indicateur de forçage (priority-array)
           if (point.isOverridden)
-            Tooltip(
-              message: 'Forcé à priorité ${point.overridePriority}',
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade100,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.red.shade300, width: 1),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.lock, size: 10, color: Colors.red.shade700),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                color: Colors.red.shade100,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock, size: 10, color: Colors.red.shade700),
+                  if (point.overridePriority != null) ...[
                     const SizedBox(width: 2),
                     Text(
                       'P${point.overridePriority}',
@@ -300,56 +414,35 @@ class _PointsScreenState extends ConsumerState<PointsScreen> {
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
             ),
-          // Indicateur d'entrée forcée (out-of-service pour les inputs)
-          if (point.type.isInput && point.outOfService == true)
-            Tooltip(
-              message: 'Entrée forcée (out-of-service)',
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.orange.shade300, width: 1),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.power_settings_new, size: 10, color: Colors.orange.shade700),
-                    const SizedBox(width: 2),
-                    Text(
-                      'OOS',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange.shade700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          // Indicateur out of service pour les non-entrées
-          else if (point.outOfService == true)
+          // Indicateur d'entrée forcée (out-of-service)
+          if (point.type.isInput && point.outOfService == true && !point.isOverridden)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              margin: const EdgeInsets.only(right: 8),
+              margin: const EdgeInsets.only(left: 4),
               decoration: BoxDecoration(
                 color: Colors.orange.shade100,
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Text(
-                'OOS',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange.shade800,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.power_settings_new, size: 10, color: Colors.orange.shade700),
+                  const SizedBox(width: 2),
+                  Text(
+                    'OOS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange.shade700,
+                    ),
+                  ),
+                ],
               ),
             ),
+          const SizedBox(width: 8),
           // Valeur
           Container(
             constraints: const BoxConstraints(minWidth: 60),
@@ -359,7 +452,9 @@ class _PointsScreenState extends ConsumerState<PointsScreen> {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              _formatValue(point),
+              point.presentValue != null
+                  ? BacnetTypeUtils.formatValue(point)
+                  : '-',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: valueColor,
@@ -368,116 +463,35 @@ class _PointsScreenState extends ConsumerState<PointsScreen> {
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.chevron_right, color: Colors.grey.shade400),
+          Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 20),
         ],
       ),
     );
   }
+}
 
-  String _formatValue(BacnetObject point) {
-    final value = point.presentValue;
-    if (value == null) return '---';
+/// Indicateur de trend log
+class _TrendLogIndicator extends ConsumerWidget {
+  final String pointKey;
 
-    if (point.type.isBinary) {
-      // Utiliser activeText/inactiveText si disponibles
-      final isActive = _isBinaryActive(value);
-      if (isActive) {
-        return point.activeText ?? 'ON';
-      } else {
-        return point.inactiveText ?? 'OFF';
-      }
-    }
+  const _TrendLogIndicator({required this.pointKey});
 
-    if (value is num) {
-      final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
-      if (point.units != null && point.units!.isNotEmpty) {
-        return '$formatted ${point.units}';
-      }
-      return formatted;
-    }
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasTrendLog = ref.watch(hasTrendLogProvider(pointKey));
 
-    return value.toString();
-  }
+    if (!hasTrendLog) return const SizedBox.shrink();
 
-  bool _isBinaryActive(dynamic value) {
-    if (value == null) return false;
-    if (value == true) return true;
-    if (value == 1) return true;
-    if (value is String) {
-      final lower = value.toLowerCase();
-      return lower == 'active' || lower == 'true' || lower == '1' || lower == 'on';
-    }
-    return false;
-  }
-
-  Color _getValueColor(BacnetObject point) {
-    if (point.outOfService == true) return Colors.orange;
-
-    final value = point.presentValue;
-    if (value == null) return Colors.grey;
-
-    if (point.type.isBinary) {
-      return _isBinaryActive(value) ? Colors.green : Colors.grey;
-    }
-
-    return Colors.blue;
-  }
-
-  bool _isPointType(BacnetObjectType type) {
-    return [
-      BacnetObjectType.analogInput,
-      BacnetObjectType.analogOutput,
-      BacnetObjectType.analogValue,
-      BacnetObjectType.binaryInput,
-      BacnetObjectType.binaryOutput,
-      BacnetObjectType.binaryValue,
-      BacnetObjectType.multiStateInput,
-      BacnetObjectType.multiStateOutput,
-      BacnetObjectType.multiStateValue,
-    ].contains(type);
-  }
-
-  IconData _getTypeIcon(BacnetObjectType type) {
-    switch (type) {
-      case BacnetObjectType.analogInput:
-        return Icons.input;
-      case BacnetObjectType.analogOutput:
-        return Icons.output;
-      case BacnetObjectType.analogValue:
-        return Icons.speed;
-      case BacnetObjectType.binaryInput:
-        return Icons.toggle_off;
-      case BacnetObjectType.binaryOutput:
-        return Icons.toggle_on;
-      case BacnetObjectType.binaryValue:
-        return Icons.radio_button_checked;
-      case BacnetObjectType.multiStateInput:
-        return Icons.list;
-      case BacnetObjectType.multiStateOutput:
-        return Icons.list_alt;
-      case BacnetObjectType.multiStateValue:
-        return Icons.format_list_numbered;
-      default:
-        return Icons.device_unknown;
-    }
-  }
-
-  Color _getTypeColor(BacnetObjectType type) {
-    switch (type) {
-      case BacnetObjectType.analogInput:
-      case BacnetObjectType.binaryInput:
-      case BacnetObjectType.multiStateInput:
-        return Colors.blue;
-      case BacnetObjectType.analogOutput:
-      case BacnetObjectType.binaryOutput:
-      case BacnetObjectType.multiStateOutput:
-        return Colors.orange;
-      case BacnetObjectType.analogValue:
-      case BacnetObjectType.binaryValue:
-      case BacnetObjectType.multiStateValue:
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
+    return Tooltip(
+      message: 'Trend log disponible',
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        child: Icon(
+          Icons.show_chart,
+          size: 16,
+          color: Colors.blue.shade600,
+        ),
+      ),
+    );
   }
 }

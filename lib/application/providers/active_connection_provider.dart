@@ -6,6 +6,7 @@ import '../../data/services/api_service.dart';
 import '../../domain/models/bacnet_object.dart';
 import 'connection_providers.dart';
 import 'database_provider.dart';
+import 'cache_provider.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
@@ -20,6 +21,10 @@ class ActiveConnectionState {
   final bool isLoadingSummary;
   final String? error;
 
+  /// Indique si les données viennent du cache
+  final bool deviceInfoFromCache;
+  final bool summaryFromCache;
+
   const ActiveConnectionState({
     this.connection,
     this.client,
@@ -29,6 +34,8 @@ class ActiveConnectionState {
     this.isLoadingDeviceInfo = false,
     this.isLoadingSummary = false,
     this.error,
+    this.deviceInfoFromCache = false,
+    this.summaryFromCache = false,
   });
 
   bool get isConnected => client != null && connection != null;
@@ -43,6 +50,8 @@ class ActiveConnectionState {
     bool? isLoadingDeviceInfo,
     bool? isLoadingSummary,
     String? error,
+    bool? deviceInfoFromCache,
+    bool? summaryFromCache,
   }) {
     return ActiveConnectionState(
       connection: connection ?? this.connection,
@@ -53,6 +62,8 @@ class ActiveConnectionState {
       isLoadingDeviceInfo: isLoadingDeviceInfo ?? this.isLoadingDeviceInfo,
       isLoadingSummary: isLoadingSummary ?? this.isLoadingSummary,
       error: error,
+      deviceInfoFromCache: deviceInfoFromCache ?? this.deviceInfoFromCache,
+      summaryFromCache: summaryFromCache ?? this.summaryFromCache,
     );
   }
 }
@@ -66,6 +77,14 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   /// Se connecte à un automate (connexion rapide, données en arrière-plan)
   Future<bool> connect(int connectionId) async {
     _logger.i('connect: connectionId=$connectionId');
+
+    // Dispose de l'ancien client avant de créer un nouveau (éviter les memory leaks)
+    final oldClient = state.client;
+    if (oldClient != null) {
+      _logger.i('connect: disposing previous client');
+      oldClient.dispose();
+    }
+
     state = state.copyWith(isConnecting: true, error: null);
 
     try {
@@ -116,17 +135,37 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       await database.updateLastConnectedAt(connectionId);
 
       // CONNEXION IMMÉDIATE - L'UI peut naviguer maintenant!
-      _logger.i('connect: connected! Loading data in background...');
+      _logger.i('connect: connected! Loading cache first, then fresh data...');
+
+      // Charger immédiatement depuis le cache (si disponible)
+      final cacheService = _ref.read(cacheServiceProvider);
+      final cachedDeviceInfo = await cacheService.getCachedDeviceInfo(connectionId);
+      final cachedSummary = await cacheService.getCachedObjectsSummary(connectionId);
+
       state = ActiveConnectionState(
         connection: connection,
         client: client,
         isConnecting: false,
-        isLoadingDeviceInfo: true,
-        isLoadingSummary: true,
+        // Afficher les données du cache immédiatement
+        deviceInfo: cachedDeviceInfo,
+        objectsSummary: cachedSummary,
+        deviceInfoFromCache: cachedDeviceInfo != null,
+        summaryFromCache: cachedSummary != null,
+        // Continuer à charger en arrière-plan si pas de cache
+        isLoadingDeviceInfo: cachedDeviceInfo == null,
+        isLoadingSummary: cachedSummary == null,
       );
 
-      // CHARGER LES DONNÉES EN ARRIÈRE-PLAN (sans bloquer)
-      _loadDataInBackground(client, connection.name);
+      if (cachedDeviceInfo != null) {
+        _logger.i('connect: deviceInfo loaded from cache: ${cachedDeviceInfo.objectName}');
+      }
+      if (cachedSummary != null) {
+        _logger.i('connect: objectsSummary loaded from cache: ${cachedSummary.total} objets');
+      }
+
+      // CHARGER LES DONNÉES FRAÎCHES EN ARRIÈRE-PLAN (sans bloquer)
+      // Cela mettra à jour le cache et l'UI
+      _loadDataInBackground(client, connectionId, connection.name);
 
       return true;
     } catch (e) {
@@ -140,42 +179,65 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   }
 
   /// Charge les données en arrière-plan sans bloquer l'UI
-  void _loadDataInBackground(ConnectedApiClient client, String fallbackName) {
-    // Charger deviceInfo
+  /// Met également à jour le cache local
+  void _loadDataInBackground(ConnectedApiClient client, int connectionId, String fallbackName) {
+    final cacheService = _ref.read(cacheServiceProvider);
+
+    // Charger deviceInfo (en arrière-plan)
     client.getDeviceInfo().then((deviceInfo) {
       _logger.i('Background: deviceInfo loaded: ${deviceInfo.objectName}');
+
+      // Mettre à jour le cache
+      cacheService.cacheDeviceInfo(connectionId, deviceInfo);
+
       if (mounted) {
         state = state.copyWith(
           deviceInfo: deviceInfo,
           isLoadingDeviceInfo: false,
+          deviceInfoFromCache: false, // Données fraîches
         );
       }
     }).catchError((e) {
       _logger.w('Background: getDeviceInfo failed: $e');
       if (mounted) {
-        state = state.copyWith(
-          deviceInfo: DeviceInfo(objectName: fallbackName),
-          isLoadingDeviceInfo: false,
-        );
+        // Si on a des données du cache, on les garde
+        if (state.deviceInfo == null) {
+          state = state.copyWith(
+            deviceInfo: DeviceInfo(objectName: fallbackName),
+            isLoadingDeviceInfo: false,
+          );
+        } else {
+          state = state.copyWith(isLoadingDeviceInfo: false);
+        }
       }
     });
 
-    // Charger objectsSummary
+    // Charger objectsSummary (en arrière-plan)
     client.getObjectsSummary().then((summary) {
       _logger.i('Background: objectsSummary loaded: ${summary.total} objets');
+
+      // Mettre à jour le cache
+      cacheService.cacheObjectsSummary(connectionId, summary);
+
       if (mounted) {
         state = state.copyWith(
           objectsSummary: summary,
           isLoadingSummary: false,
+          summaryFromCache: false, // Données fraîches
         );
       }
     }).catchError((e) {
       _logger.w('Background: getObjectsSummary failed: $e');
       if (mounted) {
-        state = state.copyWith(
-          objectsSummary: ObjectsSummary(),
-          isLoadingSummary: false,
-        );
+        // Si on a des données du cache, on les garde
+        if (state.objectsSummary == null) {
+          state = state.copyWith(
+            objectsSummary: ObjectsSummary(),
+            isLoadingSummary: false,
+          );
+        } else {
+          state = state.copyWith(isLoadingSummary: false);
+        }
       }
     });
   }
@@ -187,8 +249,18 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   }
 
   /// Rafraîchit les données (en arrière-plan)
-  Future<void> refresh() async {
+  /// forceRefresh: si true, ignore le cache et force le rechargement
+  Future<void> refresh({bool forceRefresh = false}) async {
     if (!state.isConnected) return;
+
+    final connectionId = state.connection!.id;
+
+    // Si forceRefresh, vider le cache d'abord
+    if (forceRefresh) {
+      final cacheService = _ref.read(cacheServiceProvider);
+      await cacheService.clearAllCache(connectionId);
+      _logger.i('refresh: cache cleared for connection $connectionId');
+    }
 
     state = state.copyWith(
       isLoadingDeviceInfo: true,
@@ -197,7 +269,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     );
 
     // Recharger en arrière-plan
-    _loadDataInBackground(state.client!, state.connection?.name ?? 'Automate');
+    _loadDataInBackground(state.client!, connectionId, state.connection?.name ?? 'Automate');
   }
 
   @override
