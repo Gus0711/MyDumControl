@@ -24,6 +24,9 @@ class Favorites extends Table {
   /// Ordre de tri (pour réorganiser les favoris)
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 
+  /// Super favori (affiché sur la page de connexions)
+  BoolColumn get isSuperFavorite => boolean().withDefault(const Constant(false))();
+
   /// Date d'ajout aux favoris
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 

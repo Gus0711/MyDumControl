@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../application/providers/favorites_provider.dart';
 import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/active_connection_provider.dart';
+import '../../../application/providers/super_favorites_provider.dart';
+import '../../../application/providers/trend_log_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
 import '../../../domain/models/bacnet_object.dart';
@@ -241,7 +243,7 @@ class FavoritesScreen extends ConsumerWidget {
 }
 
 /// Tile pour afficher un favori avec sa valeur live
-class _FavoriteTile extends StatelessWidget {
+class _FavoriteTile extends ConsumerWidget {
   final Favorite favorite;
   final BacnetObject? livePoint;
   final VoidCallback onTap;
@@ -256,8 +258,8 @@ class _FavoriteTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Récupérer le type depuis le favorite
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Récupérer le type BacnetObjectType depuis le String apiName
     final type = BacnetObjectType.values.cast<BacnetObjectType?>().firstWhere(
           (t) => t?.apiName == favorite.objectType,
           orElse: () => null,
@@ -270,6 +272,12 @@ class _FavoriteTile extends StatelessWidget {
     final valueColor = livePoint != null
         ? BacnetTypeUtils.getValueColor(livePoint!)
         : Colors.grey;
+
+    // Construire la clé pour le trend log (format: "analog-value:123")
+    final parts = favorite.pointRef.split(':');
+    final instance = parts.length > 1 ? parts[1] : '';
+    final trendLogKey = '${favorite.objectType}:$instance';
+    final hasTrendLog = ref.watch(hasTrendLogProvider(trendLogKey));
 
     return Dismissible(
       key: ValueKey(favorite.id),
@@ -328,6 +336,35 @@ class _FavoriteTile extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Bouton Super Favori
+            IconButton(
+              icon: Icon(
+                favorite.isSuperFavorite ? Icons.star : Icons.star_border,
+                color: favorite.isSuperFavorite ? Colors.amber : Colors.grey.shade400,
+                size: 20,
+              ),
+              tooltip: favorite.isSuperFavorite
+                  ? 'Retirer des super favoris'
+                  : 'Ajouter aux super favoris',
+              visualDensity: VisualDensity.compact,
+              onPressed: () async {
+                final toggleFn = ref.read(toggleSuperFavoriteProvider);
+                await toggleFn(favorite.id);
+              },
+            ),
+            // Indicateur de trend log
+            if (hasTrendLog)
+              Tooltip(
+                message: 'Trend log disponible',
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.show_chart,
+                    size: 16,
+                    color: Colors.blue.shade600,
+                  ),
+                ),
+              ),
             // Indicateur de forçage
             if (livePoint?.isOverridden == true)
               Container(

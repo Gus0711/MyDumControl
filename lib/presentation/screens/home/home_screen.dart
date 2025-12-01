@@ -5,8 +5,10 @@ import 'package:mydumcontrol/l10n/app_localizations.dart';
 import '../../../application/providers/active_connection_provider.dart';
 import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/favorites_provider.dart';
+import '../../../application/providers/alarms_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../domain/models/bacnet_object.dart';
 import '../../widgets/connection_loading_overlay.dart';
 
 /// Écran principal - Menu de navigation vers les fonctionnalités
@@ -52,25 +54,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _pointsLoadTriggered = false;
         _initialLoadComplete = false;
       }
-      // Marquer le chargement initial comme terminé quand tout est chargé
-      if (!_initialLoadComplete && next.isConnected && !next.isLoading && next.objectsSummary != null) {
-        setState(() {
-          _initialLoadComplete = true;
-        });
-      }
     });
+
+    // Écouter aussi le chargement des points pour fermer l'overlay
+    final pointsState = ref.watch(pointsProvider);
+    final connectionState = ref.watch(activeConnectionProvider);
+
+    // Marquer le chargement initial comme terminé quand connexion ET points sont chargés
+    if (!_initialLoadComplete &&
+        connectionState.isConnected &&
+        !connectionState.isLoading &&
+        connectionState.objectsSummary != null &&
+        !pointsState.isLoading &&
+        pointsState.points.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _initialLoadComplete = true;
+          });
+        }
+      });
+    }
 
     // Charger les points si déjà connecté au premier build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final connectionState = ref.read(activeConnectionProvider);
-      final pointsState = ref.read(pointsProvider);
-      if (connectionState.isConnected && pointsState.points.isEmpty && !pointsState.isLoading && !_pointsLoadTriggered) {
+      final connState = ref.read(activeConnectionProvider);
+      final ptsState = ref.read(pointsProvider);
+      if (connState.isConnected && ptsState.points.isEmpty && !ptsState.isLoading && !_pointsLoadTriggered) {
         _pointsLoadTriggered = true;
         ref.read(pointsProvider.notifier).loadPoints();
       }
     });
     final l10n = AppLocalizations.of(context)!;
-    final connectionState = ref.watch(activeConnectionProvider);
 
     // Nom de l'automate (ou placeholder pendant le chargement)
     String deviceName = connectionState.connection?.name ?? l10n.home;
@@ -103,6 +118,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
+            // Affichage de l'heure de l'automate
+            if (connectionState.controllerTime != null)
+              _ControllerTimeDisplay(controllerTime: connectionState.controllerTime!),
           ],
         ),
         actions: [
@@ -157,7 +175,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildBody(BuildContext context, AppLocalizations l10n, ActiveConnectionState state) {
     // Afficher l'overlay de chargement pendant tout le processus de connexion initial
     // L'overlay reste visible tant que le chargement initial n'est pas terminé
-    final showLoadingOverlay = !_initialLoadComplete && (state.isConnecting || state.isLoading);
+    final ptsState = ref.watch(pointsProvider);
+    final isLoadingPoints = ptsState.isLoading || (ptsState.points.isEmpty && state.isConnected);
+    final showLoadingOverlay = !_initialLoadComplete && (state.isConnecting || state.isLoading || isLoadingPoints);
 
     if (showLoadingOverlay) {
       int step = 0;
@@ -172,12 +192,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       } else if (state.isLoadingSummary) {
         step = 2;
         message = 'Récupération des données';
+      } else if (isLoadingPoints) {
+        step = 3;
+        message = 'Chargement des points';
       }
 
       return ConnectionLoadingOverlay(
         message: message,
         subMessage: state.connection?.name ?? 'Automate',
         currentStep: step,
+        totalSteps: 4,
       );
     }
 
@@ -220,6 +244,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       orElse: () => 0,
     );
 
+    // Compter les alarmes actives
+    final alarmsCount = ref.watch(alarmsCountProvider);
+    final hasAlarms = alarmsCount > 0;
+
     // Menu items inspirés de MyDC Control
     final menuItems = [
       _MenuItem(
@@ -238,8 +266,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _MenuItem(
         icon: Icons.notifications_active,
         title: l10n.alarms,
-        color: Colors.blue.shade700,
+        // Rouge si alarmes présentes, bleu sinon
+        color: hasAlarms ? Colors.red.shade600 : Colors.blue.shade700,
         route: Routes.alarms,
+        badge: hasAlarms ? alarmsCount.toString() : null,
       ),
       _MenuItem(
         icon: Icons.lock,
@@ -452,4 +482,209 @@ class _MenuItem {
     required this.route,
     this.badge,
   });
+}
+
+/// Widget d'affichage de l'heure de l'automate avec indicateur de décalage
+class _ControllerTimeDisplay extends StatelessWidget {
+  final ControllerTime controllerTime;
+
+  const _ControllerTimeDisplay({required this.controllerTime});
+
+  @override
+  Widget build(BuildContext context) {
+    // Couleur selon le décalage
+    Color timeColor;
+    Color? iconColor;
+    IconData? warningIcon;
+
+    if (controllerTime.hasCriticalOffset) {
+      // Décalage critique (> 10 min) : rouge
+      timeColor = Colors.red.shade300;
+      iconColor = Colors.red.shade300;
+      warningIcon = Icons.error;
+    } else if (controllerTime.hasSignificantOffset) {
+      // Décalage significatif (> 2 min) : orange
+      timeColor = Colors.orange.shade300;
+      iconColor = Colors.orange.shade300;
+      warningIcon = Icons.warning_amber;
+    } else {
+      // OK : couleur normale
+      timeColor = Colors.white70;
+    }
+
+    return Tooltip(
+      message: _buildTooltipMessage(),
+      child: InkWell(
+        onTap: () => _showTimeDialog(context),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          margin: const EdgeInsets.only(left: 8),
+          decoration: BoxDecoration(
+            color: Colors.black12,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                warningIcon ?? Icons.access_time,
+                size: 14,
+                color: iconColor ?? Colors.white54,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                controllerTime.formattedTime,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: timeColor,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _buildTooltipMessage() {
+    final buffer = StringBuffer();
+    buffer.writeln('Heure automate: ${controllerTime.formattedDateTime}');
+    buffer.write('Décalage: ${controllerTime.offsetDescription}');
+    return buffer.toString();
+  }
+
+  void _showTimeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              controllerTime.hasCriticalOffset
+                  ? Icons.error
+                  : controllerTime.hasSignificantOffset
+                      ? Icons.warning_amber
+                      : Icons.access_time,
+              color: controllerTime.hasCriticalOffset
+                  ? Colors.red
+                  : controllerTime.hasSignificantOffset
+                      ? Colors.orange
+                      : Colors.blue,
+            ),
+            const SizedBox(width: 8),
+            const Text('Heure de l\'automate'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildInfoRow('Date/Heure automate', controllerTime.formattedDateTime),
+            _buildInfoRow('Heure locale', _formatLocalTime()),
+            const Divider(),
+            _buildInfoRow(
+              'Décalage',
+              controllerTime.offsetDescription,
+              valueColor: controllerTime.hasCriticalOffset
+                  ? Colors.red
+                  : controllerTime.hasSignificantOffset
+                      ? Colors.orange
+                      : Colors.green,
+            ),
+            if (controllerTime.hasSignificantOffset) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: controllerTime.hasCriticalOffset
+                      ? Colors.red.shade50
+                      : Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: controllerTime.hasCriticalOffset
+                        ? Colors.red.shade200
+                        : Colors.orange.shade200,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: controllerTime.hasCriticalOffset
+                          ? Colors.red.shade700
+                          : Colors.orange.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'L\'heure de l\'automate est décalée. '
+                        'Les plannings peuvent ne pas s\'exécuter aux moments attendus.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: controllerTime.hasCriticalOffset
+                              ? Colors.red.shade800
+                              : Colors.orange.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatLocalTime() {
+    final now = DateTime.now();
+    final d = now.day.toString().padLeft(2, '0');
+    final m = now.month.toString().padLeft(2, '0');
+    final y = now.year;
+    final h = now.hour.toString().padLeft(2, '0');
+    final min = now.minute.toString().padLeft(2, '0');
+    final s = now.second.toString().padLeft(2, '0');
+    return '$d/$m/$y $h:$min:$s';
+  }
+
+  Widget _buildInfoRow(String label, String value, {Color? valueColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: valueColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

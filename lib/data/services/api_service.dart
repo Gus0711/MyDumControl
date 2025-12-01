@@ -310,6 +310,198 @@ class ConnectedApiClient {
     return DeviceInfo(objectName: bacnetName ?? 'Automate V1');
   }
 
+  /// Récupère la date et l'heure de l'automate
+  /// Retourne un ControllerTime avec l'heure de l'automate et le décalage avec l'heure locale
+  Future<ControllerTime> getControllerTime() async {
+    if (apiVersion == 'V1') {
+      return await _getControllerTimeV1();
+    }
+    return await _getControllerTimeV2();
+  }
+
+  /// Récupère l'heure de l'automate via API V2
+  Future<ControllerTime> _getControllerTimeV2() async {
+    final url = '$baseUrl/api/rest/v2/services/platform/time';
+    _logger.i('_getControllerTimeV2: GET $url');
+
+    try {
+      final response = await _dio.get(url, options: _authOptions);
+      _logger.d('_getControllerTimeV2: response=${response.data}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+
+        // Format V2: {"date-time": "2025-12-01T14:32:15", "utc-offset": 60, ...}
+        // ou {"dateTime": "...", "utcOffset": ...}
+        String? dateTimeStr = data['date-time'] ?? data['dateTime'] ?? data['local-date-time'];
+
+        // Si pas de date-time direct, essayer date + time séparés
+        if (dateTimeStr == null) {
+          final date = data['date'] ?? data['local-date'];
+          final time = data['time'] ?? data['local-time'];
+          if (date != null && time != null) {
+            dateTimeStr = '${date}T$time';
+          }
+        }
+
+        if (dateTimeStr != null) {
+          final controllerDateTime = DateTime.tryParse(dateTimeStr);
+          if (controllerDateTime != null) {
+            return ControllerTime.fromDateTime(controllerDateTime);
+          }
+        }
+      }
+    } catch (e) {
+      _logger.w('_getControllerTimeV2: error: $e');
+    }
+
+    // Essayer l'endpoint alternatif
+    try {
+      final altUrl = '$baseUrl/api/rest/v2/services/platform/time/date-time';
+      _logger.i('_getControllerTimeV2: trying alternate GET $altUrl');
+      final response = await _dio.get(altUrl, options: _authOptions);
+
+      if (response.statusCode == 200 && response.data != null) {
+        final dateTimeStr = response.data.toString();
+        final controllerDateTime = DateTime.tryParse(dateTimeStr);
+        if (controllerDateTime != null) {
+          return ControllerTime.fromDateTime(controllerDateTime);
+        }
+      }
+    } catch (e) {
+      _logger.w('_getControllerTimeV2: alternate endpoint error: $e');
+    }
+
+    throw Exception('Impossible de récupérer l\'heure de l\'automate');
+  }
+
+  /// Récupère l'heure de l'automate via API V1 (BACnet Device object)
+  Future<ControllerTime> _getControllerTimeV1() async {
+    final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
+    _logger.i('_getControllerTimeV1: POST $rpmUrl');
+
+    try {
+      // Lire localTime et localDate depuis l'objet Device
+      final body = {
+        'encode': 'text',
+        'propertyReferences': [
+          {'type': 'device', 'instance': -1, 'property': 'localTime', 'arrayIndex': -1},
+          {'type': 'device', 'instance': -1, 'property': 'localDate', 'arrayIndex': -1},
+        ],
+      };
+
+      final response = await _dio.post(
+        rpmUrl,
+        data: body,
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      _logger.d('_getControllerTimeV1: response=${response.data}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        String? localTime;
+        String? localDate;
+
+        // Parser la réponse RPM
+        final refs = response.data is List
+            ? response.data
+            : (response.data['propertyReferences'] as List? ?? []);
+
+        for (final ref in refs) {
+          if (ref is! Map<String, dynamic>) continue;
+          final property = ref['property'] as String?;
+          var value = ref['value'] ?? ref['message'];
+
+          // Extraire la valeur du Map si nécessaire
+          if (value is Map) {
+            value = value['value'] ?? value['\$value'] ?? value.values.firstOrNull;
+          }
+
+          if (property == 'localTime' && value != null) {
+            localTime = value.toString();
+          } else if (property == 'localDate' && value != null) {
+            localDate = value.toString();
+          }
+        }
+
+        _logger.i('_getControllerTimeV1: localDate=$localDate, localTime=$localTime');
+
+        if (localDate != null && localTime != null) {
+          // Parser les formats BACnet
+          // Date: peut être "2025-12-01", "Mon, 01 Dec 2025", etc.
+          // Time: peut être "14:32:15", "14:32:15.000", etc.
+          final dateTime = _parseBacnetDateTime(localDate, localTime);
+          if (dateTime != null) {
+            return ControllerTime.fromDateTime(dateTime);
+          }
+        }
+      }
+    } catch (e) {
+      _logger.w('_getControllerTimeV1: error: $e');
+    }
+
+    throw Exception('Impossible de récupérer l\'heure de l\'automate V1');
+  }
+
+  /// Parse une date et heure BACnet en DateTime
+  DateTime? _parseBacnetDateTime(String dateStr, String timeStr) {
+    try {
+      // Nettoyer le temps (enlever les millisecondes si présentes)
+      String cleanTime = timeStr.split('.').first;
+
+      // Nettoyer la date (enlever le jour de la semaine si présent)
+      // Format V1: "2025-12-01-Mon" -> "2025-12-01"
+      String cleanDate = dateStr;
+      final dashParts = dateStr.split('-');
+      if (dashParts.length == 4) {
+        // Format YYYY-MM-DD-Day, garder seulement les 3 premières parties
+        cleanDate = '${dashParts[0]}-${dashParts[1]}-${dashParts[2]}';
+      }
+
+      // Essayer le format ISO standard
+      final isoStr = '${cleanDate}T$cleanTime';
+      final parsed = DateTime.tryParse(isoStr);
+      if (parsed != null) return parsed;
+
+      // Essayer de parser la date séparément
+      // Format possible: "Mon, 01 Dec 2025" ou "01/12/2025" ou "2025-12-01"
+      DateTime? date;
+
+      // Format ISO
+      date = DateTime.tryParse(cleanDate);
+
+      // Format DD/MM/YYYY
+      if (date == null) {
+        final parts = cleanDate.split('/');
+        if (parts.length == 3) {
+          date = DateTime.tryParse('${parts[2]}-${parts[1]}-${parts[0]}');
+        }
+      }
+
+      if (date == null) return null;
+
+      // Parser l'heure
+      final timeParts = cleanTime.split(':');
+      if (timeParts.length >= 2) {
+        final hour = int.tryParse(timeParts[0]) ?? 0;
+        final minute = int.tryParse(timeParts[1]) ?? 0;
+        final second = timeParts.length > 2 ? (int.tryParse(timeParts[2]) ?? 0) : 0;
+
+        return DateTime(date.year, date.month, date.day, hour, minute, second);
+      }
+
+      return date;
+    } catch (e) {
+      _logger.w('_parseBacnetDateTime: error parsing $dateStr $timeStr: $e');
+      return null;
+    }
+  }
+
   /// Récupère le résumé des objets disponibles
   Future<ObjectsSummary> getObjectsSummary() async {
     final url = '$baseUrl$_bacnetBasePath/objects';
@@ -636,6 +828,11 @@ class ConnectedApiClient {
       'binaryInput', 'binaryOutput', 'binaryValue',
     ];
 
+    // Types multistate (ont state-text)
+    const multistateTypes = [
+      'multistateInput', 'multistateOutput', 'multistateValue',
+    ];
+
     // Construire les propertyReferences pour lire toutes les instances de chaque type
     // On utilise instance=-1 pour toutes les instances
     final propertyRefs = <Map<String, dynamic>>[];
@@ -672,6 +869,13 @@ class ConnectedApiClient {
         'property': 'description',
         'arrayIndex': -1,
       });
+      // Ajouter statusFlags pour détecter les alarmes
+      propertyRefs.add({
+        'type': typeName,
+        'instance': -1,
+        'property': 'statusFlags',
+        'arrayIndex': -1,
+      });
 
       // Ajouter priorityArray uniquement pour les types commandables
       if (commandableTypes.contains(typeName)) {
@@ -695,6 +899,16 @@ class ConnectedApiClient {
           'type': typeName,
           'instance': -1,
           'property': 'inactiveText',
+          'arrayIndex': -1,
+        });
+      }
+
+      // Ajouter stateText pour les types multistate
+      if (multistateTypes.contains(typeName)) {
+        propertyRefs.add({
+          'type': typeName,
+          'instance': -1,
+          'property': 'stateText',
           'arrayIndex': -1,
         });
       }
@@ -836,6 +1050,38 @@ class ConnectedApiClient {
           final priorityArray = props['priority-array'];
           final overrideInfo = BacnetObject.parsePriorityArray(priorityArray);
 
+          // Parser state-text pour les multistate
+          List<String>? stateText;
+          final stateTextRaw = props['state-text'];
+          if (stateTextRaw is List) {
+            stateText = stateTextRaw.map((e) => e?.toString() ?? '').toList();
+          }
+
+          // Parser status-flags pour in-alarm
+          final statusFlags = props['status-flags'];
+          bool inAlarm = false;
+          if (statusFlags is Map<String, dynamic>) {
+            inAlarm = statusFlags['in-alarm'] == true;
+          }
+
+          // Parser les informations d'alarme
+          DateTime? alarmTimestamp;
+          String? alarmMessage;
+          final alarmData = props['alarm'];
+          if (alarmData is Map<String, dynamic> && inAlarm) {
+            // Parser le timestamp de l'événement
+            final eventTimeStamps = alarmData['event-time-stamps'];
+            if (eventTimeStamps is Map<String, dynamic>) {
+              alarmTimestamp = _parseAlarmTimestamp(eventTimeStamps);
+            }
+            // Parser le message d'alarme
+            final eventMessages = alarmData['event-message-texts'];
+            if (eventMessages is Map<String, dynamic>) {
+              alarmMessage = eventMessages['to-off-normal']?.toString() ??
+                            eventMessages['to-fault']?.toString();
+            }
+          }
+
           results.add(BacnetObject(
             type: objectType,
             instance: instance,
@@ -850,6 +1096,10 @@ class ConnectedApiClient {
             overrideValue: overrideInfo.value,
             activeText: props['active-text']?.toString(),
             inactiveText: props['inactive-text']?.toString(),
+            stateText: stateText,
+            inAlarm: inAlarm,
+            alarmTimestamp: alarmTimestamp,
+            alarmMessage: alarmMessage,
           ));
         }
       }
@@ -901,13 +1151,64 @@ class ConnectedApiClient {
   }
 
   /// Extrait les unités pour V2 (peut être un objet avec $value)
+  /// et convertit le nom BACnet en symbole court (ex: DegreesCelsius -> °C)
   String? _extractUnitsV2(dynamic units) {
     if (units == null) return null;
-    if (units is String) return units.isEmpty ? null : units;
-    if (units is Map) {
-      return units['\$value']?.toString() ?? units['value']?.toString();
+    String? unitStr;
+    if (units is String) {
+      unitStr = units.isEmpty ? null : units;
+    } else if (units is Map) {
+      unitStr = units['\$value']?.toString() ?? units['value']?.toString();
+    } else {
+      unitStr = units.toString();
     }
-    return units.toString();
+    if (unitStr == null) return null;
+    return BacnetObject.convertUnitSymbol(unitStr);
+  }
+
+  /// Parse le timestamp d'alarme depuis event-time-stamps
+  /// Format: {"to-off-normal": {"date-time": {"date": {...}, "time": "HH:mm:ss.cc"}}}
+  DateTime? _parseAlarmTimestamp(Map<String, dynamic> eventTimeStamps) {
+    // Essayer d'abord to-off-normal, puis to-fault
+    final timestamps = eventTimeStamps['to-off-normal'] ?? eventTimeStamps['to-fault'];
+    if (timestamps == null) return null;
+
+    try {
+      Map<String, dynamic>? dateTime;
+      if (timestamps is Map<String, dynamic>) {
+        dateTime = timestamps['date-time'] as Map<String, dynamic>?;
+      }
+      if (dateTime == null) return null;
+
+      final dateData = dateTime['date'];
+      if (dateData is! Map<String, dynamic>) return null;
+
+      // Vérifier que la date n'est pas un wildcard (****)
+      final year = dateData['year'];
+      final month = dateData['month'];
+      final day = dateData['day-of-month'];
+
+      if (year == null || month == null || day == null) return null;
+
+      // Parser le temps
+      final timeStr = dateTime['time']?.toString();
+      int hour = 0, minute = 0, second = 0;
+      if (timeStr != null && !timeStr.contains('**')) {
+        final timeParts = timeStr.split(':');
+        if (timeParts.isNotEmpty) hour = int.tryParse(timeParts[0]) ?? 0;
+        if (timeParts.length > 1) minute = int.tryParse(timeParts[1]) ?? 0;
+        if (timeParts.length > 2) {
+          // Le format peut être "ss.cc" ou juste "ss"
+          final secStr = timeParts[2].split('.')[0];
+          second = int.tryParse(secStr) ?? 0;
+        }
+      }
+
+      return DateTime(year as int, month as int, day as int, hour, minute, second);
+    } catch (e) {
+      _logger.w('_parseAlarmTimestamp: failed to parse: $e');
+      return null;
+    }
   }
 
   /// Parse la réponse read-property-multiple pour construire les objets BACnet
@@ -969,12 +1270,33 @@ class ConnectedApiClient {
             : (priorityArrayData is List ? priorityArrayData.toString() : null);
         final overrideInfo = BacnetObject.parsePriorityArray(priorityArrayData);
 
+        // Parser stateText pour les multistate (V1)
+        List<String>? stateText;
+        final stateTextData = props['stateText'];
+        if (stateTextData != null) {
+          stateText = _parseStateTextV1(stateTextData);
+        }
+
+        // Parser status-flags pour in-alarm (V1 format: "[inAlarm,fault,overridden,outOfService]")
+        // Les flags actifs ont leur nom, les inactifs sont vides
+        // Ex: "[inAlarm,,,outOfService]" = in-alarm et out-of-service actifs
+        // Ex: "[,,,]" = aucun flag actif
+        bool inAlarm = false;
+        final statusFlagsData = props['statusFlags'];
+        if (statusFlagsData is Map<String, dynamic>) {
+          inAlarm = statusFlagsData['inAlarm'] == true || statusFlagsData['in-alarm'] == true;
+        } else if (statusFlagsData is String) {
+          // Format V1: "[inAlarm,fault,overridden,outOfService]"
+          // Le premier élément est inAlarm
+          inAlarm = statusFlagsData.toLowerCase().contains('inalarm');
+        }
+
         result.add(BacnetObject(
           type: objectType,
           instance: instance,
           objectName: _extractStringValue(props['objectName']) ?? '$typeName-$instance',
           presentValue: _parseValue(props['presentValue']),
-          units: _extractStringValue(props['units']),
+          units: _extractUnitsV2(props['units']),
           outOfService: _extractBoolValue(props['outOfService']),
           description: _extractStringValue(props['description']),
           priorityArrayRaw: priorityArrayRaw,
@@ -983,6 +1305,8 @@ class ConnectedApiClient {
           overrideValue: overrideInfo.value,
           activeText: _extractStringValue(props['activeText']),
           inactiveText: _extractStringValue(props['inactiveText']),
+          stateText: stateText,
+          inAlarm: inAlarm,
         ));
       }
     }
@@ -996,6 +1320,37 @@ class ConnectedApiClient {
     }
 
     return result;
+  }
+
+  /// Parse le state-text format V1
+  /// Peut être une liste, une chaîne "{text1, text2, ...}" ou un Map avec 'value'
+  List<String>? _parseStateTextV1(dynamic data) {
+    if (data == null) return null;
+
+    // Si c'est déjà une liste
+    if (data is List) {
+      return data.map((e) => e?.toString() ?? '').toList();
+    }
+
+    // Si c'est un Map avec 'value'
+    String? valueStr;
+    if (data is Map) {
+      valueStr = data['value']?.toString();
+    } else if (data is String) {
+      valueStr = data;
+    }
+
+    if (valueStr == null || valueStr.isEmpty) return null;
+
+    // Parser le format "{text1, text2, text3}"
+    String cleaned = valueStr.trim();
+    if (cleaned.startsWith('{')) cleaned = cleaned.substring(1);
+    if (cleaned.endsWith('}')) cleaned = cleaned.substring(0, cleaned.length - 1);
+
+    if (cleaned.isEmpty) return null;
+
+    // Séparer par virgules
+    return cleaned.split(',').map((e) => e.trim()).toList();
   }
 
   /// Mappe le nom de type de l'API vers BacnetObjectType
@@ -2659,6 +3014,340 @@ class ConnectedApiClient {
       }
       return false;
     }
+  }
+
+  // ==========================================================================
+  // === Super Favoris : Lecture batch de points multiples ===
+  // ==========================================================================
+
+  /// Lit les valeurs actuelles de plusieurs points en une seule requête
+  /// Optimisé pour les super favoris affichés sur la page de connexions
+  /// Retourne une Map pointRef -> BacnetObject avec les valeurs à jour
+  Future<Map<String, BacnetObject>> readMultiplePoints(List<String> pointRefs) async {
+    if (pointRefs.isEmpty) return {};
+
+    _logger.i('readMultiplePoints: reading ${pointRefs.length} points');
+
+    if (apiVersion == 'V2') {
+      return _readMultiplePointsV2(pointRefs);
+    } else {
+      return _readMultiplePointsV1(pointRefs);
+    }
+  }
+
+  /// Lecture batch V1 via read-property-multiple
+  Future<Map<String, BacnetObject>> _readMultiplePointsV1(List<String> pointRefs) async {
+    final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
+    _logger.i('_readMultiplePointsV1: POST $rpmUrl for ${pointRefs.length} points');
+
+    // Construire les propertyReferences pour chaque point
+    final propertyRefs = <Map<String, dynamic>>[];
+
+    for (final ref in pointRefs) {
+      // Parser le pointRef (format: "analog-value:1" ou "AV:1")
+      final parsed = _parsePointRef(ref);
+      if (parsed == null) {
+        _logger.w('_readMultiplePointsV1: invalid pointRef format: $ref');
+        continue;
+      }
+
+      // API V1 utilise camelCase (analogInput, analogValue, etc.)
+      final type = BacnetObjectType.fromApiName(parsed['type'] as String);
+      if (type == null) continue;
+      final typeNameV1 = type.name; // camelCase: analogInput, analogValue, etc.
+      final instance = parsed['instance'] as int;
+
+      // Ajouter les propriétés essentielles
+      for (final prop in ['objectName', 'presentValue', 'units', 'description', 'outOfService']) {
+        propertyRefs.add({
+          'type': typeNameV1,
+          'instance': instance,
+          'property': prop,
+          'arrayIndex': -1,
+        });
+      }
+
+      // Ajouter les textes pour les types binaires/multistate
+      if (type.isBinary) {
+        propertyRefs.add({'type': typeNameV1, 'instance': instance, 'property': 'activeText', 'arrayIndex': -1});
+        propertyRefs.add({'type': typeNameV1, 'instance': instance, 'property': 'inactiveText', 'arrayIndex': -1});
+      }
+      if (type.isMultiState) {
+        propertyRefs.add({'type': typeNameV1, 'instance': instance, 'property': 'stateText', 'arrayIndex': -1});
+      }
+    }
+
+    if (propertyRefs.isEmpty) return {};
+
+    try {
+      final response = await _dio.post(
+        rpmUrl,
+        data: {
+          'encode': 'text',
+          'propertyReferences': propertyRefs,
+        },
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        return _parseMultiplePointsFromRpm(response.data, pointRefs);
+      }
+    } catch (e) {
+      _logger.e('_readMultiplePointsV1 error: $e');
+    }
+
+    return {};
+  }
+
+  /// Lecture batch V2 via l'API batch
+  Future<Map<String, BacnetObject>> _readMultiplePointsV2(List<String> pointRefs) async {
+    final batchUrl = '$baseUrl/api/rest/v2/batch';
+    _logger.i('_readMultiplePointsV2: POST $batchUrl for ${pointRefs.length} points');
+
+    // Construire les requêtes batch
+    final requests = <Map<String, dynamic>>[];
+
+    for (final ref in pointRefs) {
+      final parsed = _parsePointRef(ref);
+      if (parsed == null) continue;
+
+      final typeName = parsed['type'] as String;
+      final instance = parsed['instance'] as int;
+
+      // Convertir en format kebab-case pour V2
+      final typeV2 = _typeToV2Name(typeName);
+      if (typeV2 == null) continue;
+
+      requests.add({
+        'id': ref,
+        'method': 'GET',
+        'url': '$_bacnetBasePath/objects/$typeV2/$instance',
+      });
+    }
+
+    if (requests.isEmpty) {
+      _logger.w('_readMultiplePointsV2: no valid requests built');
+      return {};
+    }
+
+    try {
+      final response = await _dio.post(
+        batchUrl,
+        data: {'requests': requests},
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        return _parseMultiplePointsFromBatchV2(response.data);
+      }
+    } catch (e) {
+      _logger.e('_readMultiplePointsV2 error: $e');
+    }
+
+    return {};
+  }
+
+  /// Parse un pointRef en type + instance
+  Map<String, dynamic>? _parsePointRef(String pointRef) {
+    // Format possible: "analog-value:1", "AV:1", "analogValue:1"
+    final parts = pointRef.split(':');
+    if (parts.length != 2) return null;
+
+    final typePart = parts[0].trim();
+    final instance = int.tryParse(parts[1].trim());
+    if (instance == null) return null;
+
+    // Mapper le nom du type (supporte tous les formats)
+    final type = BacnetObjectType.fromAnyName(typePart);
+    if (type == null) {
+      _logger.w('_parsePointRef: unknown type "$typePart" in "$pointRef"');
+      return null;
+    }
+
+    return {
+      'type': type.apiName,
+      'instance': instance,
+    };
+  }
+
+  /// Convertit un nom de type en format V2 (kebab-case + pluriel)
+  String? _typeToV2Name(String typeName) {
+    // Mapping apiName (kebab-case) vers endpoint V2 (pluriel)
+    const mapping = {
+      'analog-input': 'analog-inputs',
+      'analog-output': 'analog-outputs',
+      'analog-value': 'analog-values',
+      'binary-input': 'binary-inputs',
+      'binary-output': 'binary-outputs',
+      'binary-value': 'binary-values',
+      'multi-state-input': 'multi-state-inputs',
+      'multi-state-output': 'multi-state-outputs',
+      'multi-state-value': 'multi-state-values',
+    };
+    return mapping[typeName];
+  }
+
+  /// Parse la réponse RPM pour les super favoris (V1)
+  Map<String, BacnetObject> _parseMultiplePointsFromRpm(dynamic data, List<String> originalRefs) {
+    final results = <String, BacnetObject>{};
+    final grouped = <String, Map<String, dynamic>>{};
+
+    // Construire un mapping camelCase:instance -> originalRef
+    // L'API V1 retourne les types en camelCase (analogInput, analogValue, etc.)
+    final refMapping = <String, String>{};
+    for (final ref in originalRefs) {
+      final parsed = _parsePointRef(ref);
+      if (parsed != null) {
+        final type = BacnetObjectType.fromApiName(parsed['type'] as String);
+        if (type != null) {
+          final instance = parsed['instance'] as int;
+          refMapping['${type.name}:$instance'] = ref; // type.name = camelCase
+        }
+      }
+    }
+
+    // La réponse peut être une liste directement ou un wrapper
+    List<dynamic> refs;
+    if (data is List) {
+      refs = data;
+    } else if (data is Map<String, dynamic>) {
+      refs = data['propertyReferences'] as List? ?? [];
+    } else {
+      return results;
+    }
+
+    // Grouper par type:instance
+    for (final ref in refs) {
+      if (ref is! Map<String, dynamic>) continue;
+
+      final type = ref['type'] as String?;
+      final instance = ref['instance'];
+      final property = ref['property'] as String?;
+      var value = ref['value'] ?? ref['message'];
+
+      if (type == null || instance == null || property == null) continue;
+
+      // Extraire la valeur du Map si nécessaire
+      if (value is Map) {
+        value = value['value'] ?? value['\$value'] ?? value.values.firstOrNull;
+      }
+
+      final key = '$type:$instance';
+      grouped.putIfAbsent(key, () => {'type': type, 'instance': instance});
+      grouped[key]![property] = value;
+    }
+
+    // Construire les BacnetObjects avec les clés originales
+    for (final entry in grouped.entries) {
+      final props = entry.value;
+      // Utiliser fromAnyName car V1 retourne les types en camelCase (analogValue, etc.)
+      final type = BacnetObjectType.fromAnyName(props['type'] as String? ?? '');
+      if (type == null) continue; // Ignorer les types inconnus
+      final instance = props['instance'] as int? ?? 0;
+
+      // Parser stateText pour multistate
+      List<String>? stateText;
+      final stateTextRaw = props['stateText'];
+      if (stateTextRaw is List) {
+        stateText = stateTextRaw.map((e) => e?.toString() ?? '').toList();
+      } else if (stateTextRaw is String) {
+        stateText = stateTextRaw.split(',').map((e) => e.trim()).toList();
+      }
+
+      // Trouver la clé originale (ex: "AV:1" au lieu de "analogValue:1")
+      final originalKey = refMapping[entry.key] ?? entry.key;
+
+      // Extraire la valeur de presentValue (peut être un objet complexe)
+      var presentValue = props['presentValue'];
+      if (presentValue is Map) {
+        presentValue = presentValue['value'] ?? presentValue['\$value'] ?? presentValue.values.firstOrNull;
+      }
+
+      // Extraire units (peut être un objet avec $value)
+      var units = props['units'];
+      if (units is Map) {
+        units = units['value'] ?? units['\$value'] ?? units.values.firstOrNull;
+      }
+
+      results[originalKey] = BacnetObject(
+        type: type,
+        instance: instance,
+        objectName: props['objectName']?.toString() ?? 'Point $instance',
+        presentValue: _parseValue(presentValue),
+        units: units?.toString(),
+        description: props['description']?.toString(),
+        outOfService: props['outOfService'] == true || props['outOfService'] == 'true',
+        activeText: props['activeText']?.toString(),
+        inactiveText: props['inactiveText']?.toString(),
+        stateText: stateText,
+      );
+    }
+
+    return results;
+  }
+
+  /// Parse la réponse batch V2 pour les super favoris
+  Map<String, BacnetObject> _parseMultiplePointsFromBatchV2(dynamic data) {
+    final results = <String, BacnetObject>{};
+
+    List<dynamic> responses;
+    if (data is List) {
+      responses = data;
+    } else if (data is Map<String, dynamic>) {
+      responses = data['responses'] as List? ?? [];
+    } else {
+      return results;
+    }
+
+    for (final batchResponse in responses) {
+      if (batchResponse is! Map<String, dynamic>) continue;
+
+      final id = batchResponse['id'] as String?; // C'est notre pointRef original
+      final body = batchResponse['body'];
+      final statusCode = batchResponse['status'] as int?;
+
+      if (id == null || body == null || statusCode != 200) continue;
+      if (body is! Map<String, dynamic>) continue;
+
+      final parsed = _parsePointRef(id);
+      if (parsed == null) continue;
+
+      final type = BacnetObjectType.fromApiName(parsed['type'] as String);
+      if (type == null) continue; // Ignorer les types inconnus
+      final instance = parsed['instance'] as int;
+
+      // Parser stateText
+      List<String>? stateText;
+      final stateTextRaw = body['state-text'];
+      if (stateTextRaw is List) {
+        stateText = stateTextRaw.map((e) => e?.toString() ?? '').toList();
+      }
+
+      results[id] = BacnetObject(
+        type: type,
+        instance: instance,
+        objectName: body['object-name']?.toString() ?? 'Point $instance',
+        presentValue: _parseValue(body['present-value']),
+        units: _extractUnitsV2(body['units']),
+        description: body['description']?.toString(),
+        outOfService: body['out-of-service'] as bool?,
+        activeText: body['active-text']?.toString(),
+        inactiveText: body['inactive-text']?.toString(),
+        stateText: stateText,
+      );
+    }
+
+    return results;
   }
 
   /// Ferme le client

@@ -8,6 +8,7 @@ class ConnectionLoadingOverlay extends StatefulWidget {
   final String? subMessage;
   final bool showSteps;
   final int currentStep;
+  final int totalSteps;
 
   const ConnectionLoadingOverlay({
     super.key,
@@ -15,6 +16,7 @@ class ConnectionLoadingOverlay extends StatefulWidget {
     this.subMessage,
     this.showSteps = true,
     this.currentStep = 0,
+    this.totalSteps = 3,
   });
 
   @override
@@ -239,11 +241,16 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
   }
 
   Widget _buildProgressSteps(ThemeData theme) {
-    final steps = [
+    // Étapes disponibles (4 au total)
+    final allSteps = [
       ('Connexion', Icons.wifi),
-      ('Authentification', Icons.lock_open),
+      ('Auth', Icons.lock_open),
       ('Données', Icons.cloud_download),
+      ('Points', Icons.list_alt),
     ];
+
+    // Utiliser le nombre d'étapes demandé
+    final steps = allSteps.take(widget.totalSteps).toList();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 48),

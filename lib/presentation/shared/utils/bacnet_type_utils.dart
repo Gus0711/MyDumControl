@@ -6,6 +6,13 @@ import '../../../domain/models/bacnet_object.dart';
 class BacnetTypeUtils {
   BacnetTypeUtils._();
 
+  /// Retourne l'icône associée à un type BACnet (depuis un String)
+  static IconData getIconForType(String typeString) {
+    final type = BacnetObjectType.fromApiName(typeString);
+    if (type == null) return Icons.device_unknown;
+    return getTypeIcon(type);
+  }
+
   /// Retourne l'icône associée à un type BACnet
   static IconData getTypeIcon(BacnetObjectType type) {
     switch (type) {
@@ -96,6 +103,11 @@ class BacnetTypeUtils {
       }
     }
 
+    // Multistate : afficher "libellé (valeur)"
+    if (point.type.isMultiState) {
+      return formatMultiStateValue(point);
+    }
+
     if (value is num) {
       final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
       if (point.units != null && point.units!.isNotEmpty) {
@@ -105,6 +117,35 @@ class BacnetTypeUtils {
     }
 
     return value.toString();
+  }
+
+  /// Formate une valeur multistate : "libellé (valeur)" ou juste "valeur" si pas de libellé
+  static String formatMultiStateValue(BacnetObject point) {
+    final value = point.presentValue;
+    if (value == null) return '---';
+
+    // Convertir la valeur en int
+    final int stateIndex;
+    if (value is int) {
+      stateIndex = value;
+    } else if (value is num) {
+      stateIndex = value.toInt();
+    } else {
+      return value.toString();
+    }
+
+    // BACnet multistate est indexé à partir de 1
+    // stateText[0] = état 1, stateText[1] = état 2, etc.
+    if (point.stateText != null && point.stateText!.isNotEmpty) {
+      final arrayIndex = stateIndex - 1;
+      if (arrayIndex >= 0 && arrayIndex < point.stateText!.length) {
+        final label = point.stateText![arrayIndex];
+        return '$label ($stateIndex)';
+      }
+    }
+
+    // Pas de libellé disponible, afficher juste la valeur
+    return stateIndex.toString();
   }
 
   /// Formate une valeur de forçage pour l'affichage
@@ -122,6 +163,11 @@ class BacnetTypeUtils {
       }
     }
 
+    // Multistate : afficher "libellé (valeur)"
+    if (point.type.isMultiState) {
+      return formatMultiStateValueFromRaw(value, point.stateText);
+    }
+
     if (value is num) {
       final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
       if (point.units != null && point.units!.isNotEmpty) {
@@ -131,6 +177,31 @@ class BacnetTypeUtils {
     }
 
     return value.toString();
+  }
+
+  /// Formate une valeur multistate brute : "libellé (valeur)" ou juste "valeur"
+  static String formatMultiStateValueFromRaw(dynamic value, List<String>? stateText) {
+    if (value == null) return '-';
+
+    // Convertir la valeur en int
+    final int stateIndex;
+    if (value is int) {
+      stateIndex = value;
+    } else if (value is num) {
+      stateIndex = value.toInt();
+    } else {
+      return value.toString();
+    }
+
+    if (stateText != null && stateText.isNotEmpty) {
+      final arrayIndex = stateIndex - 1;
+      if (arrayIndex >= 0 && arrayIndex < stateText.length) {
+        final label = stateText[arrayIndex];
+        return '$label ($stateIndex)';
+      }
+    }
+
+    return stateIndex.toString();
   }
 
   /// Retourne la couleur de la valeur d'un point

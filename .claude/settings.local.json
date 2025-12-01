@@ -21,7 +21,14 @@
       "Bash(cmd /c:*)",
       "Bash(flutter build:*)",
       "Bash(adb devices:*)",
-      "Bash(copy \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\logo_mydumcontrols.png\" \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\assets\\images\\logo.png\")"
+      "Bash(copy \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\logo_mydumcontrols.png\" \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\assets\\images\\logo.png\")",
+      "WebFetch(domain:github.com)",
+      "Bash(echo:*)",
+      "Bash(python:*)",
+      "Bash(where:*)",
+      "Bash(py:*)",
+      "Bash(powershell -Command \"''{\"\"model\"\": {\"\"display_name\"\": \"\"Claude Opus 4.5\"\"}}'' | py C:\\Users\\augus\\.claude\\statusline.py\")",
+      "Bash(powershell -Command:*)"
     ],
     "deny": [],
     "ask": []

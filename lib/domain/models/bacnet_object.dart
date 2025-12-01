@@ -29,6 +29,37 @@ enum BacnetObjectType {
     }
   }
 
+  /// Trouve le type par shortName (ex: "AV", "BI", "MSV")
+  static BacnetObjectType? fromShortName(String name) {
+    try {
+      return BacnetObjectType.values.firstWhere(
+        (e) => e.shortName.toLowerCase() == name.toLowerCase(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Trouve le type par n'importe quel format (apiName, shortName, ou name)
+  static BacnetObjectType? fromAnyName(String name) {
+    // Essayer apiName d'abord (analog-value, binary-input, etc.)
+    var type = fromApiName(name);
+    if (type != null) return type;
+
+    // Essayer shortName (AV, BI, etc.)
+    type = fromShortName(name);
+    if (type != null) return type;
+
+    // Essayer le nom de l'enum (analogValue, binaryInput, etc.)
+    try {
+      return BacnetObjectType.values.firstWhere(
+        (e) => e.name.toLowerCase() == name.toLowerCase(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Vérifie si c'est un type binaire
   bool get isBinary =>
       this == BacnetObjectType.binaryInput ||
@@ -125,6 +156,19 @@ class BacnetObject {
   /// Texte affiché quand la valeur binaire est inactive (ex: "Arrêt", "OFF")
   final String? inactiveText;
 
+  /// Liste des libellés pour les valeurs multi-états (state-text)
+  /// L'index 0 correspond à present-value = 1 (BACnet est indexé à partir de 1)
+  final List<String>? stateText;
+
+  /// Indique si le point est en alarme (status-flags.in-alarm)
+  final bool inAlarm;
+
+  /// Timestamp de l'alarme (event-time-stamps.to-off-normal ou to-fault)
+  final DateTime? alarmTimestamp;
+
+  /// Message d'alarme (event-message-texts)
+  final String? alarmMessage;
+
   BacnetObject({
     required this.type,
     required this.instance,
@@ -141,6 +185,10 @@ class BacnetObject {
     this.overrideValue,
     this.activeText,
     this.inactiveText,
+    this.stateText,
+    this.inAlarm = false,
+    this.alarmTimestamp,
+    this.alarmMessage,
   });
 
   /// Identifiant unique de l'objet
@@ -163,6 +211,11 @@ class BacnetObject {
       }
     }
 
+    // Valeurs multi-états : utiliser stateText si disponible
+    if (type.isMultiState) {
+      return formattedMultiStateValue;
+    }
+
     // Valeurs analogiques avec unité
     if (presentValue is num) {
       final value = presentValue as num;
@@ -171,6 +224,55 @@ class BacnetObject {
     }
 
     return presentValue.toString();
+  }
+
+  /// Valeur formatée pour les multi-états (avec libellé)
+  String get formattedMultiStateValue {
+    if (presentValue == null) return '-';
+
+    // Convertir la valeur en int
+    final int stateIndex;
+    if (presentValue is int) {
+      stateIndex = presentValue;
+    } else if (presentValue is num) {
+      stateIndex = presentValue.toInt();
+    } else {
+      return presentValue.toString();
+    }
+
+    // BACnet multistate est indexé à partir de 1
+    // stateText[0] = état 1, stateText[1] = état 2, etc.
+    if (stateText != null && stateText!.isNotEmpty) {
+      final arrayIndex = stateIndex - 1;
+      if (arrayIndex >= 0 && arrayIndex < stateText!.length) {
+        return stateText![arrayIndex];
+      }
+    }
+
+    // Pas de libellé disponible, afficher juste la valeur
+    return stateIndex.toString();
+  }
+
+  /// Libellé de l'état actuel pour les multi-états (null si pas disponible)
+  String? get currentStateLabel {
+    if (!type.isMultiState || presentValue == null || stateText == null) {
+      return null;
+    }
+
+    final int stateIndex;
+    if (presentValue is int) {
+      stateIndex = presentValue;
+    } else if (presentValue is num) {
+      stateIndex = presentValue.toInt();
+    } else {
+      return null;
+    }
+
+    final arrayIndex = stateIndex - 1;
+    if (arrayIndex >= 0 && arrayIndex < stateText!.length) {
+      return stateText![arrayIndex];
+    }
+    return null;
   }
 
   /// Vérifie si une valeur binaire est active
@@ -201,10 +303,172 @@ class BacnetObject {
 
   static String? _parseUnits(dynamic units) {
     if (units == null) return null;
-    if (units is String) return units;
-    if (units is Map) return units['value']?.toString();
-    return units.toString();
+    String unitStr;
+    if (units is String) {
+      unitStr = units;
+    } else if (units is Map) {
+      unitStr = units['value']?.toString() ?? '';
+    } else {
+      unitStr = units.toString();
+    }
+    return convertUnitSymbol(unitStr);
   }
+
+  /// Convertit un nom d'unité BACnet en symbole court
+  /// Ex: "DegreesCelsius" -> "°C", "Percent" -> "%"
+  static String convertUnitSymbol(String unitName) {
+    return _bacnetUnitSymbols[unitName] ?? unitName;
+  }
+
+  /// Mapping des noms enum BACnet vers les symboles courts
+  static const Map<String, String> _bacnetUnitSymbols = {
+    // Température
+    'DegreesCelsius': '°C',
+    'DegreeCelsius': '°C',
+    'degreesCelsius': '°C',
+    'DegreesFahrenheit': '°F',
+    'DegreeFahrenheit': '°F',
+    'degreesFahrenheit': '°F',
+    'DegreesKelvin': 'K',
+    'DeltaDegreesFahrenheit': 'Δ°F',
+    'DeltaDegreesCelsius': 'Δ°C',
+    'DeltaDegreesKelvin': 'ΔK',
+
+    // Pourcentage
+    'Percent': '%',
+    'percent': '%',
+    'PercentRelativeHumidity': '%RH',
+    'percentRelativeHumidity': '%RH',
+
+    // Pression
+    'Pascals': 'Pa',
+    'pascals': 'Pa',
+    'Kilopascals': 'kPa',
+    'kilopascals': 'kPa',
+    'Bars': 'bar',
+    'Millibars': 'mbar',
+    'PoundsForcePerSquareInch': 'psi',
+    'InchesOfWater': 'inH₂O',
+    'MillimetersOfWater': 'mmH₂O',
+    'CentimetersOfWater': 'cmH₂O',
+    'InchesOfMercury': 'inHg',
+    'MillimetersOfMercury': 'mmHg',
+
+    // Débit volumique
+    'CubicMetersPerHour': 'm³/h',
+    'cubicMetersPerHour': 'm³/h',
+    'CubicMetersPerMinute': 'm³/min',
+    'CubicMetersPerSecond': 'm³/s',
+    'CubicFeetPerMinute': 'CFM',
+    'cubicFeetPerMinute': 'CFM',
+    'CubicFeetPerHour': 'ft³/h',
+    'CubicFeetPerSecond': 'ft³/s',
+    'LitersPerSecond': 'L/s',
+    'litersPerSecond': 'L/s',
+    'LitersPerMinute': 'L/min',
+    'litersPerMinute': 'L/min',
+    'LitersPerHour': 'L/h',
+    'GallonsPerMinute': 'GPM',
+    'GallonsPerHour': 'GPH',
+
+    // Puissance / Énergie
+    'Watts': 'W',
+    'watts': 'W',
+    'Kilowatts': 'kW',
+    'kilowatts': 'kW',
+    'Megawatts': 'MW',
+    'BtusPerHour': 'BTU/h',
+    'Horsepower': 'HP',
+    'TonsRefrigeration': 'TR',
+    'KilowattHours': 'kWh',
+    'kilowattHours': 'kWh',
+    'WattHours': 'Wh',
+    'MegawattHours': 'MWh',
+    'Joules': 'J',
+    'Kilojoules': 'kJ',
+    'KilojoulesPerKilogram': 'kJ/kg',
+    'JoulesPerKilogramDryAir': 'J/kg',
+    'BtusPerPound': 'BTU/lb',
+    'BtusPerPoundDryAir': 'BTU/lb',
+
+    // Courant / Tension / Électrique
+    'Volts': 'V',
+    'volts': 'V',
+    'Millivolts': 'mV',
+    'Kilovolts': 'kV',
+    'Amperes': 'A',
+    'amperes': 'A',
+    'Milliamperes': 'mA',
+    'Ohms': 'Ω',
+    'Kilohms': 'kΩ',
+    'Megohms': 'MΩ',
+    'VoltAmperes': 'VA',
+    'KilovoltAmperes': 'kVA',
+    'VoltAmperesReactive': 'VAR',
+    'KilovoltAmperesReactive': 'kVAR',
+    'PowerFactor': 'PF',
+    'Hertz': 'Hz',
+    'hertz': 'Hz',
+    'Kilohertz': 'kHz',
+    'Megahertz': 'MHz',
+
+    // Temps
+    'Seconds': 's',
+    'seconds': 's',
+    'Minutes': 'min',
+    'minutes': 'min',
+    'Hours': 'h',
+    'hours': 'h',
+    'Days': 'j',
+    'Weeks': 'sem',
+    'Months': 'mois',
+    'Years': 'ans',
+
+    // Vitesse
+    'MetersPerSecond': 'm/s',
+    'metersPerSecond': 'm/s',
+    'MetersPerMinute': 'm/min',
+    'KilometersPerHour': 'km/h',
+    'FeetPerSecond': 'ft/s',
+    'FeetPerMinute': 'ft/min',
+    'MilesPerHour': 'mph',
+
+    // Masse / Volume
+    'Kilograms': 'kg',
+    'Grams': 'g',
+    'Milligrams': 'mg',
+    'Pounds': 'lb',
+    'Liters': 'L',
+    'Milliliters': 'mL',
+    'CubicMeters': 'm³',
+    'CubicFeet': 'ft³',
+    'Gallons': 'gal',
+
+    // Concentration
+    'PartsPerMillion': 'ppm',
+    'partsPerMillion': 'ppm',
+    'PartsPerBillion': 'ppb',
+    'GramsPerKilogram': 'g/kg',
+    'GramsPerCubicMeter': 'g/m³',
+    'MilligramsPerLiter': 'mg/L',
+    'MicrogramsPerCubicMeter': 'µg/m³',
+
+    // Luminosité
+    'Lux': 'lux',
+    'Lumens': 'lm',
+    'Candelas': 'cd',
+    'FootCandles': 'fc',
+
+    // Autres
+    'RevolutionsPerMinute': 'RPM',
+    'revolutionsPerMinute': 'RPM',
+    'DegreesAngular': '°',
+    'Radians': 'rad',
+    'RadiansPerSecond': 'rad/s',
+    'NoUnits': '',
+    'noUnits': '',
+    'No-Units': '',
+  };
 
   /// Crée une copie avec les informations de forçage mises à jour
   BacnetObject copyWith({
@@ -223,6 +487,10 @@ class BacnetObject {
     dynamic overrideValue,
     String? activeText,
     String? inactiveText,
+    List<String>? stateText,
+    bool? inAlarm,
+    DateTime? alarmTimestamp,
+    String? alarmMessage,
   }) {
     return BacnetObject(
       type: type ?? this.type,
@@ -240,6 +508,10 @@ class BacnetObject {
       overrideValue: overrideValue ?? this.overrideValue,
       activeText: activeText ?? this.activeText,
       inactiveText: inactiveText ?? this.inactiveText,
+      stateText: stateText ?? this.stateText,
+      inAlarm: inAlarm ?? this.inAlarm,
+      alarmTimestamp: alarmTimestamp ?? this.alarmTimestamp,
+      alarmMessage: alarmMessage ?? this.alarmMessage,
     );
   }
 
@@ -473,4 +745,94 @@ class ObjectsSummary {
   int get totalOutputs => analogOutputs + binaryOutputs + multiStateOutputs;
   int get totalValues => analogValues + binaryValues + multiStateValues;
   int get total => totalInputs + totalOutputs + totalValues + schedules;
+}
+
+/// Heure de l'automate avec calcul du décalage par rapport à l'heure locale
+class ControllerTime {
+  /// Date et heure de l'automate
+  final DateTime controllerDateTime;
+
+  /// Date et heure locale au moment de la lecture
+  final DateTime localDateTime;
+
+  /// Décalage en secondes (positif = automate en avance, négatif = en retard)
+  final int offsetSeconds;
+
+  const ControllerTime({
+    required this.controllerDateTime,
+    required this.localDateTime,
+    required this.offsetSeconds,
+  });
+
+  /// Crée un ControllerTime à partir de la date/heure de l'automate
+  factory ControllerTime.fromDateTime(DateTime controllerDateTime) {
+    final localDateTime = DateTime.now();
+    final offsetSeconds = controllerDateTime.difference(localDateTime).inSeconds;
+    return ControllerTime(
+      controllerDateTime: controllerDateTime,
+      localDateTime: localDateTime,
+      offsetSeconds: offsetSeconds,
+    );
+  }
+
+  /// Décalage absolu en secondes
+  int get absoluteOffsetSeconds => offsetSeconds.abs();
+
+  /// Décalage en minutes (arrondi)
+  int get offsetMinutes => (offsetSeconds / 60).round();
+
+  /// Décalage absolu en minutes
+  int get absoluteOffsetMinutes => offsetMinutes.abs();
+
+  /// Indique si le décalage est significatif (> 2 minutes)
+  bool get hasSignificantOffset => absoluteOffsetMinutes > 2;
+
+  /// Indique si le décalage est critique (> 10 minutes)
+  bool get hasCriticalOffset => absoluteOffsetMinutes > 10;
+
+  /// Heure formatée (HH:mm)
+  String get formattedTime {
+    final h = controllerDateTime.hour.toString().padLeft(2, '0');
+    final m = controllerDateTime.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  /// Date formatée courte (JJ/MM)
+  String get formattedDateShort {
+    final d = controllerDateTime.day.toString().padLeft(2, '0');
+    final m = controllerDateTime.month.toString().padLeft(2, '0');
+    return '$d/$m';
+  }
+
+  /// Date et heure formatées complètes
+  String get formattedDateTime {
+    final d = controllerDateTime.day.toString().padLeft(2, '0');
+    final m = controllerDateTime.month.toString().padLeft(2, '0');
+    final y = controllerDateTime.year;
+    final h = controllerDateTime.hour.toString().padLeft(2, '0');
+    final min = controllerDateTime.minute.toString().padLeft(2, '0');
+    final s = controllerDateTime.second.toString().padLeft(2, '0');
+    return '$d/$m/$y $h:$min:$s';
+  }
+
+  /// Description du décalage pour l'affichage
+  String get offsetDescription {
+    if (absoluteOffsetMinutes == 0) {
+      return 'Synchronisé';
+    }
+
+    final absMin = absoluteOffsetMinutes;
+    final direction = offsetMinutes > 0 ? 'en avance' : 'en retard';
+
+    if (absMin < 60) {
+      return '$absMin min $direction';
+    }
+
+    final hours = absMin ~/ 60;
+    final mins = absMin % 60;
+    if (mins == 0) {
+      return '$hours h $direction';
+    }
+    return '$hours h $mins min $direction';
+  }
 }

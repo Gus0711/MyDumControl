@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mydumcontrol/l10n/app_localizations.dart';
 import '../../../application/providers/connection_providers.dart';
 import '../../../application/providers/folder_providers.dart';
+import '../../../application/providers/super_favorites_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
+import '../../shared/utils/bacnet_type_utils.dart';
 
 /// Écran de liste des connexions sauvegardées organisées par dossiers
 class ConnectionsListScreen extends ConsumerStatefulWidget {
@@ -196,6 +199,9 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     switch (value) {
+                      case 'refresh':
+                        _refreshFolderSuperFavorites(ref, connections);
+                        break;
                       case 'edit':
                         _showEditFolderDialog(context, l10n, folder);
                         break;
@@ -205,6 +211,16 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                     }
                   },
                   itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'refresh',
+                      child: Row(
+                        children: [
+                          Icon(Icons.refresh, size: 20),
+                          SizedBox(width: 8),
+                          Text('Rafraîchir les valeurs'),
+                        ],
+                      ),
+                    ),
                     const PopupMenuItem(
                       value: 'edit',
                       child: Row(
@@ -273,6 +289,17 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     } catch (e) {
       return Colors.blue;
     }
+  }
+
+  /// Rafraîchit les super favoris de toutes les connexions d'un dossier
+  void _refreshFolderSuperFavorites(WidgetRef ref, List<Connection> connections) {
+    final connectionIds = connections.map((c) => c.id).toList();
+    ref.read(superFavoritesProvider.notifier).refreshFolder(connectionIds);
+  }
+
+  /// Rafraîchit les super favoris d'une connexion
+  void _refreshConnectionSuperFavorites(WidgetRef ref, int connectionId) {
+    ref.read(superFavoritesProvider.notifier).refreshConnection(connectionId);
   }
 
   Future<void> _showAddFolderDialog(BuildContext context, AppLocalizations l10n) async {
@@ -637,8 +664,8 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
   }
 }
 
-/// Carte affichant une connexion
-class _ConnectionCard extends StatelessWidget {
+/// Carte affichant une connexion avec ses super favoris
+class _ConnectionCard extends ConsumerWidget {
   final Connection connection;
   final AppLocalizations l10n;
   final VoidCallback onTap;
@@ -656,9 +683,14 @@ class _ConnectionCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final protocol = connection.useHttps ? 'https' : 'http';
     final url = '$protocol://${connection.host}:${connection.port}';
+
+    // Récupérer les super favoris pour cette connexion
+    final superFavsState = ref.watch(superFavoritesProvider);
+    final superFavorites = superFavsState.forConnection(connection.id);
+    final isRefreshing = superFavsState.isRefreshing(connection.id);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -667,120 +699,311 @@ class _ConnectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icône
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.dns,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Infos
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      connection.name,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+              // En-tête de la connexion
+              Row(
+                children: [
+                  // Icône
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      url,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey.shade600,
-                            fontSize: 11,
-                          ),
+                    child: Icon(
+                      Icons.dns,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 22,
                     ),
-                    if (connection.apiVersion != null) ...[
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 1,
+                  ),
+                  const SizedBox(width: 12),
+                  // Infos
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          connection.name,
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade100,
-                          borderRadius: BorderRadius.circular(4),
+                        const SizedBox(height: 2),
+                        Text(
+                          url,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.grey.shade600,
+                                fontSize: 11,
+                              ),
                         ),
-                        child: Text(
-                          'API ${connection.apiVersion}',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.blue.shade800,
+                        if (connection.apiVersion != null) ...[
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade100,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'API ${connection.apiVersion}',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.blue.shade800,
+                              ),
+                            ),
                           ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  // Bouton refresh pour les super favoris (si présents)
+                  if (superFavorites.isNotEmpty)
+                    _RefreshButton(connectionId: connection.id),
+                  // Actions
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'edit':
+                          onEdit();
+                          break;
+                        case 'move':
+                          onMoveToFolder();
+                          break;
+                        case 'delete':
+                          onDelete();
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.edit, size: 20),
+                            const SizedBox(width: 8),
+                            Text(l10n.editConnection),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'move',
+                        child: Row(
+                          children: [
+                            Icon(Icons.drive_file_move_outline, size: 20),
+                            SizedBox(width: 8),
+                            Text('Déplacer'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, size: 20, color: Colors.red),
+                            const SizedBox(width: 8),
+                            Text(
+                              l10n.deleteConnection,
+                              style: TextStyle(color: Colors.red.shade400),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-              // Actions
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  switch (value) {
-                    case 'edit':
-                      onEdit();
-                      break;
-                    case 'move':
-                      onMoveToFolder();
-                      break;
-                    case 'delete':
-                      onDelete();
-                      break;
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.edit, size: 20),
-                        const SizedBox(width: 8),
-                        Text(l10n.editConnection),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'move',
-                    child: Row(
-                      children: [
-                        Icon(Icons.drive_file_move_outline, size: 20),
-                        SizedBox(width: 8),
-                        Text('Déplacer'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, size: 20, color: Colors.red),
-                        const SizedBox(width: 8),
-                        Text(
-                          l10n.deleteConnection,
-                          style: TextStyle(color: Colors.red.shade400),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),
+              // Super favoris (si présents)
+              if (superFavorites.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+                _buildSuperFavoritesList(context, superFavorites, isRefreshing),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// Construit la liste des super favoris
+  Widget _buildSuperFavoritesList(
+    BuildContext context,
+    List<SuperFavoriteWithValue> superFavorites,
+    bool isRefreshing,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: superFavorites.map((sf) {
+        final liveData = sf.liveData;
+        final hasValue = liveData != null;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            children: [
+              // Icône du type
+              Icon(
+                BacnetTypeUtils.getIconForType(sf.favorite.objectType),
+                size: 16,
+                color: Colors.grey.shade600,
+              ),
+              const SizedBox(width: 8),
+              // Nom du point
+              Expanded(
+                child: Text(
+                  sf.favorite.pointName,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey.shade700,
+                      ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Valeur
+              if (isRefreshing && !hasValue)
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: hasValue
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    sf.displayValue,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: hasValue
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.grey.shade500,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// Bouton de refresh avec chrono de cooldown
+class _RefreshButton extends ConsumerStatefulWidget {
+  final int connectionId;
+
+  const _RefreshButton({required this.connectionId});
+
+  @override
+  ConsumerState<_RefreshButton> createState() => _RefreshButtonState();
+}
+
+class _RefreshButtonState extends ConsumerState<_RefreshButton> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimerIfNeeded();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _startTimerIfNeeded() {
+    final state = ref.read(superFavoritesProvider);
+    final remaining = state.secondsUntilRefresh(widget.connectionId);
+
+    if (remaining > 0 && _timer == null) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) {
+          setState(() {});
+          // Arrêter le timer quand on atteint 0
+          final newRemaining = ref.read(superFavoritesProvider).secondsUntilRefresh(widget.connectionId);
+          if (newRemaining == 0) {
+            _timer?.cancel();
+            _timer = null;
+          }
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(superFavoritesProvider);
+    final isRefreshing = state.isRefreshing(widget.connectionId);
+    final secondsRemaining = state.secondsUntilRefresh(widget.connectionId);
+    final canRefresh = !isRefreshing && secondsRemaining == 0;
+
+    // Démarrer le timer si nécessaire (après un refresh)
+    if (secondsRemaining > 0 && _timer == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startTimerIfNeeded();
+      });
+    }
+
+    // En cours de refresh : spinner
+    if (isRefreshing) {
+      return const SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    // Cooldown actif : afficher le chrono
+    if (secondsRemaining > 0) {
+      return SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: Text(
+            '${secondsRemaining}s',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade500,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Refresh possible : bouton normal
+    return IconButton(
+      icon: const Icon(Icons.refresh, size: 20),
+      onPressed: () {
+        ref.read(superFavoritesProvider.notifier).refreshConnection(widget.connectionId);
+        // Démarrer le timer après le refresh
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _startTimerIfNeeded();
+        });
+      },
+      tooltip: 'Rafraîchir les valeurs',
+      visualDensity: VisualDensity.compact,
     );
   }
 }

@@ -1313,6 +1313,21 @@ class $FavoritesTable extends Favorites
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _isSuperFavoriteMeta = const VerificationMeta(
+    'isSuperFavorite',
+  );
+  @override
+  late final GeneratedColumn<bool> isSuperFavorite = GeneratedColumn<bool>(
+    'is_super_favorite',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_super_favorite" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1334,6 +1349,7 @@ class $FavoritesTable extends Favorites
     pointDescription,
     objectType,
     sortOrder,
+    isSuperFavorite,
     createdAt,
   ];
   @override
@@ -1401,6 +1417,15 @@ class $FavoritesTable extends Favorites
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('is_super_favorite')) {
+      context.handle(
+        _isSuperFavoriteMeta,
+        isSuperFavorite.isAcceptableOrUnknown(
+          data['is_super_favorite']!,
+          _isSuperFavoriteMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1448,6 +1473,10 @@ class $FavoritesTable extends Favorites
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      isSuperFavorite: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_super_favorite'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1483,6 +1512,9 @@ class Favorite extends DataClass implements Insertable<Favorite> {
   /// Ordre de tri (pour réorganiser les favoris)
   final int sortOrder;
 
+  /// Super favori (affiché sur la page de connexions)
+  final bool isSuperFavorite;
+
   /// Date d'ajout aux favoris
   final DateTime createdAt;
   const Favorite({
@@ -1493,6 +1525,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
     this.pointDescription,
     required this.objectType,
     required this.sortOrder,
+    required this.isSuperFavorite,
     required this.createdAt,
   });
   @override
@@ -1507,6 +1540,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
     }
     map['object_type'] = Variable<String>(objectType);
     map['sort_order'] = Variable<int>(sortOrder);
+    map['is_super_favorite'] = Variable<bool>(isSuperFavorite);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -1522,6 +1556,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
           : Value(pointDescription),
       objectType: Value(objectType),
       sortOrder: Value(sortOrder),
+      isSuperFavorite: Value(isSuperFavorite),
       createdAt: Value(createdAt),
     );
   }
@@ -1539,6 +1574,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
       pointDescription: serializer.fromJson<String?>(json['pointDescription']),
       objectType: serializer.fromJson<String>(json['objectType']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      isSuperFavorite: serializer.fromJson<bool>(json['isSuperFavorite']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1553,6 +1589,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
       'pointDescription': serializer.toJson<String?>(pointDescription),
       'objectType': serializer.toJson<String>(objectType),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'isSuperFavorite': serializer.toJson<bool>(isSuperFavorite),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1565,6 +1602,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
     Value<String?> pointDescription = const Value.absent(),
     String? objectType,
     int? sortOrder,
+    bool? isSuperFavorite,
     DateTime? createdAt,
   }) => Favorite(
     id: id ?? this.id,
@@ -1576,6 +1614,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
         : this.pointDescription,
     objectType: objectType ?? this.objectType,
     sortOrder: sortOrder ?? this.sortOrder,
+    isSuperFavorite: isSuperFavorite ?? this.isSuperFavorite,
     createdAt: createdAt ?? this.createdAt,
   );
   Favorite copyWithCompanion(FavoritesCompanion data) {
@@ -1593,6 +1632,9 @@ class Favorite extends DataClass implements Insertable<Favorite> {
           ? data.objectType.value
           : this.objectType,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      isSuperFavorite: data.isSuperFavorite.present
+          ? data.isSuperFavorite.value
+          : this.isSuperFavorite,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1607,6 +1649,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
           ..write('pointDescription: $pointDescription, ')
           ..write('objectType: $objectType, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('isSuperFavorite: $isSuperFavorite, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1621,6 +1664,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
     pointDescription,
     objectType,
     sortOrder,
+    isSuperFavorite,
     createdAt,
   );
   @override
@@ -1634,6 +1678,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
           other.pointDescription == this.pointDescription &&
           other.objectType == this.objectType &&
           other.sortOrder == this.sortOrder &&
+          other.isSuperFavorite == this.isSuperFavorite &&
           other.createdAt == this.createdAt);
 }
 
@@ -1645,6 +1690,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
   final Value<String?> pointDescription;
   final Value<String> objectType;
   final Value<int> sortOrder;
+  final Value<bool> isSuperFavorite;
   final Value<DateTime> createdAt;
   const FavoritesCompanion({
     this.id = const Value.absent(),
@@ -1654,6 +1700,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     this.pointDescription = const Value.absent(),
     this.objectType = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.isSuperFavorite = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   FavoritesCompanion.insert({
@@ -1664,6 +1711,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     this.pointDescription = const Value.absent(),
     required String objectType,
     this.sortOrder = const Value.absent(),
+    this.isSuperFavorite = const Value.absent(),
     this.createdAt = const Value.absent(),
   }) : connectionId = Value(connectionId),
        pointRef = Value(pointRef),
@@ -1677,6 +1725,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     Expression<String>? pointDescription,
     Expression<String>? objectType,
     Expression<int>? sortOrder,
+    Expression<bool>? isSuperFavorite,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -1687,6 +1736,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
       if (pointDescription != null) 'point_description': pointDescription,
       if (objectType != null) 'object_type': objectType,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (isSuperFavorite != null) 'is_super_favorite': isSuperFavorite,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -1699,6 +1749,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     Value<String?>? pointDescription,
     Value<String>? objectType,
     Value<int>? sortOrder,
+    Value<bool>? isSuperFavorite,
     Value<DateTime>? createdAt,
   }) {
     return FavoritesCompanion(
@@ -1709,6 +1760,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
       pointDescription: pointDescription ?? this.pointDescription,
       objectType: objectType ?? this.objectType,
       sortOrder: sortOrder ?? this.sortOrder,
+      isSuperFavorite: isSuperFavorite ?? this.isSuperFavorite,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -1737,6 +1789,9 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (isSuperFavorite.present) {
+      map['is_super_favorite'] = Variable<bool>(isSuperFavorite.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1753,6 +1808,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
           ..write('pointDescription: $pointDescription, ')
           ..write('objectType: $objectType, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('isSuperFavorite: $isSuperFavorite, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -5583,6 +5639,7 @@ typedef $$FavoritesTableCreateCompanionBuilder =
       Value<String?> pointDescription,
       required String objectType,
       Value<int> sortOrder,
+      Value<bool> isSuperFavorite,
       Value<DateTime> createdAt,
     });
 typedef $$FavoritesTableUpdateCompanionBuilder =
@@ -5594,6 +5651,7 @@ typedef $$FavoritesTableUpdateCompanionBuilder =
       Value<String?> pointDescription,
       Value<String> objectType,
       Value<int> sortOrder,
+      Value<bool> isSuperFavorite,
       Value<DateTime> createdAt,
     });
 
@@ -5657,6 +5715,11 @@ class $$FavoritesTableFilterComposer
 
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSuperFavorite => $composableBuilder(
+    column: $table.isSuperFavorite,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5728,6 +5791,11 @@ class $$FavoritesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isSuperFavorite => $composableBuilder(
+    column: $table.isSuperFavorite,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -5787,6 +5855,11 @@ class $$FavoritesTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<bool> get isSuperFavorite => $composableBuilder(
+    column: $table.isSuperFavorite,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5850,6 +5923,7 @@ class $$FavoritesTableTableManager
                 Value<String?> pointDescription = const Value.absent(),
                 Value<String> objectType = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<bool> isSuperFavorite = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => FavoritesCompanion(
                 id: id,
@@ -5859,6 +5933,7 @@ class $$FavoritesTableTableManager
                 pointDescription: pointDescription,
                 objectType: objectType,
                 sortOrder: sortOrder,
+                isSuperFavorite: isSuperFavorite,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -5870,6 +5945,7 @@ class $$FavoritesTableTableManager
                 Value<String?> pointDescription = const Value.absent(),
                 required String objectType,
                 Value<int> sortOrder = const Value.absent(),
+                Value<bool> isSuperFavorite = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => FavoritesCompanion.insert(
                 id: id,
@@ -5879,6 +5955,7 @@ class $$FavoritesTableTableManager
                 pointDescription: pointDescription,
                 objectType: objectType,
                 sortOrder: sortOrder,
+                isSuperFavorite: isSuperFavorite,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0

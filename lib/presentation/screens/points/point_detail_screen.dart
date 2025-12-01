@@ -565,8 +565,12 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
   }
 
   Widget _buildMultiStateEditor(BuildContext context, BacnetObject point) {
-    // Pour les multi-états, on affiche un dropdown si on a les états possibles
-    // Sinon on utilise un champ texte numérique
+    // Si on a les états possibles, afficher un dropdown
+    if (point.stateText != null && point.stateText!.isNotEmpty) {
+      return _buildMultiStateDropdown(context, point);
+    }
+
+    // Sinon on utilise un champ texte numérique (fallback)
     return Form(
       key: _formKey,
       child: Column(
@@ -602,6 +606,111 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           _buildApplyButtonWithValidation(point),
         ],
       ),
+    );
+  }
+
+  Widget _buildMultiStateDropdown(BuildContext context, BacnetObject point) {
+    final stateText = point.stateText!;
+
+    // Valeur actuelle (BACnet est indexé à partir de 1)
+    int currentValue;
+    if (_editValue is int) {
+      currentValue = _editValue;
+    } else if (point.presentValue is int) {
+      currentValue = point.presentValue;
+    } else if (point.presentValue is num) {
+      currentValue = (point.presentValue as num).toInt();
+    } else {
+      currentValue = 1;
+    }
+
+    // S'assurer que la valeur est dans les bornes
+    if (currentValue < 1 || currentValue > stateText.length) {
+      currentValue = 1;
+    }
+
+    return Column(
+      children: [
+        Container(
+          constraints: const BoxConstraints(minWidth: 250),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: currentValue,
+              isExpanded: true,
+              icon: const Icon(Icons.arrow_drop_down),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+              items: List.generate(stateText.length, (index) {
+                final stateValue = index + 1; // BACnet indexé à partir de 1
+                final label = stateText[index];
+                return DropdownMenuItem<int>(
+                  value: stateValue,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: stateValue == currentValue
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Center(
+                          child: Text(
+                            stateValue.toString(),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: stateValue == currentValue
+                                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                                  : Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontWeight: stateValue == currentValue
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _editValue = value;
+                  });
+                }
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Affichage de la sélection actuelle
+        Text(
+          'État sélectionné: ${stateText[currentValue - 1]} ($currentValue)',
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildApplyButton(point),
+      ],
     );
   }
 

@@ -12,6 +12,7 @@ import '../../presentation/screens/overrides/overrides_screen.dart';
 import '../../presentation/screens/favorites/favorites_screen.dart';
 import '../../presentation/screens/schedules/schedules_list_screen.dart';
 import '../../presentation/screens/schedules/schedule_detail_screen.dart';
+import '../../presentation/screens/alarms/alarms_screen.dart';
 
 /// Configuration du router de l'application
 class AppRouter {
@@ -85,13 +86,11 @@ class AppRouter {
         ],
       ),
 
-      // Alarmes - À implémenter
+      // Alarmes
       GoRoute(
         path: Routes.alarms,
         name: 'alarms',
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Alarmes - À implémenter')),
-        ),
+        builder: (context, state) => const AlarmsScreen(),
       ),
 
       // Schedules (Plannings)

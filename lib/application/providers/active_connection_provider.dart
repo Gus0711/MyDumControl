@@ -18,6 +18,7 @@ class ActiveConnectionState {
   final ConnectedApiClient? client;
   final DeviceInfo? deviceInfo;
   final ObjectsSummary? objectsSummary;
+  final ControllerTime? controllerTime;
   final bool isConnecting;
   final bool isLoadingDeviceInfo;
   final bool isLoadingSummary;
@@ -32,6 +33,7 @@ class ActiveConnectionState {
     this.client,
     this.deviceInfo,
     this.objectsSummary,
+    this.controllerTime,
     this.isConnecting = false,
     this.isLoadingDeviceInfo = false,
     this.isLoadingSummary = false,
@@ -48,6 +50,7 @@ class ActiveConnectionState {
     ConnectedApiClient? client,
     DeviceInfo? deviceInfo,
     ObjectsSummary? objectsSummary,
+    ControllerTime? controllerTime,
     bool? isConnecting,
     bool? isLoadingDeviceInfo,
     bool? isLoadingSummary,
@@ -60,6 +63,7 @@ class ActiveConnectionState {
       client: client ?? this.client,
       deviceInfo: deviceInfo ?? this.deviceInfo,
       objectsSummary: objectsSummary ?? this.objectsSummary,
+      controllerTime: controllerTime ?? this.controllerTime,
       isConnecting: isConnecting ?? this.isConnecting,
       isLoadingDeviceInfo: isLoadingDeviceInfo ?? this.isLoadingDeviceInfo,
       isLoadingSummary: isLoadingSummary ?? this.isLoadingSummary,
@@ -248,6 +252,18 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
           state = state.copyWith(isLoadingSummary: false);
         }
       }
+    });
+
+    // Charger l'heure de l'automate (en arrière-plan)
+    client.getControllerTime().then((controllerTime) {
+      _logger.i('Background: controllerTime loaded: ${controllerTime.formattedDateTime}, offset=${controllerTime.offsetDescription}');
+
+      if (mounted) {
+        state = state.copyWith(controllerTime: controllerTime);
+      }
+    }).catchError((e) {
+      _logger.w('Background: getControllerTime failed: $e');
+      // Pas critique, on continue sans l'heure
     });
   }
 

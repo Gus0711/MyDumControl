@@ -22,7 +22,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -45,6 +45,10 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(cachedDeviceInfo);
             await m.createTable(cachedTrendLogMapping);
             await m.createTable(cachedObjectsSummary);
+          }
+          if (from < 5) {
+            // Migration de v4 à v5 : ajout de isSuperFavorite aux favoris
+            await m.addColumn(favorites, favorites.isSuperFavorite);
           }
         },
       );
@@ -315,6 +319,88 @@ class AppDatabase extends _$AppDatabase {
     final query = selectOnly(favorites)
       ..addColumns([count])
       ..where(favorites.connectionId.equals(connectionId));
+    final result = await query.getSingle();
+    return result.read(count) ?? 0;
+  }
+
+  // === Super Favoris ===
+
+  /// Récupère les super favoris d'une connexion
+  Future<List<Favorite>> getSuperFavoritesByConnection(int connectionId) {
+    return (select(favorites)
+          ..where((f) =>
+              f.connectionId.equals(connectionId) & f.isSuperFavorite.equals(true))
+          ..orderBy([(f) => OrderingTerm.asc(f.sortOrder)]))
+        .get();
+  }
+
+  /// Stream des super favoris d'une connexion
+  Stream<List<Favorite>> watchSuperFavoritesByConnection(int connectionId) {
+    return (select(favorites)
+          ..where((f) =>
+              f.connectionId.equals(connectionId) & f.isSuperFavorite.equals(true))
+          ..orderBy([(f) => OrderingTerm.asc(f.sortOrder)]))
+        .watch();
+  }
+
+  /// Récupère tous les super favoris groupés par connexion
+  Future<Map<int, List<Favorite>>> getAllSuperFavoritesGrouped() async {
+    final allSuperFavs = await (select(favorites)
+          ..where((f) => f.isSuperFavorite.equals(true))
+          ..orderBy([(f) => OrderingTerm.asc(f.sortOrder)]))
+        .get();
+
+    final grouped = <int, List<Favorite>>{};
+    for (final fav in allSuperFavs) {
+      grouped.putIfAbsent(fav.connectionId, () => []).add(fav);
+    }
+    return grouped;
+  }
+
+  /// Stream de tous les super favoris groupés par connexion
+  Stream<Map<int, List<Favorite>>> watchAllSuperFavoritesGrouped() {
+    return (select(favorites)
+          ..where((f) => f.isSuperFavorite.equals(true))
+          ..orderBy([(f) => OrderingTerm.asc(f.sortOrder)]))
+        .watch()
+        .map((allSuperFavs) {
+      final grouped = <int, List<Favorite>>{};
+      for (final fav in allSuperFavs) {
+        grouped.putIfAbsent(fav.connectionId, () => []).add(fav);
+      }
+      return grouped;
+    });
+  }
+
+  /// Toggle le statut super favori d'un favori
+  Future<bool> toggleSuperFavorite(int favoriteId) async {
+    final existing = await (select(favorites)
+          ..where((f) => f.id.equals(favoriteId)))
+        .getSingleOrNull();
+
+    if (existing == null) return false;
+
+    final newValue = !existing.isSuperFavorite;
+    await (update(favorites)..where((f) => f.id.equals(favoriteId))).write(
+      FavoritesCompanion(isSuperFavorite: Value(newValue)),
+    );
+    return newValue;
+  }
+
+  /// Met à jour le statut super favori
+  Future<void> setSuperFavorite(int favoriteId, bool isSuperFavorite) async {
+    await (update(favorites)..where((f) => f.id.equals(favoriteId))).write(
+      FavoritesCompanion(isSuperFavorite: Value(isSuperFavorite)),
+    );
+  }
+
+  /// Compte les super favoris pour une connexion
+  Future<int> countSuperFavorites(int connectionId) async {
+    final count = favorites.id.count();
+    final query = selectOnly(favorites)
+      ..addColumns([count])
+      ..where(favorites.connectionId.equals(connectionId) &
+          favorites.isSuperFavorite.equals(true));
     final result = await query.getSingle();
     return result.read(count) ?? 0;
   }

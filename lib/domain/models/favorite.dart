@@ -9,6 +9,7 @@ class Favorite {
   final String? pointDescription;
   final BacnetObjectType objectType;
   final int sortOrder;
+  final bool isSuperFavorite;
   final DateTime createdAt;
 
   /// Données live du point (chargées séparément)
@@ -22,6 +23,7 @@ class Favorite {
     this.pointDescription,
     required this.objectType,
     required this.sortOrder,
+    this.isSuperFavorite = false,
     required this.createdAt,
     this.liveData,
   });
@@ -31,6 +33,7 @@ class Favorite {
     required int connectionId,
     required BacnetObject object,
     int sortOrder = 0,
+    bool isSuperFavorite = false,
   }) {
     return Favorite(
       id: 0, // Sera assigné par la DB
@@ -40,6 +43,7 @@ class Favorite {
       pointDescription: object.description,
       objectType: object.type,
       sortOrder: sortOrder,
+      isSuperFavorite: isSuperFavorite,
       createdAt: DateTime.now(),
       liveData: object,
     );
@@ -55,6 +59,7 @@ class Favorite {
       pointDescription: pointDescription,
       objectType: objectType,
       sortOrder: sortOrder,
+      isSuperFavorite: isSuperFavorite,
       createdAt: createdAt,
       liveData: liveData,
     );
@@ -70,6 +75,23 @@ class Favorite {
       pointDescription: pointDescription,
       objectType: objectType,
       sortOrder: newSortOrder,
+      isSuperFavorite: isSuperFavorite,
+      createdAt: createdAt,
+      liveData: liveData,
+    );
+  }
+
+  /// Crée une copie avec le statut super favori modifié
+  Favorite copyWithSuperFavorite(bool isSuperFavorite) {
+    return Favorite(
+      id: id,
+      connectionId: connectionId,
+      pointRef: pointRef,
+      pointName: pointName,
+      pointDescription: pointDescription,
+      objectType: objectType,
+      sortOrder: sortOrder,
+      isSuperFavorite: isSuperFavorite,
       createdAt: createdAt,
       liveData: liveData,
     );
