@@ -14,7 +14,7 @@ class Routes {
   static const String pointDetail = '/points/:id';
   static const String alarms = '/alarms';
   static const String schedules = '/schedules';
-  static const String scheduleDetail = '/schedules/:id';
+  static const String scheduleDetail = '/schedules/:instance';
   static const String overrides = '/overrides';
   static const String favorites = '/favorites';
   static const String pidLoops = '/pid-loops';

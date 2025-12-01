@@ -7,6 +7,8 @@ import '../../domain/models/bacnet_object.dart';
 import 'connection_providers.dart';
 import 'database_provider.dart';
 import 'cache_provider.dart';
+import 'points_provider.dart';
+import 'schedule_provider.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
@@ -85,6 +87,10 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       oldClient.dispose();
     }
 
+    // IMPORTANT: Réinitialiser tous les providers de données
+    // pour éviter d'afficher les données de l'ancien automate
+    _clearDataProviders();
+
     state = state.copyWith(isConnecting: true, error: null);
 
     try {
@@ -142,6 +148,15 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       final cachedDeviceInfo = await cacheService.getCachedDeviceInfo(connectionId);
       final cachedSummary = await cacheService.getCachedObjectsSummary(connectionId);
 
+      if (cachedDeviceInfo != null) {
+        _logger.i('connect: deviceInfo loaded from cache: ${cachedDeviceInfo.objectName}');
+      }
+      if (cachedSummary != null) {
+        _logger.i('connect: objectsSummary loaded from cache: ${cachedSummary.total} objets');
+      }
+
+      // TOUJOURS afficher l'animation de chargement (même avec cache)
+      // pour une UX cohérente entre V1 et V2
       state = ActiveConnectionState(
         connection: connection,
         client: client,
@@ -151,17 +166,11 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
         objectsSummary: cachedSummary,
         deviceInfoFromCache: cachedDeviceInfo != null,
         summaryFromCache: cachedSummary != null,
-        // Continuer à charger en arrière-plan si pas de cache
-        isLoadingDeviceInfo: cachedDeviceInfo == null,
-        isLoadingSummary: cachedSummary == null,
+        // Toujours mettre isLoading à true pour afficher l'animation
+        // Le chargement en arrière-plan les passera à false
+        isLoadingDeviceInfo: true,
+        isLoadingSummary: true,
       );
-
-      if (cachedDeviceInfo != null) {
-        _logger.i('connect: deviceInfo loaded from cache: ${cachedDeviceInfo.objectName}');
-      }
-      if (cachedSummary != null) {
-        _logger.i('connect: objectsSummary loaded from cache: ${cachedSummary.total} objets');
-      }
 
       // CHARGER LES DONNÉES FRAÎCHES EN ARRIÈRE-PLAN (sans bloquer)
       // Cela mettra à jour le cache et l'UI
@@ -242,10 +251,31 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     });
   }
 
-  /// Se déconnecte
+  /// Se déconnecte et réinitialise tous les providers de données
   void disconnect() {
+    _logger.i('disconnect: clearing all data providers');
     state.client?.dispose();
+
+    // Réinitialiser tous les providers de données pour éviter
+    // d'afficher les données de l'ancien automate
+    _clearDataProviders();
+
     state = const ActiveConnectionState();
+  }
+
+  /// Réinitialise tous les providers de données
+  /// Appelé lors de la déconnexion ou du changement d'automate
+  void _clearDataProviders() {
+    // Points BACnet - reset via le notifier (pas invalidate pour éviter dépendance circulaire)
+    _ref.read(pointsProvider.notifier).reset();
+
+    // Plannings - reset via le notifier
+    _ref.read(scheduleEditProvider.notifier).reset();
+
+    // Note: schedulesListProvider et trendLogMappingProvider sont des FutureProvider
+    // Ils se rafraîchiront automatiquement car ils watchent activeConnectionProvider
+
+    _logger.i('_clearDataProviders: data providers reset');
   }
 
   /// Rafraîchit les données (en arrière-plan)

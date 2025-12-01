@@ -322,9 +322,23 @@ class TrendLogBufferParser {
     return TrendLogData.fromRecords(records);
   }
 
-  /// Parse le log buffer V2 (format JSON)
-  static TrendLogData parseV2(List<dynamic> samples) {
+  /// Parse le log buffer V2 (format JSON avec columns/rows)
+  /// Format: {columns: [{name: "timestamp"}, {name: "flags"}, {name: "value"}], rows: [{timestamp: ..., value: ...}, ...]}
+  static TrendLogData parseV2(dynamic data) {
     final records = <TrendLogRecord>[];
+
+    List<dynamic> samples;
+
+    // Gérer les deux formats possibles
+    if (data is Map<String, dynamic>) {
+      // Format columns/rows (standard V2)
+      samples = data['rows'] as List<dynamic>? ?? [];
+    } else if (data is List) {
+      // Format liste simple (fallback)
+      samples = data;
+    } else {
+      return TrendLogData.fromRecords([]);
+    }
 
     for (final sample in samples) {
       if (sample is! Map<String, dynamic>) continue;

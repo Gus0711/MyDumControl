@@ -7,6 +7,7 @@ import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/favorites_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../widgets/connection_loading_overlay.dart';
 
 /// Écran principal - Menu de navigation vers les fonctionnalités
 class HomeScreen extends ConsumerStatefulWidget {
@@ -20,11 +21,14 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _pointsLoadTriggered = false;
+  bool _initialLoadComplete = false;
 
   @override
   void initState() {
     super.initState();
     if (widget.connectionId != null) {
+      // Reset le flag de chargement initial quand on démarre une nouvelle connexion
+      _initialLoadComplete = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(activeConnectionProvider.notifier).connect(widget.connectionId!);
       });
@@ -46,6 +50,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Reset si déconnecté
       if (!next.isConnected) {
         _pointsLoadTriggered = false;
+        _initialLoadComplete = false;
+      }
+      // Marquer le chargement initial comme terminé quand tout est chargé
+      if (!_initialLoadComplete && next.isConnected && !next.isLoading && next.objectsSummary != null) {
+        setState(() {
+          _initialLoadComplete = true;
+        });
       }
     });
 
@@ -144,17 +155,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n, ActiveConnectionState state) {
-    // Afficher le spinner uniquement pendant la connexion initiale
-    if (state.isConnecting && !state.isConnected) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Connexion en cours...'),
-          ],
-        ),
+    // Afficher l'overlay de chargement pendant tout le processus de connexion initial
+    // L'overlay reste visible tant que le chargement initial n'est pas terminé
+    final showLoadingOverlay = !_initialLoadComplete && (state.isConnecting || state.isLoading);
+
+    if (showLoadingOverlay) {
+      int step = 0;
+      String message = 'Connexion en cours';
+
+      if (state.isConnecting) {
+        step = 0;
+        message = 'Connexion en cours';
+      } else if (state.isLoadingDeviceInfo) {
+        step = 1;
+        message = 'Authentification';
+      } else if (state.isLoadingSummary) {
+        step = 2;
+        message = 'Récupération des données';
+      }
+
+      return ConnectionLoadingOverlay(
+        message: message,
+        subMessage: state.connection?.name ?? 'Automate',
+        currentStep: step,
       );
     }
 

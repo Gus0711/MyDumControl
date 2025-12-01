@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Autoriser le trafic HTTP non chiffré (cleartext) pour les connexions locales -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- Certificats système -->
+            <certificates src="system"/>
+            <!-- Certificats utilisateur (pour les certificats auto-signés importés) -->
+            <certificates src="user"/>
+        </trust-anchors>
+    </base-config>
+
+    <!-- Configuration spécifique pour les adresses IP locales (automates) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">10.0.0.0</domain>
+        <domain includeSubdomains="true">172.16.0.0</domain>
+        <domain includeSubdomains="true">192.168.0.0</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

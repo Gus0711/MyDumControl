@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:logger/logger.dart';
 import '../../domain/models/bacnet_object.dart';
+import '../../domain/models/schedule.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
@@ -512,6 +513,7 @@ class ConnectedApiClient {
   int _countObjects(Map<String, dynamic> data, String key1, String key2) {
     final value = data[key1] ?? data[key2];
     if (value is List) return value.length;
+    if (value is Map) return value.length;  // V2 format: {instance: {...}, ...}
     if (value is int) return value;
     return 0;
   }
@@ -733,7 +735,7 @@ class ConnectedApiClient {
     return [];
   }
 
-  /// Récupère tous les points V2 via batch API avec $select pour inclure priority-array
+  /// Récupère tous les points V2 via batch API
   Future<List<BacnetObject>> _getAllPointsV2Optimized() async {
     _logger.i('_getAllPointsV2Optimized: fetching all points with batch API');
 
@@ -744,41 +746,13 @@ class ConnectedApiClient {
       'multi-state-inputs', 'multi-state-outputs', 'multi-state-values',
     ];
 
-    // Types commandables (ont un priority-array)
-    const commandableTypes = [
-      'analog-outputs', 'analog-values',
-      'binary-outputs', 'binary-values',
-      'multi-state-outputs', 'multi-state-values',
-    ];
-
-    // Types binaires (ont active-text et inactive-text)
-    const binaryTypes = [
-      'binary-inputs', 'binary-outputs', 'binary-values',
-    ];
-
     // Construire les requêtes batch
     final requests = <Map<String, dynamic>>[];
     for (final typeName in pointTypes) {
-      // Construire le $select selon le type
-      // Propriétés de base pour tous les types
-      String baseProps = 'object-name,present-value,units,out-of-service,description';
-
-      // Ajouter priority-array pour les types commandables
-      if (commandableTypes.contains(typeName)) {
-        baseProps += ',priority-array';
-      }
-
-      // Ajouter active-text et inactive-text pour les types binaires
-      if (binaryTypes.contains(typeName)) {
-        baseProps += ',active-text,inactive-text';
-      }
-
-      final selectParam = '\$select=*(\$select=$baseProps)';
-
       requests.add({
         'id': typeName,
         'method': 'GET',
-        'url': '$_bacnetBasePath/objects?$selectParam&\$select=$typeName',
+        'url': '$_bacnetBasePath/objects/$typeName',
       });
     }
 
@@ -818,13 +792,26 @@ class ConnectedApiClient {
 
     final results = <BacnetObject>[];
 
-    // La réponse batch est une liste de réponses
-    if (data is! List) {
-      _logger.w('_parsePointsFromBatchV2: expected List, got ${data.runtimeType}');
+    // La réponse batch peut être une liste directement ou un wrapper {"responses": [...]}
+    List<dynamic> responses;
+    if (data is List) {
+      responses = data;
+    } else if (data is Map<String, dynamic>) {
+      // Essayer d'extraire "responses" du wrapper
+      final responsesList = data['responses'];
+      if (responsesList is List) {
+        responses = responsesList;
+        _logger.d('_parsePointsFromBatchV2: extracted ${responses.length} responses from wrapper');
+      } else {
+        _logger.w('_parsePointsFromBatchV2: no responses key found, keys=${data.keys.toList()}');
+        return results;
+      }
+    } else {
+      _logger.w('_parsePointsFromBatchV2: expected List or Map, got ${data.runtimeType}');
       return results;
     }
 
-    for (final batchResponse in data) {
+    for (final batchResponse in responses) {
       if (batchResponse is! Map<String, dynamic>) continue;
 
       final id = batchResponse['id'] as String?;
@@ -834,12 +821,9 @@ class ConnectedApiClient {
 
       // Mapper l'ID (type kebab-case) vers BacnetObjectType
       final objectType = _mapTypeNameV2(id);
-      if (objectType == null) {
-        _logger.w('_parsePointsFromBatchV2: unknown type $id');
-        continue;
-      }
+      if (objectType == null) continue;
 
-      // Body contient les objets de ce type {instance: {props...}, ...}
+      // Body contient directement les instances {instance: {props...}, ...}
       if (body is Map<String, dynamic>) {
         for (final entry in body.entries) {
           final instance = int.tryParse(entry.key);
@@ -1536,14 +1520,14 @@ class ConnectedApiClient {
     final typePath = _objectTypeToKebabCasePlural(type);
     final formattedValue = _formatValueForWrite(type, value);
 
-    // Étape 1: Mettre out-of-service à true via PATCH
-    final oosUrl = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance';
+    // Étape 1: Mettre out-of-service à true via POST sur la propriété
+    final oosUrl = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/out-of-service';
     _logger.i('_forceInputV2: Setting out-of-service=true for $typePath/$instance');
 
     try {
-      final oosResponse = await _dio.patch(
+      final oosResponse = await _dio.post(
         oosUrl,
-        data: {'out-of-service': true},
+        data: {'\$value': true},
         options: Options(
           headers: {
             'Authorization': basicAuth,
@@ -1557,13 +1541,13 @@ class ConnectedApiClient {
         return false;
       }
 
-      // Étape 2: Écrire present-value via set-value
-      final pvUrl = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/set-value';
+      // Étape 2: Écrire present-value via POST sur la propriété
+      final pvUrl = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/present-value';
       _logger.i('_forceInputV2: Writing present-value=$formattedValue for $typePath/$instance');
 
       final pvResponse = await _dio.post(
         pvUrl,
-        data: {'value': formattedValue},
+        data: {'\$value': formattedValue},
         options: Options(
           headers: {
             'Authorization': basicAuth,
@@ -1583,14 +1567,14 @@ class ConnectedApiClient {
   /// Libère une entrée forcée V2 en remettant out-of-service à false
   Future<bool> _releaseInputV2(BacnetObjectType type, int instance) async {
     final typePath = _objectTypeToKebabCasePlural(type);
-    final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance';
+    final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/out-of-service';
 
     _logger.i('_releaseInputV2: Setting out-of-service=false for $typePath/$instance');
 
     try {
-      final response = await _dio.patch(
+      final response = await _dio.post(
         url,
-        data: {'out-of-service': false},
+        data: {'\$value': false},
         options: Options(
           headers: {
             'Authorization': basicAuth,
@@ -1909,42 +1893,47 @@ class ConnectedApiClient {
 
     final mapping = <String, int>{};
 
-    // En V2, récupérer les trend-logs avec $select pour log-device-object-property
-    final url = '$baseUrl$_bacnetBasePath/objects/trend-logs?\$select=log-device-object-property';
+    // En V2, récupérer les trend-logs
+    final url = '$baseUrl$_bacnetBasePath/objects/trend-logs';
 
     try {
       final response = await _dio.get(url, options: _authOptions);
 
+      _logger.d('_getTrendLogMappingV2: status=${response.statusCode}, data type=${response.data?.runtimeType}');
       if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
         final data = response.data as Map<String, dynamic>;
+        _logger.d('_getTrendLogMappingV2: ${data.length} entries, keys=${data.keys.take(3).toList()}');
 
         data.forEach((key, value) {
           final instance = int.tryParse(key);
           if (instance == null || value is! Map<String, dynamic>) return;
 
-          final logProp = value['log-device-object-property'];
-          if (logProp == null) return;
+          // En V2, la propriété s'appelle 'source-reference'
+          final logProp = value['source-reference'];
+          if (logProp == null || logProp is! Map<String, dynamic>) return;
 
-          // Parser le format - peut être un objet ou une chaîne
+          // Parser le format V2: {object-identifier: {object-type: "AnalogValue", object-instance: 17}}
           String? objectType;
           int? objectInstance;
 
-          if (logProp is Map<String, dynamic>) {
-            // Format objet: {"object-type": "analog-value", "instance": 454}
-            objectType = logProp['object-type']?.toString();
-            objectInstance = logProp['instance'] as int?;
-          } else if (logProp is String) {
-            // Format texte: "[Analog Value 454,Present Value,,]"
-            final match = RegExp(r'\[([^,]+)\s+(\d+),').firstMatch(logProp);
-            if (match != null) {
-              objectType = match.group(1)?.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-');
-              objectInstance = int.tryParse(match.group(2) ?? '');
+          final objectId = logProp['object-identifier'];
+          if (objectId is Map<String, dynamic>) {
+            // Format V2: object-type est en PascalCase (AnalogValue, BinaryInput, etc.)
+            final rawType = objectId['object-type']?.toString();
+            objectInstance = objectId['object-instance'] as int?;
+
+            // Convertir PascalCase en kebab-case (AnalogValue -> analog-value)
+            if (rawType != null) {
+              objectType = rawType
+                  .replaceAllMapped(RegExp(r'([A-Z])'), (m) => '-${m.group(1)!.toLowerCase()}')
+                  .replaceFirst('-', ''); // Enlever le tiret initial
             }
           }
 
           if (objectType != null && objectInstance != null) {
             final objKey = '$objectType:$objectInstance';
             mapping[objKey] = instance;
+            _logger.d('_getTrendLogMappingV2: mapped $objKey -> trend-log $instance');
           }
         });
       }
@@ -2005,24 +1994,48 @@ class ConnectedApiClient {
   Future<String?> _getTrendLogBufferV2(int trendLogInstance) async {
     _logger.i('_getTrendLogBufferV2: fetching history for trend-log $trendLogInstance');
 
+    // D'abord récupérer le nom de l'historique depuis le trend-log
+    String? historyName;
+    try {
+      final trendLogUrl = '$baseUrl$_bacnetBasePath/objects/trend-logs/$trendLogInstance';
+      final trendLogResponse = await _dio.get(trendLogUrl, options: _authOptions);
+      if (trendLogResponse.statusCode == 200 && trendLogResponse.data is Map<String, dynamic>) {
+        historyName = trendLogResponse.data['history']?.toString();
+        _logger.d('_getTrendLogBufferV2: got history name: $historyName');
+      }
+    } catch (e) {
+      _logger.w('_getTrendLogBufferV2: failed to get history name: $e');
+    }
+
+    if (historyName == null || historyName.isEmpty) {
+      _logger.w('_getTrendLogBufferV2: no history name found for trend-log $trendLogInstance');
+      return null;
+    }
+
     // En V2, utiliser l'API history avec get-history
     final url = '$baseUrl/api/rest/v2/services/history/groups/bacnet/histories/get-history';
 
-    // Calculer la plage de temps (7 derniers jours par défaut)
+    // Calculer la plage de temps (30 derniers jours pour couvrir toutes les périodes UI)
+    // Format requis: "2022-01-01T00:00:00/2024-09-25T00:00:00" (sans millisecondes ni timezone)
     final now = DateTime.now();
-    final startDate = now.subtract(const Duration(days: 7));
-    final timeRange = '${startDate.toIso8601String()}/${now.toIso8601String()}';
+    final startDate = now.subtract(const Duration(days: 30));
+    String formatDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}T${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}:${d.second.toString().padLeft(2, '0')}';
+    final timeRange = '${formatDate(startDate)}/${formatDate(now)}';
+
+    final requestData = {
+      'history': historyName,
+      'delta': false,
+      'time-range': timeRange,
+      'interval': null,
+      'delta-timestamps': 'Leading',
+    };
+    _logger.d('_getTrendLogBufferV2: POST $url');
+    _logger.d('_getTrendLogBufferV2: body=$requestData');
 
     try {
       final response = await _dio.post(
         url,
-        data: {
-          'history': 'trend-log-$trendLogInstance',
-          'delta': false,
-          'time-range': timeRange,
-          'interval': null,
-          'delta-timestamps': 'Leading',
-        },
+        data: requestData,
         options: Options(
           headers: {
             'Authorization': basicAuth,
@@ -2031,12 +2044,13 @@ class ConnectedApiClient {
         ),
       );
 
-      _logger.d('_getTrendLogBufferV2: status=${response.statusCode}');
+      _logger.d('_getTrendLogBufferV2: status=${response.statusCode}, response=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
-        // Retourner les données JSON comme chaîne pour parsing ultérieur
-        if (response.data is List) {
-          return response.data.toString();
+        // Retourner les données JSON comme chaîne encodée proprement
+        // Format V2: {columns: [...], rows: [...]}
+        if (response.data is Map || response.data is List) {
+          return jsonEncode(response.data);
         }
         return response.data.toString();
       }
@@ -2120,6 +2134,531 @@ class ConnectedApiClient {
     }
 
     return null;
+  }
+
+  // ============ Méthodes Schedule ============
+
+  /// Récupère la liste des schedules
+  Future<List<ScheduleSummary>> getSchedules() async {
+    if (apiVersion == 'V2') {
+      return _getSchedulesV2();
+    }
+    return _getSchedulesV1();
+  }
+
+  /// Récupère les schedules V1
+  Future<List<ScheduleSummary>> _getSchedulesV1() async {
+    _logger.i('_getSchedulesV1: fetching schedules');
+
+    // D'abord récupérer la liste des instances
+    final listUrl = '$baseUrl$_bacnetBasePath/objects/schedule';
+
+    try {
+      final listResponse = await _dio.get(listUrl, options: _authOptions);
+      _logger.d('_getSchedulesV1: list status=${listResponse.statusCode}');
+
+      if (listResponse.statusCode != 200 || listResponse.data == null) {
+        return [];
+      }
+
+      final schedules = <ScheduleSummary>[];
+      final instances = <int>[];
+
+      // Parser la liste des instances
+      if (listResponse.data is List) {
+        for (final item in listResponse.data) {
+          if (item is int) {
+            instances.add(item);
+          } else if (item is Map<String, dynamic>) {
+            // Format: {href: "/api/.../schedule/1", name: "schedule_1"}
+            final href = item['href']?.toString();
+            if (href != null) {
+              final match = RegExp(r'/(\d+)$').firstMatch(href);
+              if (match != null) {
+                instances.add(int.parse(match.group(1)!));
+              }
+            }
+          }
+        }
+      }
+
+      _logger.i('_getSchedulesV1: found ${instances.length} schedules: $instances');
+
+      // Utiliser read-property-multiple pour récupérer les infos de base
+      if (instances.isNotEmpty) {
+        final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
+        final propertyRefs = <Map<String, dynamic>>[];
+
+        for (final instance in instances) {
+          propertyRefs.add({
+            'type': 'schedule',
+            'instance': instance,
+            'property': 'objectName',
+            'arrayIndex': -1,
+          });
+          propertyRefs.add({
+            'type': 'schedule',
+            'instance': instance,
+            'property': 'presentValue',
+            'arrayIndex': -1,
+          });
+          propertyRefs.add({
+            'type': 'schedule',
+            'instance': instance,
+            'property': 'description',
+            'arrayIndex': -1,
+          });
+        }
+
+        final rpmResponse = await _dio.post(
+          rpmUrl,
+          data: {
+            'encode': 'text',
+            'propertyReferences': propertyRefs,
+          },
+          options: Options(
+            headers: {
+              'Authorization': basicAuth,
+              'Content-Type': 'application/json',
+            },
+          ),
+        );
+
+        if (rpmResponse.statusCode == 200 && rpmResponse.data != null) {
+          // Grouper les propriétés par instance
+          final propsById = <int, Map<String, dynamic>>{};
+
+          List refs;
+          if (rpmResponse.data is List) {
+            refs = rpmResponse.data;
+          } else if (rpmResponse.data is Map<String, dynamic>) {
+            refs = rpmResponse.data['propertyReferences'] as List? ?? [];
+          } else {
+            refs = [];
+          }
+
+          for (final ref in refs) {
+            if (ref is! Map<String, dynamic>) continue;
+            final instance = ref['instance'];
+            if (instance == null || instance == -1) continue;
+
+            final instanceInt = instance is int ? instance : int.tryParse(instance.toString()) ?? 0;
+            propsById.putIfAbsent(instanceInt, () => {});
+
+            final property = ref['property'] as String? ?? '';
+            final value = ref['value'] ?? ref['message'];
+            propsById[instanceInt]![property] = value;
+          }
+
+          for (final instance in instances) {
+            final props = propsById[instance] ?? {};
+            schedules.add(ScheduleSummary(
+              instance: instance,
+              objectName: _extractStringValue(props['objectName']) ?? 'Schedule $instance',
+              description: _extractStringValue(props['description']),
+              presentValue: props['presentValue'],
+              valueType: ScheduleValueType.fromValue(props['presentValue']),
+            ));
+          }
+        }
+      }
+
+      return schedules;
+    } catch (e) {
+      _logger.e('_getSchedulesV1 error: $e');
+      return [];
+    }
+  }
+
+  /// Récupère les schedules V2
+  Future<List<ScheduleSummary>> _getSchedulesV2() async {
+    _logger.i('_getSchedulesV2: fetching schedules');
+
+    final url = '$baseUrl$_bacnetBasePath/objects/schedules';
+
+    try {
+      final response = await _dio.get(url, options: _authOptions);
+      _logger.d('_getSchedulesV2: status=${response.statusCode}');
+      _logger.d('_getSchedulesV2: response type=${response.data.runtimeType}');
+      _logger.d('_getSchedulesV2: response data=${response.data}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        final schedules = <ScheduleSummary>[];
+
+        if (response.data is Map<String, dynamic>) {
+          final data = response.data as Map<String, dynamic>;
+          _logger.d('_getSchedulesV2: data keys=${data.keys.toList()}');
+          data.forEach((key, value) {
+            final instance = int.tryParse(key);
+            _logger.d('_getSchedulesV2: key=$key, instance=$instance, value type=${value.runtimeType}');
+            if (instance != null && value is Map<String, dynamic>) {
+              schedules.add(ScheduleSummary.fromV2(instance, value));
+            }
+          });
+        }
+
+        _logger.i('_getSchedulesV2: found ${schedules.length} schedules');
+        return schedules;
+      }
+    } catch (e) {
+      _logger.e('_getSchedulesV2 error: $e');
+    }
+
+    return [];
+  }
+
+  /// Récupère un schedule complet avec son planning hebdomadaire
+  Future<Schedule?> getScheduleDetail(int instance) async {
+    if (apiVersion == 'V2') {
+      return _getScheduleDetailV2(instance);
+    }
+    return _getScheduleDetailV1(instance);
+  }
+
+  /// Récupère un schedule V1
+  Future<Schedule?> _getScheduleDetailV1(int instance) async {
+    _logger.i('_getScheduleDetailV1: fetching schedule $instance');
+
+    try {
+      // Récupérer les propriétés principales via read-property-multiple
+      final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
+      final propertyRefs = [
+        {'type': 'schedule', 'instance': instance, 'property': 'objectName', 'arrayIndex': -1},
+        {'type': 'schedule', 'instance': instance, 'property': 'description', 'arrayIndex': -1},
+        {'type': 'schedule', 'instance': instance, 'property': 'presentValue', 'arrayIndex': -1},
+        {'type': 'schedule', 'instance': instance, 'property': 'scheduleDefault', 'arrayIndex': -1},
+        {'type': 'schedule', 'instance': instance, 'property': 'stateTextReference', 'arrayIndex': -1},
+      ];
+
+      final rpmResponse = await _dio.post(
+        rpmUrl,
+        data: {'encode': 'text', 'propertyReferences': propertyRefs},
+        options: Options(
+          headers: {'Authorization': basicAuth, 'Content-Type': 'application/json'},
+        ),
+      );
+
+      String objectName = 'Schedule $instance';
+      String? description;
+      dynamic presentValue;
+      dynamic scheduleDefault;
+
+      if (rpmResponse.statusCode == 200 && rpmResponse.data != null) {
+        List refs;
+        if (rpmResponse.data is List) {
+          refs = rpmResponse.data;
+        } else if (rpmResponse.data is Map<String, dynamic>) {
+          refs = rpmResponse.data['propertyReferences'] as List? ?? [];
+        } else {
+          refs = [];
+        }
+
+        for (final ref in refs) {
+          if (ref is! Map<String, dynamic>) continue;
+          if (ref['instance'] == -1) continue;
+
+          final property = ref['property'] as String? ?? '';
+          final value = ref['value'] ?? ref['message'];
+
+          switch (property) {
+            case 'objectName':
+              objectName = _extractStringValue(value) ?? objectName;
+              break;
+            case 'description':
+              description = _extractStringValue(value);
+              break;
+            case 'presentValue':
+              presentValue = value;
+              break;
+            case 'scheduleDefault':
+              scheduleDefault = value;
+              break;
+          }
+        }
+      }
+
+      // Récupérer le weekly-schedule
+      final weeklyUrl = '$baseUrl$_bacnetBasePath/objects/schedule/$instance/properties/weekly-schedule';
+      final weeklyResponse = await _dio.get(weeklyUrl, options: _authOptions);
+
+      WeeklySchedule weeklySchedule = WeeklySchedule.empty();
+      if (weeklyResponse.statusCode == 200 && weeklyResponse.data != null) {
+        weeklySchedule = WeeklySchedule.fromV1(weeklyResponse.data as Map<String, dynamic>);
+      }
+
+      // Récupérer les state-texts
+      final stateTexts = await _getScheduleStateTextsV1(instance);
+
+      // Déterminer le type de valeur
+      final valueType = ScheduleValueType.fromValue(presentValue);
+
+      return Schedule(
+        instance: instance,
+        objectName: objectName,
+        description: description,
+        weeklySchedule: weeklySchedule,
+        stateTexts: stateTexts,
+        valueType: valueType,
+        presentValue: presentValue,
+        scheduleDefault: scheduleDefault,
+      );
+    } catch (e) {
+      _logger.e('_getScheduleDetailV1 error: $e');
+      return null;
+    }
+  }
+
+  /// Récupère les state-texts d'un schedule V1
+  /// Format V1: {value: "{Hors_Gel;Enumerated:1,Reduit;Enumerated:2,Confort;Enumerated:3}"}
+  Future<List<ScheduleStateText>> _getScheduleStateTextsV1(int instance) async {
+    final stateTexts = <ScheduleStateText>[];
+
+    try {
+      // Endpoint correct pour V1
+      final url = '$baseUrl$_bacnetBasePath/objects/schedule/$instance/properties/schedule-state-text';
+      final response = await _dio.get(url, options: _authOptions);
+
+      _logger.d('_getScheduleStateTextsV1: response=${response.data}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+
+        String? valueStr;
+        if (data is Map<String, dynamic>) {
+          final value = data['value'];
+          if (value is String) {
+            valueStr = value;
+          } else if (value is List) {
+            // Format liste simple
+            for (int i = 0; i < value.length; i++) {
+              stateTexts.add(ScheduleStateText(index: i, text: value[i].toString()));
+            }
+          }
+        } else if (data is String) {
+          valueStr = data;
+        }
+
+        // Parser le format V1: "{Label1;Enumerated:1,Label2;Enumerated:2,...}"
+        if (valueStr != null && valueStr.isNotEmpty) {
+          stateTexts.addAll(_parseScheduleStateTextV1(valueStr));
+        }
+      }
+    } catch (e) {
+      _logger.w('_getScheduleStateTextsV1: error fetching state texts: $e');
+    }
+
+    // Si pas de state-texts, retourner des valeurs par défaut pour boolean
+    if (stateTexts.isEmpty) {
+      stateTexts.add(ScheduleStateText(index: 0, text: 'Inactif'));
+      stateTexts.add(ScheduleStateText(index: 1, text: 'Actif'));
+    }
+
+    return stateTexts;
+  }
+
+  /// Parse le format V1 des state-texts
+  /// Format: "{Hors_Gel;Enumerated:1,Reduit;Enumerated:2,Confort;Enumerated:3,Vacances;Enumerated:4}"
+  List<ScheduleStateText> _parseScheduleStateTextV1(String value) {
+    final stateTexts = <ScheduleStateText>[];
+
+    // Enlever les accolades
+    String cleaned = value.trim();
+    if (cleaned.startsWith('{')) cleaned = cleaned.substring(1);
+    if (cleaned.endsWith('}')) cleaned = cleaned.substring(0, cleaned.length - 1);
+
+    if (cleaned.isEmpty) return stateTexts;
+
+    // Séparer par virgules : "Hors_Gel;Enumerated:1,Reduit;Enumerated:2,..."
+    final entries = cleaned.split(',');
+
+    for (final entry in entries) {
+      final trimmed = entry.trim();
+      if (trimmed.isEmpty) continue;
+
+      // Format: "Label;Enumerated:index" ou "Label;Type:index"
+      final semiColonIndex = trimmed.indexOf(';');
+      if (semiColonIndex > 0) {
+        final label = trimmed.substring(0, semiColonIndex).trim();
+        final typeAndIndex = trimmed.substring(semiColonIndex + 1).trim();
+
+        // Extraire l'index après le ":"
+        final colonIndex = typeAndIndex.indexOf(':');
+        if (colonIndex > 0) {
+          final indexStr = typeAndIndex.substring(colonIndex + 1).trim();
+          final index = int.tryParse(indexStr);
+          if (index != null) {
+            // Remplacer les underscores par des espaces dans le label
+            final displayLabel = label.replaceAll('_', ' ');
+            stateTexts.add(ScheduleStateText(index: index, text: displayLabel));
+            _logger.d('_parseScheduleStateTextV1: parsed state $index = "$displayLabel"');
+          }
+        }
+      }
+    }
+
+    // Trier par index
+    stateTexts.sort((a, b) => a.index.compareTo(b.index));
+
+    return stateTexts;
+  }
+
+  /// Récupère un schedule V2
+  Future<Schedule?> _getScheduleDetailV2(int instance) async {
+    _logger.i('_getScheduleDetailV2: fetching schedule $instance');
+
+    try {
+      // Récupérer les propriétés principales (sans $select qui cause des problèmes)
+      final url = '$baseUrl$_bacnetBasePath/objects/schedules/$instance';
+      final response = await _dio.get(url, options: _authOptions);
+
+      if (response.statusCode != 200 || response.data == null) {
+        return null;
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      _logger.d('_getScheduleDetailV2: data keys=${data.keys.toList()}');
+
+      final objectName = data['object-name']?.toString() ?? 'Schedule $instance';
+      final description = data['description']?.toString();
+      final presentValue = data['present-value'];
+      final scheduleDefault = data['schedule-default'];
+
+      // Parser les state-texts (V2 utilise 'schedule-state-text')
+      final stateTexts = <ScheduleStateText>[];
+      final stateTextData = data['schedule-state-text'];
+      _logger.d('_getScheduleDetailV2: schedule-state-text=$stateTextData');
+
+      if (stateTextData is List) {
+        // V2: [{string: "Hors gel", value: 1}, {string: "Vacances", value: 2}, ...]
+        for (final item in stateTextData) {
+          if (item is Map<String, dynamic>) {
+            final value = item['value'];
+            final text = item['string']?.toString();
+            if (value is int && text != null) {
+              stateTexts.add(ScheduleStateText(index: value, text: text));
+            }
+          }
+        }
+      } else if (stateTextData is Map<String, dynamic>) {
+        stateTextData.forEach((key, value) {
+          final index = int.tryParse(key);
+          if (index != null) {
+            final text = value is Map ? value['\$value']?.toString() : value?.toString();
+            stateTexts.add(ScheduleStateText(index: index, text: text ?? 'État $index'));
+          }
+        });
+      }
+
+      _logger.d('_getScheduleDetailV2: parsed stateTexts=${stateTexts.length}');
+
+      // Valeurs par défaut si vide
+      if (stateTexts.isEmpty) {
+        stateTexts.add(ScheduleStateText(index: 0, text: 'Inoccupé'));
+        stateTexts.add(ScheduleStateText(index: 1, text: 'Occupé'));
+      }
+
+      // Récupérer le weekly-schedule
+      final weeklyUrl = '$baseUrl$_bacnetBasePath/objects/schedules/$instance/weekly-schedule';
+      final weeklyResponse = await _dio.get(weeklyUrl, options: _authOptions);
+
+      WeeklySchedule weeklySchedule = WeeklySchedule.empty();
+      if (weeklyResponse.statusCode == 200 && weeklyResponse.data != null) {
+        weeklySchedule = WeeklySchedule.fromV2(weeklyResponse.data as Map<String, dynamic>);
+      }
+
+      return Schedule(
+        instance: instance,
+        objectName: objectName,
+        description: description,
+        weeklySchedule: weeklySchedule,
+        stateTexts: stateTexts,
+        valueType: ScheduleValueType.fromValue(presentValue),
+        presentValue: presentValue,
+        scheduleDefault: scheduleDefault,
+      );
+    } catch (e) {
+      _logger.e('_getScheduleDetailV2 error: $e');
+      return null;
+    }
+  }
+
+  /// Écrit le planning hebdomadaire d'un schedule
+  Future<bool> writeWeeklySchedule(int instance, WeeklySchedule weeklySchedule) async {
+    if (apiVersion == 'V2') {
+      return _writeWeeklyScheduleV2(instance, weeklySchedule);
+    }
+    return _writeWeeklyScheduleV1(instance, weeklySchedule);
+  }
+
+  /// Écrit le weekly-schedule V1
+  Future<bool> _writeWeeklyScheduleV1(int instance, WeeklySchedule weeklySchedule) async {
+    _logger.i('_writeWeeklyScheduleV1: writing schedule $instance');
+
+    final url = '$baseUrl$_bacnetBasePath/objects/schedule/$instance/properties/weekly-schedule';
+    final body = weeklySchedule.toV1Json();
+
+    _logger.d('_writeWeeklyScheduleV1: body=$body');
+
+    try {
+      final response = await _dio.post(
+        url,
+        data: body,
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      _logger.i('_writeWeeklyScheduleV1: status=${response.statusCode}');
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      _logger.e('_writeWeeklyScheduleV1 error: $e');
+      return false;
+    }
+  }
+
+  /// Écrit le weekly-schedule V2
+  Future<bool> _writeWeeklyScheduleV2(int instance, WeeklySchedule weeklySchedule) async {
+    _logger.i('_writeWeeklyScheduleV2: writing schedule $instance');
+
+    final url = '$baseUrl$_bacnetBasePath/objects/schedules/$instance/weekly-schedule';
+    final body = weeklySchedule.toV2Json();
+
+    _logger.d('_writeWeeklyScheduleV2: url=$url');
+    _logger.d('_writeWeeklyScheduleV2: body=$body');
+
+    try {
+      final response = await _dio.post(
+        url,
+        data: body,
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+
+      _logger.i('_writeWeeklyScheduleV2: status=${response.statusCode}');
+
+      if (response.statusCode == 400) {
+        _logger.e('_writeWeeklyScheduleV2: 400 Bad Request - response=${response.data}');
+        return false;
+      }
+
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      if (e is DioException) {
+        _logger.e('_writeWeeklyScheduleV2 DioException: ${e.message}');
+        _logger.e('_writeWeeklyScheduleV2 response: ${e.response?.data}');
+      } else {
+        _logger.e('_writeWeeklyScheduleV2 error: $e');
+      }
+      return false;
+    }
   }
 
   /// Ferme le client

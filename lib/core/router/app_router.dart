@@ -10,6 +10,8 @@ import '../../presentation/screens/points/points_screen.dart';
 import '../../presentation/screens/points/point_detail_screen.dart';
 import '../../presentation/screens/overrides/overrides_screen.dart';
 import '../../presentation/screens/favorites/favorites_screen.dart';
+import '../../presentation/screens/schedules/schedules_list_screen.dart';
+import '../../presentation/screens/schedules/schedule_detail_screen.dart';
 
 /// Configuration du router de l'application
 class AppRouter {
@@ -92,13 +94,23 @@ class AppRouter {
         ),
       ),
 
-      // Schedules - À implémenter
+      // Schedules (Plannings)
       GoRoute(
         path: Routes.schedules,
         name: 'schedules',
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Horaires - À implémenter')),
-        ),
+        builder: (context, state) => const SchedulesListScreen(),
+        routes: [
+          // Détail d'un schedule
+          GoRoute(
+            path: ':instance',
+            name: 'scheduleDetail',
+            builder: (context, state) {
+              final instanceStr = state.pathParameters['instance']!;
+              final instance = int.tryParse(instanceStr) ?? 0;
+              return ScheduleDetailScreen(instance: instance);
+            },
+          ),
+        ],
       ),
 
       // Overrides - Liste des points forcés

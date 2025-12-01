@@ -179,6 +179,12 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
   PointsNotifier(this._ref) : super(PointsState());
 
+  /// Réinitialise l'état (appelé lors du changement d'automate)
+  void reset() {
+    state = PointsState();
+    _logger.i('PointsNotifier: reset');
+  }
+
   /// Charge tous les points depuis l'automate
   /// Utilise le cache local pour les propriétés statiques (nom, unité, description)
   Future<void> loadPoints({bool forceRefresh = false}) async {

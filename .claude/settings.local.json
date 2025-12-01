@@ -19,7 +19,8 @@
       "Bash(more:*)",
       "Bash(cmd /c \"cd /d C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\docs_API_Distech && findstr /C:\"\"active-text\"\" API-V2.postman_collection.json\")",
       "Bash(cmd /c:*)",
-      "Bash(flutter build:*)"
+      "Bash(flutter build:*)",
+      "Bash(adb devices:*)"
     ],
     "deny": [],
     "ask": []

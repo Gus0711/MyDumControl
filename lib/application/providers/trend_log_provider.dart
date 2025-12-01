@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import '../../domain/models/trend_log.dart';
@@ -23,9 +25,9 @@ final trendLogMappingProvider = FutureProvider<Map<String, int>>((ref) async {
   final connectionId = connection.id;
   final cacheService = ref.read(cacheServiceProvider);
 
-  // ÉTAPE 1: Essayer de charger depuis le cache d'abord
+  // ÉTAPE 1: Essayer de charger depuis le cache d'abord (seulement si non vide)
   final cachedMapping = await cacheService.getCachedTrendLogMapping(connectionId);
-  if (cachedMapping != null) {
+  if (cachedMapping != null && cachedMapping.isNotEmpty) {
     _logger.i('trendLogMappingProvider: loaded ${cachedMapping.length} mappings from cache');
 
     // Rafraîchir en arrière-plan (sans bloquer)
@@ -188,14 +190,13 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
       TrendLogData trendData;
 
       if (client.apiVersion == 'V2') {
-        // Essayer de parser comme JSON
+        // V2: Parser le JSON encodé (format columns/rows)
         try {
-          if (bufferData.startsWith('[')) {
-            trendData = TrendLogBufferParser.parseV1(bufferData);
-          } else {
-            trendData = TrendLogBufferParser.parseV1(bufferData);
-          }
+          final jsonData = json.decode(bufferData);
+          trendData = TrendLogBufferParser.parseV2(jsonData);
+          _logger.i('TrendLogViewer: parsed ${trendData.records.length} records from V2 JSON');
         } catch (e) {
+          _logger.w('TrendLogViewer: V2 JSON parse failed, falling back to V1: $e');
           trendData = TrendLogBufferParser.parseV1(bufferData);
         }
       } else {

@@ -1,0 +1,811 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../application/providers/schedule_provider.dart';
+import '../../../domain/models/schedule.dart';
+import 'widgets/day_transitions_editor.dart';
+import 'widgets/schedule_dialogs.dart';
+import 'widgets/schedule_colors.dart';
+import 'widgets/vertical_day_schedule_view.dart';
+
+/// Écran de détail d'un schedule avec vue hebdomadaire et mode édition
+class ScheduleDetailScreen extends ConsumerStatefulWidget {
+  final int instance;
+
+  const ScheduleDetailScreen({
+    super.key,
+    required this.instance,
+  });
+
+  @override
+  ConsumerState<ScheduleDetailScreen> createState() => _ScheduleDetailScreenState();
+}
+
+class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
+  WeekDay? _selectedDay;
+  bool _isEditing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Charger le schedule dans le provider d'édition
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(scheduleEditProvider.notifier).loadSchedule(widget.instance);
+    });
+  }
+
+  @override
+  void dispose() {
+    // Note: Ne pas utiliser ref.read() dans dispose() car le widget est déjà disposé
+    // Le reset sera fait automatiquement si nécessaire lors du prochain chargement
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduleAsync = ref.watch(scheduleDetailProvider(widget.instance));
+    final editState = ref.watch(scheduleEditProvider);
+
+    // Écouter les messages de succès/erreur
+    ref.listen(scheduleEditProvider, (previous, next) {
+      if (next.successMessage != null && previous?.successMessage != next.successMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.successMessage!),
+            backgroundColor: Colors.green,
+          ),
+        );
+        ref.read(scheduleEditProvider.notifier).clearSuccess();
+      }
+      if (next.error != null && previous?.error != next.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+        ref.read(scheduleEditProvider.notifier).clearError();
+      }
+    });
+
+    return PopScope(
+      canPop: !_isEditing || !editState.hasChanges,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop && _isEditing && editState.hasChanges) {
+          final discard = await showDialog<bool>(
+            context: context,
+            builder: (context) => const DiscardChangesDialog(),
+          );
+          if (discard == true && context.mounted) {
+            ref.read(scheduleEditProvider.notifier).revert();
+            setState(() => _isEditing = false);
+            Navigator.of(context).pop();
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: _buildAppBar(scheduleAsync, editState),
+        body: scheduleAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stack) => _buildError(context, error),
+          data: (schedule) {
+            if (schedule == null) return _buildNotFound(context);
+
+            // Utiliser le schedule édité si en mode édition
+            final displaySchedule = _isEditing && editState.editedSchedule != null
+                ? editState.editedSchedule!
+                : schedule;
+
+            return _ScheduleDetailContent(
+              schedule: displaySchedule,
+              isEditing: _isEditing,
+              selectedDay: _selectedDay,
+              onDaySelected: (day) => setState(() {
+                _selectedDay = _selectedDay == day ? null : day;
+              }),
+            );
+          },
+        ),
+        floatingActionButton: _buildFab(editState),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(
+    AsyncValue<Schedule?> scheduleAsync,
+    ScheduleEditState editState,
+  ) {
+    return AppBar(
+      title: scheduleAsync.when(
+        loading: () => const Text('Chargement...'),
+        error: (_, __) => const Text('Erreur'),
+        data: (schedule) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              schedule?.objectName ?? 'Schedule ${widget.instance}',
+              style: const TextStyle(fontSize: 18),
+            ),
+            if (_isEditing)
+              Text(
+                editState.hasChanges ? 'Modifié' : 'Mode édition',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: editState.hasChanges
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.outline,
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        if (_isEditing) ...[
+          // Bouton annuler les modifications
+          if (editState.hasChanges)
+            IconButton(
+              icon: const Icon(Icons.undo),
+              tooltip: 'Annuler les modifications',
+              onPressed: () {
+                ref.read(scheduleEditProvider.notifier).revert();
+              },
+            ),
+          // Bouton sauvegarder
+          IconButton(
+            icon: editState.isSaving
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save),
+            tooltip: 'Sauvegarder',
+            onPressed: editState.hasChanges && !editState.isSaving
+                ? () => _handleSave()
+                : null,
+          ),
+          // Bouton fermer l'édition
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Fermer l\'édition',
+            onPressed: () => _handleCloseEdit(),
+          ),
+        ] else ...[
+          // Bouton rafraîchir
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualiser',
+            onPressed: () {
+              ref.invalidate(scheduleDetailProvider(widget.instance));
+              ref.read(scheduleEditProvider.notifier).loadSchedule(widget.instance);
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget? _buildFab(ScheduleEditState editState) {
+    if (_isEditing) return null;
+
+    return FloatingActionButton.extended(
+      onPressed: () {
+        setState(() => _isEditing = true);
+        ref.read(scheduleEditProvider.notifier).setEditing(true);
+      },
+      icon: const Icon(Icons.edit),
+      label: const Text('Modifier'),
+    );
+  }
+
+  Widget _buildError(BuildContext context, Object error) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 64, color: Colors.red),
+          const SizedBox(height: 16),
+          Text(
+            'Erreur de chargement',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              error.toString(),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => ref.invalidate(scheduleDetailProvider(widget.instance)),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Réessayer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotFound(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.calendar_today_outlined,
+            size: 64,
+            color: Theme.of(context).colorScheme.outline,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Schedule introuvable',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleSave() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => const SaveConfirmDialog(changeCount: 1),
+    );
+
+    if (confirm == true) {
+      final success = await ref.read(scheduleEditProvider.notifier).save();
+      if (success && mounted) {
+        setState(() => _isEditing = false);
+      }
+    }
+  }
+
+  Future<void> _handleCloseEdit() async {
+    final editState = ref.read(scheduleEditProvider);
+    if (editState.hasChanges) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => const DiscardChangesDialog(),
+      );
+      if (discard == true) {
+        ref.read(scheduleEditProvider.notifier).revert();
+        setState(() => _isEditing = false);
+      }
+    } else {
+      setState(() => _isEditing = false);
+    }
+    ref.read(scheduleEditProvider.notifier).setEditing(false);
+  }
+}
+
+/// Contenu de l'écran de détail
+class _ScheduleDetailContent extends StatefulWidget {
+  final Schedule schedule;
+  final bool isEditing;
+  final WeekDay? selectedDay;
+  final ValueChanged<WeekDay> onDaySelected;
+
+  const _ScheduleDetailContent({
+    required this.schedule,
+    required this.isEditing,
+    required this.selectedDay,
+    required this.onDaySelected,
+  });
+
+  @override
+  State<_ScheduleDetailContent> createState() => _ScheduleDetailContentState();
+}
+
+class _ScheduleDetailContentState extends State<_ScheduleDetailContent> {
+  WeekDay? _currentDay;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 600; // Mobile/compact view
+
+    return Column(
+      children: [
+        // Header avec infos du schedule (compact sur mobile)
+        _buildHeader(context, theme, colorScheme, isCompact),
+
+        // Légende des états
+        _buildLegend(context, theme, colorScheme),
+
+        // Mode édition: indicateur
+        if (widget.isEditing)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: colorScheme.primaryContainer,
+            child: Row(
+              children: [
+                Icon(Icons.edit, size: 16, color: colorScheme.onPrimaryContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isCompact
+                        ? 'Mode édition - Appuyez sur un créneau'
+                        : 'Mode édition - Appuyez sur un jour pour modifier',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // Vue du planning
+        Expanded(
+          child: isCompact
+              ? VerticalDayScheduleView(
+                  schedule: widget.schedule,
+                  isEditing: widget.isEditing,
+                  initialDay: _currentDay,
+                  onDayChanged: (day) {
+                    setState(() => _currentDay = day);
+                    widget.onDaySelected(day);
+                  },
+                )
+              : _EditableWeeklyScheduleView(
+                  schedule: widget.schedule,
+                  isEditing: widget.isEditing,
+                  selectedDay: widget.selectedDay,
+                  onDaySelected: widget.onDaySelected,
+                ),
+        ),
+
+        // Panel d'édition du jour sélectionné (uniquement en mode horizontal)
+        if (!isCompact && widget.selectedDay != null)
+          DayTransitionsEditor(
+            schedule: widget.schedule,
+            day: widget.selectedDay!,
+            isEditing: widget.isEditing,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, ThemeData theme, ColorScheme colorScheme, bool isCompact) {
+    return Container(
+      padding: EdgeInsets.all(isCompact ? 12 : 16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Description si présente
+          if (widget.schedule.description != null && widget.schedule.description!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                widget.schedule.description!,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                maxLines: isCompact ? 2 : null,
+                overflow: isCompact ? TextOverflow.ellipsis : null,
+              ),
+            ),
+
+          // Infos techniques
+          Wrap(
+            spacing: isCompact ? 8 : 16,
+            runSpacing: 8,
+            children: [
+              if (!isCompact)
+                _buildInfoChip(
+                  context,
+                  icon: Icons.tag,
+                  label: 'Instance ${widget.schedule.instance}',
+                ),
+              _buildInfoChip(
+                context,
+                icon: widget.schedule.valueType == ScheduleValueType.boolean
+                    ? Icons.toggle_on_outlined
+                    : Icons.format_list_numbered,
+                label: widget.schedule.valueType == ScheduleValueType.boolean
+                    ? 'Booléen'
+                    : 'Multi-états',
+              ),
+              if (widget.schedule.presentValue != null)
+                _buildInfoChip(
+                  context,
+                  icon: Icons.play_arrow,
+                  label: 'Actuel: ${widget.schedule.getStateText(widget.schedule.presentValue)}',
+                  highlighted: true,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    bool highlighted = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: highlighted
+            ? colorScheme.primaryContainer
+            : colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: highlighted
+                ? colorScheme.onPrimaryContainer
+                : colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: highlighted
+                      ? colorScheme.onPrimaryContainer
+                      : colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegend(BuildContext context, ThemeData theme, ColorScheme colorScheme) {
+    final possibleValues = widget.schedule.possibleValues;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Légende :',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.outline,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: possibleValues.map((pv) {
+                final color = _getColorForValue(pv.value, colorScheme);
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(2),
+                        border: pv.value == null
+                            ? Border.all(color: colorScheme.outline)
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      pv.text,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getColorForValue(dynamic value, ColorScheme colorScheme) {
+    return ScheduleColors.getColorForValue(value, widget.schedule.valueType, colorScheme);
+  }
+}
+
+/// Vue hebdomadaire avec gestion de la sélection
+class _EditableWeeklyScheduleView extends ConsumerStatefulWidget {
+  final Schedule schedule;
+  final bool isEditing;
+  final WeekDay? selectedDay;
+  final ValueChanged<WeekDay> onDaySelected;
+
+  const _EditableWeeklyScheduleView({
+    required this.schedule,
+    required this.isEditing,
+    required this.selectedDay,
+    required this.onDaySelected,
+  });
+
+  @override
+  ConsumerState<_EditableWeeklyScheduleView> createState() => _EditableWeeklyScheduleViewState();
+}
+
+class _EditableWeeklyScheduleViewState extends ConsumerState<_EditableWeeklyScheduleView> {
+  final ScrollController _scrollController = ScrollController();
+
+  static const int startHour = 0;
+  static const int endHour = 24;
+  static const double hourWidth = 60.0;
+  static const double dayLabelWidth = 50.0;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return SingleChildScrollView(
+      controller: _scrollController,
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: dayLabelWidth + (endHour - startHour) * hourWidth,
+        child: Column(
+          children: [
+            // En-tête avec les heures
+            _buildTimeHeader(theme, colorScheme),
+
+            // Grille des jours
+            Expanded(
+              child: ListView.builder(
+                itemCount: WeekDay.values.length,
+                itemBuilder: (context, index) {
+                  final day = WeekDay.values[index];
+                  return _buildDayRow(context, day, theme, colorScheme);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeHeader(ThemeData theme, ColorScheme colorScheme) {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: dayLabelWidth),
+          for (int hour = startHour; hour < endHour; hour++)
+            SizedBox(
+              width: hourWidth,
+              child: Text(
+                '${hour.toString().padLeft(2, '0')}h',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.outline,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayRow(
+    BuildContext context,
+    WeekDay day,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    // En mode édition, utiliser les données éditées
+    final editState = ref.watch(scheduleEditProvider);
+    final schedule = widget.isEditing && editState.editedSchedule != null
+        ? editState.editedSchedule!
+        : widget.schedule;
+    final daySchedule = schedule.weeklySchedule.getDay(day);
+    final isSelected = widget.selectedDay == day;
+    final isWeekend = day == WeekDay.saturday || day == WeekDay.sunday;
+
+    return GestureDetector(
+      onTap: () => widget.onDaySelected(day),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: isSelected
+              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
+              : (isWeekend
+                  ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)
+                  : null),
+          border: Border(
+            bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+            left: isSelected
+                ? BorderSide(color: colorScheme.primary, width: 3)
+                : BorderSide.none,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Label du jour
+            Container(
+              width: dayLabelWidth,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                day.shortName,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : (isWeekend ? colorScheme.outline : null),
+                ),
+              ),
+            ),
+
+            // Timeline du jour
+            Expanded(
+              child: CustomPaint(
+                painter: _DayTimelinePainter(
+                  schedule: schedule,
+                  daySchedule: daySchedule,
+                  colorScheme: colorScheme,
+                  hourWidth: hourWidth,
+                  startHour: startHour,
+                  endHour: endHour,
+                ),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Painter pour dessiner la timeline d'un jour
+class _DayTimelinePainter extends CustomPainter {
+  final Schedule schedule;
+  final DaySchedule daySchedule;
+  final ColorScheme colorScheme;
+  final double hourWidth;
+  final int startHour;
+  final int endHour;
+
+  _DayTimelinePainter({
+    required this.schedule,
+    required this.daySchedule,
+    required this.colorScheme,
+    required this.hourWidth,
+    required this.startHour,
+    required this.endHour,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Dessiner le fond par défaut
+    final bgPaint = Paint()
+      ..color = colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, 4, size.width, size.height - 8),
+      bgPaint,
+    );
+
+    // Dessiner les lignes verticales pour chaque heure
+    final gridPaint = Paint()
+      ..color = colorScheme.outlineVariant.withValues(alpha: 0.3)
+      ..strokeWidth = 1;
+
+    for (int hour = startHour; hour <= endHour; hour++) {
+      final x = (hour - startHour) * hourWidth;
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        gridPaint,
+      );
+    }
+
+    // Convertir les transitions en créneaux pour un affichage correct
+    // (gère les chevauchements et le découpage)
+    final slots = TimeSlotConverter.transitionsToSlots(daySchedule.sortedTransitions);
+    if (slots.isEmpty) return;
+
+    // Dessiner chaque créneau
+    for (final slot in slots) {
+      final startX = _timeToX(slot.startMinutes, size.width);
+      final endX = _timeToX(slot.endMinutes, size.width);
+      _drawSegment(canvas, startX, endX, size.height, slot.value);
+    }
+
+    // Dessiner les marqueurs aux limites des créneaux
+    for (final slot in slots) {
+      final startX = _timeToX(slot.startMinutes, size.width);
+      final endX = _timeToX(slot.endMinutes, size.width);
+      _drawTransitionMarker(canvas, startX, size.height, slot.value);
+      if (slot.endMinutes < 1440) {
+        _drawTransitionMarker(canvas, endX, size.height, null);
+      }
+    }
+  }
+
+  void _drawSegment(Canvas canvas, double startX, double endX, double height, dynamic value) {
+    final color = _getColorForValue(value);
+    if (color == null) return;
+
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.7)
+      ..style = PaintingStyle.fill;
+
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(startX, 4, endX - startX, height - 8),
+      const Radius.circular(4),
+    );
+
+    canvas.drawRRect(rect, paint);
+  }
+
+  void _drawTransitionMarker(Canvas canvas, double x, double height, dynamic value) {
+    final color = _getColorForValue(value) ?? colorScheme.outline;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawLine(
+      Offset(x, 0),
+      Offset(x, height),
+      paint,
+    );
+
+    final circlePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(Offset(x, 8), 4, circlePaint);
+  }
+
+  double _timeToX(int timeInMinutes, double totalWidth) {
+    final totalMinutes = (endHour - startHour) * 60;
+    return (timeInMinutes / totalMinutes) * totalWidth;
+  }
+
+  Color? _getColorForValue(dynamic value) {
+    return ScheduleColors.getColorForValueNullable(value, schedule.valueType, colorScheme);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DayTimelinePainter oldDelegate) {
+    return oldDelegate.daySchedule != daySchedule ||
+        oldDelegate.colorScheme != colorScheme;
+  }
+}
