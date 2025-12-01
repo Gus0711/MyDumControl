@@ -838,6 +838,32 @@ class _ConnectionCard extends ConsumerWidget {
     List<SuperFavoriteWithValue> superFavorites,
     bool isRefreshing,
   ) {
+    // Vérifier s'il y a une erreur globale (même erreur sur tous les favoris)
+    final globalError = superFavorites.isNotEmpty &&
+        superFavorites.every((sf) => sf.error != null)
+        ? superFavorites.first.error
+        : null;
+
+    if (globalError != null && !isRefreshing) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, size: 14, color: Colors.orange.shade700),
+            const SizedBox(width: 6),
+            Text(
+              globalError,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.orange.shade700,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: superFavorites.map((sf) {

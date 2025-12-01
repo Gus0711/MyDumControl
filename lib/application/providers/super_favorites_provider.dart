@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
 import '../../data/database/app_database.dart';
 import '../../data/services/api_service.dart';
 import '../../domain/models/bacnet_object.dart';
+import 'active_connection_provider.dart';
+import 'connection_providers.dart';
 import 'database_provider.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
@@ -119,7 +120,6 @@ final superFavoritesDbProvider = StreamProvider<Map<int, List<Favorite>>>((ref) 
 /// Notifier pour gérer les super favoris avec leurs valeurs live
 class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
   final Ref _ref;
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   /// Cache des ConnectedApiClient par connexion (pour éviter de recréer)
   final Map<int, ConnectedApiClient> _apiClients = {};
@@ -195,7 +195,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
       final apiClient = await _getApiClientForConnection(connectionId);
       if (apiClient == null) {
         _logger.e('refreshConnection: failed to create ApiClient for $connectionId');
-        _setError(connectionId, 'Impossible de se connecter');
+        _setError(connectionId, 'Connectez-vous à cet automate');
         return;
       }
 
@@ -265,19 +265,33 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
 
   /// Récupère ou crée un ConnectedApiClient pour une connexion
   Future<ConnectedApiClient?> _getApiClientForConnection(int connectionId) async {
-    // Vérifier le cache
+    // Vérifier le cache local
     if (_apiClients.containsKey(connectionId)) {
       return _apiClients[connectionId];
+    }
+
+    // Vérifier si c'est la connexion active (réutiliser son client)
+    final activeState = _ref.read(activeConnectionProvider);
+    if (activeState.isConnected && activeState.connection?.id == connectionId) {
+      _logger.i('_getApiClientForConnection: reusing active connection client for $connectionId');
+      return activeState.client;
     }
 
     // Récupérer les infos de connexion depuis la DB
     final database = _ref.read(databaseProvider);
     final connection = await database.getConnectionById(connectionId);
-    if (connection == null) return null;
+    if (connection == null) {
+      _logger.e('_getApiClientForConnection: connection $connectionId not found in DB');
+      return null;
+    }
 
-    // Récupérer le mot de passe depuis le secure storage
-    final password = await _secureStorage.read(key: connection.passwordKey);
-    if (password == null) return null;
+    // Récupérer le mot de passe depuis le secure storage (avec les bonnes options Android)
+    final secureStorage = _ref.read(secureStorageProvider);
+    final password = await secureStorage.read(key: connection.passwordKey);
+    if (password == null) {
+      _logger.e('_getApiClientForConnection: password not found for key "${connection.passwordKey}" - user needs to reconnect on this device');
+      return null;
+    }
 
     // Construire l'URL de base et l'auth
     final protocol = connection.useHttps ? 'https' : 'http';

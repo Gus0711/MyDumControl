@@ -3079,6 +3079,8 @@ class ConnectedApiClient {
 
     if (propertyRefs.isEmpty) return {};
 
+    _logger.d('_readMultiplePointsV1: propertyRefs=${propertyRefs.take(3).toList()}');
+
     try {
       final response = await _dio.post(
         rpmUrl,
@@ -3094,6 +3096,7 @@ class ConnectedApiClient {
         ),
       );
 
+      _logger.d('_readMultiplePointsV1: status=${response.statusCode}, data=${response.data}');
       if (response.statusCode == 200 && response.data != null) {
         return _parseMultiplePointsFromRpm(response.data, pointRefs);
       }
@@ -3147,6 +3150,7 @@ class ConnectedApiClient {
         ),
       );
 
+      _logger.d('_readMultiplePointsV2: status=${response.statusCode}, data=${response.data}');
       if (response.statusCode == 200 && response.data != null) {
         return _parseMultiplePointsFromBatchV2(response.data);
       }
@@ -3216,6 +3220,8 @@ class ConnectedApiClient {
       }
     }
 
+    _logger.d('_parseMultiplePointsFromRpm: refMapping=$refMapping');
+
     // La réponse peut être une liste directement ou un wrapper
     List<dynamic> refs;
     if (data is List) {
@@ -3223,8 +3229,11 @@ class ConnectedApiClient {
     } else if (data is Map<String, dynamic>) {
       refs = data['propertyReferences'] as List? ?? [];
     } else {
+      _logger.w('_parseMultiplePointsFromRpm: unexpected data type: ${data.runtimeType}');
       return results;
     }
+
+    _logger.d('_parseMultiplePointsFromRpm: refs.length=${refs.length}');
 
     // Grouper par type:instance
     for (final ref in refs) {
@@ -3246,6 +3255,8 @@ class ConnectedApiClient {
       grouped.putIfAbsent(key, () => {'type': type, 'instance': instance});
       grouped[key]![property] = value;
     }
+
+    _logger.d('_parseMultiplePointsFromRpm: grouped.keys=${grouped.keys.toList()}');
 
     // Construire les BacnetObjects avec les clés originales
     for (final entry in grouped.entries) {
@@ -3306,8 +3317,11 @@ class ConnectedApiClient {
     } else if (data is Map<String, dynamic>) {
       responses = data['responses'] as List? ?? [];
     } else {
+      _logger.w('_parseMultiplePointsFromBatchV2: unexpected data type: ${data.runtimeType}');
       return results;
     }
+
+    _logger.d('_parseMultiplePointsFromBatchV2: responses.length=${responses.length}');
 
     for (final batchResponse in responses) {
       if (batchResponse is! Map<String, dynamic>) continue;
@@ -3315,6 +3329,8 @@ class ConnectedApiClient {
       final id = batchResponse['id'] as String?; // C'est notre pointRef original
       final body = batchResponse['body'];
       final statusCode = batchResponse['status'] as int?;
+
+      _logger.d('_parseMultiplePointsFromBatchV2: id=$id, status=$statusCode');
 
       if (id == null || body == null || statusCode != 200) continue;
       if (body is! Map<String, dynamic>) continue;
