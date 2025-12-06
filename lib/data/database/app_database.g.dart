@@ -1328,6 +1328,21 @@ class $FavoritesTable extends Favorites
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _wasPromotedMeta = const VerificationMeta(
+    'wasPromoted',
+  );
+  @override
+  late final GeneratedColumn<bool> wasPromoted = GeneratedColumn<bool>(
+    'was_promoted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("was_promoted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1350,6 +1365,7 @@ class $FavoritesTable extends Favorites
     objectType,
     sortOrder,
     isSuperFavorite,
+    wasPromoted,
     createdAt,
   ];
   @override
@@ -1426,6 +1442,15 @@ class $FavoritesTable extends Favorites
         ),
       );
     }
+    if (data.containsKey('was_promoted')) {
+      context.handle(
+        _wasPromotedMeta,
+        wasPromoted.isAcceptableOrUnknown(
+          data['was_promoted']!,
+          _wasPromotedMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1477,6 +1502,10 @@ class $FavoritesTable extends Favorites
         DriftSqlType.bool,
         data['${effectivePrefix}is_super_favorite'],
       )!,
+      wasPromoted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}was_promoted'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1515,6 +1544,10 @@ class Favorite extends DataClass implements Insertable<Favorite> {
   /// Super favori (affiché sur la page de connexions)
   final bool isSuperFavorite;
 
+  /// Indique si le favori a été rétrogradé de super favori (pour le cycle)
+  /// Permet de savoir si on "monte" ou "descend" dans le cycle
+  final bool wasPromoted;
+
   /// Date d'ajout aux favoris
   final DateTime createdAt;
   const Favorite({
@@ -1526,6 +1559,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
     required this.objectType,
     required this.sortOrder,
     required this.isSuperFavorite,
+    required this.wasPromoted,
     required this.createdAt,
   });
   @override
@@ -1541,6 +1575,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
     map['object_type'] = Variable<String>(objectType);
     map['sort_order'] = Variable<int>(sortOrder);
     map['is_super_favorite'] = Variable<bool>(isSuperFavorite);
+    map['was_promoted'] = Variable<bool>(wasPromoted);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -1557,6 +1592,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
       objectType: Value(objectType),
       sortOrder: Value(sortOrder),
       isSuperFavorite: Value(isSuperFavorite),
+      wasPromoted: Value(wasPromoted),
       createdAt: Value(createdAt),
     );
   }
@@ -1575,6 +1611,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
       objectType: serializer.fromJson<String>(json['objectType']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       isSuperFavorite: serializer.fromJson<bool>(json['isSuperFavorite']),
+      wasPromoted: serializer.fromJson<bool>(json['wasPromoted']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1590,6 +1627,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
       'objectType': serializer.toJson<String>(objectType),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'isSuperFavorite': serializer.toJson<bool>(isSuperFavorite),
+      'wasPromoted': serializer.toJson<bool>(wasPromoted),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1603,6 +1641,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
     String? objectType,
     int? sortOrder,
     bool? isSuperFavorite,
+    bool? wasPromoted,
     DateTime? createdAt,
   }) => Favorite(
     id: id ?? this.id,
@@ -1615,6 +1654,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
     objectType: objectType ?? this.objectType,
     sortOrder: sortOrder ?? this.sortOrder,
     isSuperFavorite: isSuperFavorite ?? this.isSuperFavorite,
+    wasPromoted: wasPromoted ?? this.wasPromoted,
     createdAt: createdAt ?? this.createdAt,
   );
   Favorite copyWithCompanion(FavoritesCompanion data) {
@@ -1635,6 +1675,9 @@ class Favorite extends DataClass implements Insertable<Favorite> {
       isSuperFavorite: data.isSuperFavorite.present
           ? data.isSuperFavorite.value
           : this.isSuperFavorite,
+      wasPromoted: data.wasPromoted.present
+          ? data.wasPromoted.value
+          : this.wasPromoted,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1650,6 +1693,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
           ..write('objectType: $objectType, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('isSuperFavorite: $isSuperFavorite, ')
+          ..write('wasPromoted: $wasPromoted, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1665,6 +1709,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
     objectType,
     sortOrder,
     isSuperFavorite,
+    wasPromoted,
     createdAt,
   );
   @override
@@ -1679,6 +1724,7 @@ class Favorite extends DataClass implements Insertable<Favorite> {
           other.objectType == this.objectType &&
           other.sortOrder == this.sortOrder &&
           other.isSuperFavorite == this.isSuperFavorite &&
+          other.wasPromoted == this.wasPromoted &&
           other.createdAt == this.createdAt);
 }
 
@@ -1691,6 +1737,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
   final Value<String> objectType;
   final Value<int> sortOrder;
   final Value<bool> isSuperFavorite;
+  final Value<bool> wasPromoted;
   final Value<DateTime> createdAt;
   const FavoritesCompanion({
     this.id = const Value.absent(),
@@ -1701,6 +1748,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     this.objectType = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.isSuperFavorite = const Value.absent(),
+    this.wasPromoted = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   FavoritesCompanion.insert({
@@ -1712,6 +1760,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     required String objectType,
     this.sortOrder = const Value.absent(),
     this.isSuperFavorite = const Value.absent(),
+    this.wasPromoted = const Value.absent(),
     this.createdAt = const Value.absent(),
   }) : connectionId = Value(connectionId),
        pointRef = Value(pointRef),
@@ -1726,6 +1775,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     Expression<String>? objectType,
     Expression<int>? sortOrder,
     Expression<bool>? isSuperFavorite,
+    Expression<bool>? wasPromoted,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -1737,6 +1787,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
       if (objectType != null) 'object_type': objectType,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (isSuperFavorite != null) 'is_super_favorite': isSuperFavorite,
+      if (wasPromoted != null) 'was_promoted': wasPromoted,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -1750,6 +1801,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     Value<String>? objectType,
     Value<int>? sortOrder,
     Value<bool>? isSuperFavorite,
+    Value<bool>? wasPromoted,
     Value<DateTime>? createdAt,
   }) {
     return FavoritesCompanion(
@@ -1761,6 +1813,7 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
       objectType: objectType ?? this.objectType,
       sortOrder: sortOrder ?? this.sortOrder,
       isSuperFavorite: isSuperFavorite ?? this.isSuperFavorite,
+      wasPromoted: wasPromoted ?? this.wasPromoted,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -1792,6 +1845,9 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
     if (isSuperFavorite.present) {
       map['is_super_favorite'] = Variable<bool>(isSuperFavorite.value);
     }
+    if (wasPromoted.present) {
+      map['was_promoted'] = Variable<bool>(wasPromoted.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1809,6 +1865,801 @@ class FavoritesCompanion extends UpdateCompanion<Favorite> {
           ..write('objectType: $objectType, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('isSuperFavorite: $isSuperFavorite, ')
+          ..write('wasPromoted: $wasPromoted, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $FavoriteFoldersTable extends FavoriteFolders
+    with TableInfo<$FavoriteFoldersTable, FavoriteFolder> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FavoriteFoldersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _connectionIdMeta = const VerificationMeta(
+    'connectionId',
+  );
+  @override
+  late final GeneratedColumn<int> connectionId = GeneratedColumn<int>(
+    'connection_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES connections (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 100,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _colorMeta = const VerificationMeta('color');
+  @override
+  late final GeneratedColumn<String> color = GeneratedColumn<String>(
+    'color',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 7,
+      maxTextLength: 7,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('#2196F3'),
+  );
+  static const VerificationMeta _iconMeta = const VerificationMeta('icon');
+  @override
+  late final GeneratedColumn<String> icon = GeneratedColumn<String>(
+    'icon',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 50,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('folder'),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    connectionId,
+    name,
+    color,
+    icon,
+    sortOrder,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'favorite_folders';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FavoriteFolder> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('connection_id')) {
+      context.handle(
+        _connectionIdMeta,
+        connectionId.isAcceptableOrUnknown(
+          data['connection_id']!,
+          _connectionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_connectionIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('color')) {
+      context.handle(
+        _colorMeta,
+        color.isAcceptableOrUnknown(data['color']!, _colorMeta),
+      );
+    }
+    if (data.containsKey('icon')) {
+      context.handle(
+        _iconMeta,
+        icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {connectionId, name},
+  ];
+  @override
+  FavoriteFolder map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FavoriteFolder(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      connectionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}connection_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      color: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}color'],
+      )!,
+      icon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FavoriteFoldersTable createAlias(String alias) {
+    return $FavoriteFoldersTable(attachedDatabase, alias);
+  }
+}
+
+class FavoriteFolder extends DataClass implements Insertable<FavoriteFolder> {
+  /// Identifiant unique
+  final int id;
+
+  /// Connexion associée (chaque automate a ses propres dossiers)
+  final int connectionId;
+
+  /// Nom du dossier (ex: "Chaudière", "Circuit 1")
+  final String name;
+
+  /// Couleur du dossier (format hex: "#FF5722")
+  final String color;
+
+  /// Icône du dossier (nom de l'icône Material: "local_fire_department", "water_drop", etc.)
+  final String icon;
+
+  /// Ordre de tri (pour réorganiser les dossiers)
+  final int sortOrder;
+
+  /// Date de création
+  final DateTime createdAt;
+  const FavoriteFolder({
+    required this.id,
+    required this.connectionId,
+    required this.name,
+    required this.color,
+    required this.icon,
+    required this.sortOrder,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['connection_id'] = Variable<int>(connectionId);
+    map['name'] = Variable<String>(name);
+    map['color'] = Variable<String>(color);
+    map['icon'] = Variable<String>(icon);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  FavoriteFoldersCompanion toCompanion(bool nullToAbsent) {
+    return FavoriteFoldersCompanion(
+      id: Value(id),
+      connectionId: Value(connectionId),
+      name: Value(name),
+      color: Value(color),
+      icon: Value(icon),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory FavoriteFolder.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FavoriteFolder(
+      id: serializer.fromJson<int>(json['id']),
+      connectionId: serializer.fromJson<int>(json['connectionId']),
+      name: serializer.fromJson<String>(json['name']),
+      color: serializer.fromJson<String>(json['color']),
+      icon: serializer.fromJson<String>(json['icon']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'connectionId': serializer.toJson<int>(connectionId),
+      'name': serializer.toJson<String>(name),
+      'color': serializer.toJson<String>(color),
+      'icon': serializer.toJson<String>(icon),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  FavoriteFolder copyWith({
+    int? id,
+    int? connectionId,
+    String? name,
+    String? color,
+    String? icon,
+    int? sortOrder,
+    DateTime? createdAt,
+  }) => FavoriteFolder(
+    id: id ?? this.id,
+    connectionId: connectionId ?? this.connectionId,
+    name: name ?? this.name,
+    color: color ?? this.color,
+    icon: icon ?? this.icon,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  FavoriteFolder copyWithCompanion(FavoriteFoldersCompanion data) {
+    return FavoriteFolder(
+      id: data.id.present ? data.id.value : this.id,
+      connectionId: data.connectionId.present
+          ? data.connectionId.value
+          : this.connectionId,
+      name: data.name.present ? data.name.value : this.name,
+      color: data.color.present ? data.color.value : this.color,
+      icon: data.icon.present ? data.icon.value : this.icon,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FavoriteFolder(')
+          ..write('id: $id, ')
+          ..write('connectionId: $connectionId, ')
+          ..write('name: $name, ')
+          ..write('color: $color, ')
+          ..write('icon: $icon, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, connectionId, name, color, icon, sortOrder, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FavoriteFolder &&
+          other.id == this.id &&
+          other.connectionId == this.connectionId &&
+          other.name == this.name &&
+          other.color == this.color &&
+          other.icon == this.icon &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt);
+}
+
+class FavoriteFoldersCompanion extends UpdateCompanion<FavoriteFolder> {
+  final Value<int> id;
+  final Value<int> connectionId;
+  final Value<String> name;
+  final Value<String> color;
+  final Value<String> icon;
+  final Value<int> sortOrder;
+  final Value<DateTime> createdAt;
+  const FavoriteFoldersCompanion({
+    this.id = const Value.absent(),
+    this.connectionId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.color = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  FavoriteFoldersCompanion.insert({
+    this.id = const Value.absent(),
+    required int connectionId,
+    required String name,
+    this.color = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : connectionId = Value(connectionId),
+       name = Value(name);
+  static Insertable<FavoriteFolder> custom({
+    Expression<int>? id,
+    Expression<int>? connectionId,
+    Expression<String>? name,
+    Expression<String>? color,
+    Expression<String>? icon,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (connectionId != null) 'connection_id': connectionId,
+      if (name != null) 'name': name,
+      if (color != null) 'color': color,
+      if (icon != null) 'icon': icon,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  FavoriteFoldersCompanion copyWith({
+    Value<int>? id,
+    Value<int>? connectionId,
+    Value<String>? name,
+    Value<String>? color,
+    Value<String>? icon,
+    Value<int>? sortOrder,
+    Value<DateTime>? createdAt,
+  }) {
+    return FavoriteFoldersCompanion(
+      id: id ?? this.id,
+      connectionId: connectionId ?? this.connectionId,
+      name: name ?? this.name,
+      color: color ?? this.color,
+      icon: icon ?? this.icon,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (connectionId.present) {
+      map['connection_id'] = Variable<int>(connectionId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (color.present) {
+      map['color'] = Variable<String>(color.value);
+    }
+    if (icon.present) {
+      map['icon'] = Variable<String>(icon.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FavoriteFoldersCompanion(')
+          ..write('id: $id, ')
+          ..write('connectionId: $connectionId, ')
+          ..write('name: $name, ')
+          ..write('color: $color, ')
+          ..write('icon: $icon, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $FavoriteFolderAssignmentsTable extends FavoriteFolderAssignments
+    with TableInfo<$FavoriteFolderAssignmentsTable, FavoriteFolderAssignment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FavoriteFolderAssignmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _favoriteIdMeta = const VerificationMeta(
+    'favoriteId',
+  );
+  @override
+  late final GeneratedColumn<int> favoriteId = GeneratedColumn<int>(
+    'favorite_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES favorites (id)',
+    ),
+  );
+  static const VerificationMeta _folderIdMeta = const VerificationMeta(
+    'folderId',
+  );
+  @override
+  late final GeneratedColumn<int> folderId = GeneratedColumn<int>(
+    'folder_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES favorite_folders (id)',
+    ),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, favoriteId, folderId, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'favorite_folder_assignments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FavoriteFolderAssignment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('favorite_id')) {
+      context.handle(
+        _favoriteIdMeta,
+        favoriteId.isAcceptableOrUnknown(data['favorite_id']!, _favoriteIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_favoriteIdMeta);
+    }
+    if (data.containsKey('folder_id')) {
+      context.handle(
+        _folderIdMeta,
+        folderId.isAcceptableOrUnknown(data['folder_id']!, _folderIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_folderIdMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {favoriteId, folderId},
+  ];
+  @override
+  FavoriteFolderAssignment map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FavoriteFolderAssignment(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      favoriteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}favorite_id'],
+      )!,
+      folderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}folder_id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FavoriteFolderAssignmentsTable createAlias(String alias) {
+    return $FavoriteFolderAssignmentsTable(attachedDatabase, alias);
+  }
+}
+
+class FavoriteFolderAssignment extends DataClass
+    implements Insertable<FavoriteFolderAssignment> {
+  /// Identifiant unique
+  final int id;
+
+  /// Favori concerné
+  final int favoriteId;
+
+  /// Dossier concerné
+  final int folderId;
+
+  /// Date d'assignation
+  final DateTime createdAt;
+  const FavoriteFolderAssignment({
+    required this.id,
+    required this.favoriteId,
+    required this.folderId,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['favorite_id'] = Variable<int>(favoriteId);
+    map['folder_id'] = Variable<int>(folderId);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  FavoriteFolderAssignmentsCompanion toCompanion(bool nullToAbsent) {
+    return FavoriteFolderAssignmentsCompanion(
+      id: Value(id),
+      favoriteId: Value(favoriteId),
+      folderId: Value(folderId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory FavoriteFolderAssignment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FavoriteFolderAssignment(
+      id: serializer.fromJson<int>(json['id']),
+      favoriteId: serializer.fromJson<int>(json['favoriteId']),
+      folderId: serializer.fromJson<int>(json['folderId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'favoriteId': serializer.toJson<int>(favoriteId),
+      'folderId': serializer.toJson<int>(folderId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  FavoriteFolderAssignment copyWith({
+    int? id,
+    int? favoriteId,
+    int? folderId,
+    DateTime? createdAt,
+  }) => FavoriteFolderAssignment(
+    id: id ?? this.id,
+    favoriteId: favoriteId ?? this.favoriteId,
+    folderId: folderId ?? this.folderId,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  FavoriteFolderAssignment copyWithCompanion(
+    FavoriteFolderAssignmentsCompanion data,
+  ) {
+    return FavoriteFolderAssignment(
+      id: data.id.present ? data.id.value : this.id,
+      favoriteId: data.favoriteId.present
+          ? data.favoriteId.value
+          : this.favoriteId,
+      folderId: data.folderId.present ? data.folderId.value : this.folderId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FavoriteFolderAssignment(')
+          ..write('id: $id, ')
+          ..write('favoriteId: $favoriteId, ')
+          ..write('folderId: $folderId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, favoriteId, folderId, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FavoriteFolderAssignment &&
+          other.id == this.id &&
+          other.favoriteId == this.favoriteId &&
+          other.folderId == this.folderId &&
+          other.createdAt == this.createdAt);
+}
+
+class FavoriteFolderAssignmentsCompanion
+    extends UpdateCompanion<FavoriteFolderAssignment> {
+  final Value<int> id;
+  final Value<int> favoriteId;
+  final Value<int> folderId;
+  final Value<DateTime> createdAt;
+  const FavoriteFolderAssignmentsCompanion({
+    this.id = const Value.absent(),
+    this.favoriteId = const Value.absent(),
+    this.folderId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  FavoriteFolderAssignmentsCompanion.insert({
+    this.id = const Value.absent(),
+    required int favoriteId,
+    required int folderId,
+    this.createdAt = const Value.absent(),
+  }) : favoriteId = Value(favoriteId),
+       folderId = Value(folderId);
+  static Insertable<FavoriteFolderAssignment> custom({
+    Expression<int>? id,
+    Expression<int>? favoriteId,
+    Expression<int>? folderId,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (favoriteId != null) 'favorite_id': favoriteId,
+      if (folderId != null) 'folder_id': folderId,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  FavoriteFolderAssignmentsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? favoriteId,
+    Value<int>? folderId,
+    Value<DateTime>? createdAt,
+  }) {
+    return FavoriteFolderAssignmentsCompanion(
+      id: id ?? this.id,
+      favoriteId: favoriteId ?? this.favoriteId,
+      folderId: folderId ?? this.folderId,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (favoriteId.present) {
+      map['favorite_id'] = Variable<int>(favoriteId.value);
+    }
+    if (folderId.present) {
+      map['folder_id'] = Variable<int>(folderId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FavoriteFolderAssignmentsCompanion(')
+          ..write('id: $id, ')
+          ..write('favoriteId: $favoriteId, ')
+          ..write('folderId: $folderId, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -4305,12 +5156,1100 @@ class CachedObjectsSummaryCompanion
   }
 }
 
+class $SynopticsTable extends Synoptics
+    with TableInfo<$SynopticsTable, Synoptic> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SynopticsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 100,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _svgAssetPathMeta = const VerificationMeta(
+    'svgAssetPath',
+  );
+  @override
+  late final GeneratedColumn<String> svgAssetPath = GeneratedColumn<String>(
+    'svg_asset_path',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 255,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _connectionIdMeta = const VerificationMeta(
+    'connectionId',
+  );
+  @override
+  late final GeneratedColumn<int> connectionId = GeneratedColumn<int>(
+    'connection_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    svgAssetPath,
+    connectionId,
+    description,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'synoptics';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Synoptic> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('svg_asset_path')) {
+      context.handle(
+        _svgAssetPathMeta,
+        svgAssetPath.isAcceptableOrUnknown(
+          data['svg_asset_path']!,
+          _svgAssetPathMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_svgAssetPathMeta);
+    }
+    if (data.containsKey('connection_id')) {
+      context.handle(
+        _connectionIdMeta,
+        connectionId.isAcceptableOrUnknown(
+          data['connection_id']!,
+          _connectionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Synoptic map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Synoptic(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      svgAssetPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}svg_asset_path'],
+      )!,
+      connectionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}connection_id'],
+      ),
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SynopticsTable createAlias(String alias) {
+    return $SynopticsTable(attachedDatabase, alias);
+  }
+}
+
+class Synoptic extends DataClass implements Insertable<Synoptic> {
+  /// Identifiant unique
+  final int id;
+
+  /// Nom du synoptique (donné par l'utilisateur)
+  final String name;
+
+  /// Chemin de l'asset SVG (ex: "assets/synoptics/CR_V0.1.svg")
+  final String svgAssetPath;
+
+  /// Connexion associée (null = synoptique global réutilisable)
+  final int? connectionId;
+
+  /// Description optionnelle
+  final String? description;
+
+  /// Ordre de tri pour l'affichage
+  final int sortOrder;
+
+  /// Date de création
+  final DateTime createdAt;
+
+  /// Date de dernière modification
+  final DateTime updatedAt;
+  const Synoptic({
+    required this.id,
+    required this.name,
+    required this.svgAssetPath,
+    this.connectionId,
+    this.description,
+    required this.sortOrder,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['svg_asset_path'] = Variable<String>(svgAssetPath);
+    if (!nullToAbsent || connectionId != null) {
+      map['connection_id'] = Variable<int>(connectionId);
+    }
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  SynopticsCompanion toCompanion(bool nullToAbsent) {
+    return SynopticsCompanion(
+      id: Value(id),
+      name: Value(name),
+      svgAssetPath: Value(svgAssetPath),
+      connectionId: connectionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(connectionId),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Synoptic.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Synoptic(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      svgAssetPath: serializer.fromJson<String>(json['svgAssetPath']),
+      connectionId: serializer.fromJson<int?>(json['connectionId']),
+      description: serializer.fromJson<String?>(json['description']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'svgAssetPath': serializer.toJson<String>(svgAssetPath),
+      'connectionId': serializer.toJson<int?>(connectionId),
+      'description': serializer.toJson<String?>(description),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  Synoptic copyWith({
+    int? id,
+    String? name,
+    String? svgAssetPath,
+    Value<int?> connectionId = const Value.absent(),
+    Value<String?> description = const Value.absent(),
+    int? sortOrder,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => Synoptic(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    svgAssetPath: svgAssetPath ?? this.svgAssetPath,
+    connectionId: connectionId.present ? connectionId.value : this.connectionId,
+    description: description.present ? description.value : this.description,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  Synoptic copyWithCompanion(SynopticsCompanion data) {
+    return Synoptic(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      svgAssetPath: data.svgAssetPath.present
+          ? data.svgAssetPath.value
+          : this.svgAssetPath,
+      connectionId: data.connectionId.present
+          ? data.connectionId.value
+          : this.connectionId,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Synoptic(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('svgAssetPath: $svgAssetPath, ')
+          ..write('connectionId: $connectionId, ')
+          ..write('description: $description, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    svgAssetPath,
+    connectionId,
+    description,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Synoptic &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.svgAssetPath == this.svgAssetPath &&
+          other.connectionId == this.connectionId &&
+          other.description == this.description &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SynopticsCompanion extends UpdateCompanion<Synoptic> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<String> svgAssetPath;
+  final Value<int?> connectionId;
+  final Value<String?> description;
+  final Value<int> sortOrder;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const SynopticsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.svgAssetPath = const Value.absent(),
+    this.connectionId = const Value.absent(),
+    this.description = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  SynopticsCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required String svgAssetPath,
+    this.connectionId = const Value.absent(),
+    this.description = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : name = Value(name),
+       svgAssetPath = Value(svgAssetPath);
+  static Insertable<Synoptic> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<String>? svgAssetPath,
+    Expression<int>? connectionId,
+    Expression<String>? description,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (svgAssetPath != null) 'svg_asset_path': svgAssetPath,
+      if (connectionId != null) 'connection_id': connectionId,
+      if (description != null) 'description': description,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  SynopticsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<String>? svgAssetPath,
+    Value<int?>? connectionId,
+    Value<String?>? description,
+    Value<int>? sortOrder,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return SynopticsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      svgAssetPath: svgAssetPath ?? this.svgAssetPath,
+      connectionId: connectionId ?? this.connectionId,
+      description: description ?? this.description,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (svgAssetPath.present) {
+      map['svg_asset_path'] = Variable<String>(svgAssetPath.value);
+    }
+    if (connectionId.present) {
+      map['connection_id'] = Variable<int>(connectionId.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SynopticsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('svgAssetPath: $svgAssetPath, ')
+          ..write('connectionId: $connectionId, ')
+          ..write('description: $description, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SynopticBindingsTable extends SynopticBindings
+    with TableInfo<$SynopticBindingsTable, SynopticBinding> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SynopticBindingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _synopticIdMeta = const VerificationMeta(
+    'synopticId',
+  );
+  @override
+  late final GeneratedColumn<int> synopticId = GeneratedColumn<int>(
+    'synoptic_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES synoptics (id)',
+    ),
+  );
+  static const VerificationMeta _svgElementIdMeta = const VerificationMeta(
+    'svgElementId',
+  );
+  @override
+  late final GeneratedColumn<String> svgElementId = GeneratedColumn<String>(
+    'svg_element_id',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 100,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pointRefMeta = const VerificationMeta(
+    'pointRef',
+  );
+  @override
+  late final GeneratedColumn<String> pointRef = GeneratedColumn<String>(
+    'point_ref',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 50,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<BindingType, String> bindingType =
+      GeneratedColumn<String>(
+        'binding_type',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<BindingType>(
+        $SynopticBindingsTable.$converterbindingType,
+      );
+  static const VerificationMeta _configJsonMeta = const VerificationMeta(
+    'configJson',
+  );
+  @override
+  late final GeneratedColumn<String> configJson = GeneratedColumn<String>(
+    'config_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pointNameMeta = const VerificationMeta(
+    'pointName',
+  );
+  @override
+  late final GeneratedColumn<String> pointName = GeneratedColumn<String>(
+    'point_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    synopticId,
+    svgElementId,
+    pointRef,
+    bindingType,
+    configJson,
+    pointName,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'synoptic_bindings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SynopticBinding> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('synoptic_id')) {
+      context.handle(
+        _synopticIdMeta,
+        synopticId.isAcceptableOrUnknown(data['synoptic_id']!, _synopticIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_synopticIdMeta);
+    }
+    if (data.containsKey('svg_element_id')) {
+      context.handle(
+        _svgElementIdMeta,
+        svgElementId.isAcceptableOrUnknown(
+          data['svg_element_id']!,
+          _svgElementIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_svgElementIdMeta);
+    }
+    if (data.containsKey('point_ref')) {
+      context.handle(
+        _pointRefMeta,
+        pointRef.isAcceptableOrUnknown(data['point_ref']!, _pointRefMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pointRefMeta);
+    }
+    if (data.containsKey('config_json')) {
+      context.handle(
+        _configJsonMeta,
+        configJson.isAcceptableOrUnknown(data['config_json']!, _configJsonMeta),
+      );
+    }
+    if (data.containsKey('point_name')) {
+      context.handle(
+        _pointNameMeta,
+        pointName.isAcceptableOrUnknown(data['point_name']!, _pointNameMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {synopticId, svgElementId},
+  ];
+  @override
+  SynopticBinding map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SynopticBinding(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      synopticId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}synoptic_id'],
+      )!,
+      svgElementId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}svg_element_id'],
+      )!,
+      pointRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}point_ref'],
+      )!,
+      bindingType: $SynopticBindingsTable.$converterbindingType.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}binding_type'],
+        )!,
+      ),
+      configJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}config_json'],
+      ),
+      pointName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}point_name'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SynopticBindingsTable createAlias(String alias) {
+    return $SynopticBindingsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<BindingType, String> $converterbindingType =
+      const BindingTypeConverter();
+}
+
+class SynopticBinding extends DataClass implements Insertable<SynopticBinding> {
+  /// Identifiant unique
+  final int id;
+
+  /// Synoptique parent
+  final int synopticId;
+
+  /// ID de l'élément dans le SVG (ex: "val_temp_depart", "ind_pompe_etat")
+  final String svgElementId;
+
+  /// Référence du point BACnet (ex: "AV:1", "BI:5")
+  final String pointRef;
+
+  /// Type de liaison
+  final BindingType bindingType;
+
+  /// Configuration JSON (format, couleurs ON/OFF, seuils, etc.)
+  /// Exemple pour value: {"format": "{value}°C", "decimals": 1}
+  /// Exemple pour color: {"onColor": "#27ae60", "offColor": "#e74c3c", "threshold": 0.5}
+  /// Exemple pour animation: {"property": "visibility", "onValue": "visible", "offValue": "hidden"}
+  final String? configJson;
+
+  /// Nom du point (pour affichage même offline)
+  final String? pointName;
+
+  /// Date de création
+  final DateTime createdAt;
+  const SynopticBinding({
+    required this.id,
+    required this.synopticId,
+    required this.svgElementId,
+    required this.pointRef,
+    required this.bindingType,
+    this.configJson,
+    this.pointName,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['synoptic_id'] = Variable<int>(synopticId);
+    map['svg_element_id'] = Variable<String>(svgElementId);
+    map['point_ref'] = Variable<String>(pointRef);
+    {
+      map['binding_type'] = Variable<String>(
+        $SynopticBindingsTable.$converterbindingType.toSql(bindingType),
+      );
+    }
+    if (!nullToAbsent || configJson != null) {
+      map['config_json'] = Variable<String>(configJson);
+    }
+    if (!nullToAbsent || pointName != null) {
+      map['point_name'] = Variable<String>(pointName);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  SynopticBindingsCompanion toCompanion(bool nullToAbsent) {
+    return SynopticBindingsCompanion(
+      id: Value(id),
+      synopticId: Value(synopticId),
+      svgElementId: Value(svgElementId),
+      pointRef: Value(pointRef),
+      bindingType: Value(bindingType),
+      configJson: configJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(configJson),
+      pointName: pointName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pointName),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory SynopticBinding.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SynopticBinding(
+      id: serializer.fromJson<int>(json['id']),
+      synopticId: serializer.fromJson<int>(json['synopticId']),
+      svgElementId: serializer.fromJson<String>(json['svgElementId']),
+      pointRef: serializer.fromJson<String>(json['pointRef']),
+      bindingType: serializer.fromJson<BindingType>(json['bindingType']),
+      configJson: serializer.fromJson<String?>(json['configJson']),
+      pointName: serializer.fromJson<String?>(json['pointName']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'synopticId': serializer.toJson<int>(synopticId),
+      'svgElementId': serializer.toJson<String>(svgElementId),
+      'pointRef': serializer.toJson<String>(pointRef),
+      'bindingType': serializer.toJson<BindingType>(bindingType),
+      'configJson': serializer.toJson<String?>(configJson),
+      'pointName': serializer.toJson<String?>(pointName),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  SynopticBinding copyWith({
+    int? id,
+    int? synopticId,
+    String? svgElementId,
+    String? pointRef,
+    BindingType? bindingType,
+    Value<String?> configJson = const Value.absent(),
+    Value<String?> pointName = const Value.absent(),
+    DateTime? createdAt,
+  }) => SynopticBinding(
+    id: id ?? this.id,
+    synopticId: synopticId ?? this.synopticId,
+    svgElementId: svgElementId ?? this.svgElementId,
+    pointRef: pointRef ?? this.pointRef,
+    bindingType: bindingType ?? this.bindingType,
+    configJson: configJson.present ? configJson.value : this.configJson,
+    pointName: pointName.present ? pointName.value : this.pointName,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  SynopticBinding copyWithCompanion(SynopticBindingsCompanion data) {
+    return SynopticBinding(
+      id: data.id.present ? data.id.value : this.id,
+      synopticId: data.synopticId.present
+          ? data.synopticId.value
+          : this.synopticId,
+      svgElementId: data.svgElementId.present
+          ? data.svgElementId.value
+          : this.svgElementId,
+      pointRef: data.pointRef.present ? data.pointRef.value : this.pointRef,
+      bindingType: data.bindingType.present
+          ? data.bindingType.value
+          : this.bindingType,
+      configJson: data.configJson.present
+          ? data.configJson.value
+          : this.configJson,
+      pointName: data.pointName.present ? data.pointName.value : this.pointName,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SynopticBinding(')
+          ..write('id: $id, ')
+          ..write('synopticId: $synopticId, ')
+          ..write('svgElementId: $svgElementId, ')
+          ..write('pointRef: $pointRef, ')
+          ..write('bindingType: $bindingType, ')
+          ..write('configJson: $configJson, ')
+          ..write('pointName: $pointName, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    synopticId,
+    svgElementId,
+    pointRef,
+    bindingType,
+    configJson,
+    pointName,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SynopticBinding &&
+          other.id == this.id &&
+          other.synopticId == this.synopticId &&
+          other.svgElementId == this.svgElementId &&
+          other.pointRef == this.pointRef &&
+          other.bindingType == this.bindingType &&
+          other.configJson == this.configJson &&
+          other.pointName == this.pointName &&
+          other.createdAt == this.createdAt);
+}
+
+class SynopticBindingsCompanion extends UpdateCompanion<SynopticBinding> {
+  final Value<int> id;
+  final Value<int> synopticId;
+  final Value<String> svgElementId;
+  final Value<String> pointRef;
+  final Value<BindingType> bindingType;
+  final Value<String?> configJson;
+  final Value<String?> pointName;
+  final Value<DateTime> createdAt;
+  const SynopticBindingsCompanion({
+    this.id = const Value.absent(),
+    this.synopticId = const Value.absent(),
+    this.svgElementId = const Value.absent(),
+    this.pointRef = const Value.absent(),
+    this.bindingType = const Value.absent(),
+    this.configJson = const Value.absent(),
+    this.pointName = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  SynopticBindingsCompanion.insert({
+    this.id = const Value.absent(),
+    required int synopticId,
+    required String svgElementId,
+    required String pointRef,
+    required BindingType bindingType,
+    this.configJson = const Value.absent(),
+    this.pointName = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : synopticId = Value(synopticId),
+       svgElementId = Value(svgElementId),
+       pointRef = Value(pointRef),
+       bindingType = Value(bindingType);
+  static Insertable<SynopticBinding> custom({
+    Expression<int>? id,
+    Expression<int>? synopticId,
+    Expression<String>? svgElementId,
+    Expression<String>? pointRef,
+    Expression<String>? bindingType,
+    Expression<String>? configJson,
+    Expression<String>? pointName,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (synopticId != null) 'synoptic_id': synopticId,
+      if (svgElementId != null) 'svg_element_id': svgElementId,
+      if (pointRef != null) 'point_ref': pointRef,
+      if (bindingType != null) 'binding_type': bindingType,
+      if (configJson != null) 'config_json': configJson,
+      if (pointName != null) 'point_name': pointName,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  SynopticBindingsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? synopticId,
+    Value<String>? svgElementId,
+    Value<String>? pointRef,
+    Value<BindingType>? bindingType,
+    Value<String?>? configJson,
+    Value<String?>? pointName,
+    Value<DateTime>? createdAt,
+  }) {
+    return SynopticBindingsCompanion(
+      id: id ?? this.id,
+      synopticId: synopticId ?? this.synopticId,
+      svgElementId: svgElementId ?? this.svgElementId,
+      pointRef: pointRef ?? this.pointRef,
+      bindingType: bindingType ?? this.bindingType,
+      configJson: configJson ?? this.configJson,
+      pointName: pointName ?? this.pointName,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (synopticId.present) {
+      map['synoptic_id'] = Variable<int>(synopticId.value);
+    }
+    if (svgElementId.present) {
+      map['svg_element_id'] = Variable<String>(svgElementId.value);
+    }
+    if (pointRef.present) {
+      map['point_ref'] = Variable<String>(pointRef.value);
+    }
+    if (bindingType.present) {
+      map['binding_type'] = Variable<String>(
+        $SynopticBindingsTable.$converterbindingType.toSql(bindingType.value),
+      );
+    }
+    if (configJson.present) {
+      map['config_json'] = Variable<String>(configJson.value);
+    }
+    if (pointName.present) {
+      map['point_name'] = Variable<String>(pointName.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SynopticBindingsCompanion(')
+          ..write('id: $id, ')
+          ..write('synopticId: $synopticId, ')
+          ..write('svgElementId: $svgElementId, ')
+          ..write('pointRef: $pointRef, ')
+          ..write('bindingType: $bindingType, ')
+          ..write('configJson: $configJson, ')
+          ..write('pointName: $pointName, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $FoldersTable folders = $FoldersTable(this);
   late final $ConnectionsTable connections = $ConnectionsTable(this);
   late final $FavoritesTable favorites = $FavoritesTable(this);
+  late final $FavoriteFoldersTable favoriteFolders = $FavoriteFoldersTable(
+    this,
+  );
+  late final $FavoriteFolderAssignmentsTable favoriteFolderAssignments =
+      $FavoriteFolderAssignmentsTable(this);
   late final $CachedPointsTable cachedPoints = $CachedPointsTable(this);
   late final $CachedDeviceInfoTable cachedDeviceInfo = $CachedDeviceInfoTable(
     this,
@@ -4319,6 +6258,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $CachedTrendLogMappingTable(this);
   late final $CachedObjectsSummaryTable cachedObjectsSummary =
       $CachedObjectsSummaryTable(this);
+  late final $SynopticsTable synoptics = $SynopticsTable(this);
+  late final $SynopticBindingsTable synopticBindings = $SynopticBindingsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4327,10 +6270,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     folders,
     connections,
     favorites,
+    favoriteFolders,
+    favoriteFolderAssignments,
     cachedPoints,
     cachedDeviceInfo,
     cachedTrendLogMapping,
     cachedObjectsSummary,
+    synoptics,
+    synopticBindings,
   ];
 }
 
@@ -4724,6 +6671,29 @@ final class $$ConnectionsTableReferences
     );
   }
 
+  static MultiTypedResultKey<$FavoriteFoldersTable, List<FavoriteFolder>>
+  _favoriteFoldersRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.favoriteFolders,
+    aliasName: $_aliasNameGenerator(
+      db.connections.id,
+      db.favoriteFolders.connectionId,
+    ),
+  );
+
+  $$FavoriteFoldersTableProcessedTableManager get favoriteFoldersRefs {
+    final manager = $$FavoriteFoldersTableTableManager(
+      $_db,
+      $_db.favoriteFolders,
+    ).filter((f) => f.connectionId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _favoriteFoldersRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$CachedPointsTable, List<CachedPoint>>
   _cachedPointsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.cachedPoints,
@@ -4933,6 +6903,31 @@ class $$ConnectionsTableFilterComposer
           }) => $$FavoritesTableFilterComposer(
             $db: $db,
             $table: $db.favorites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> favoriteFoldersRefs(
+    Expression<bool> Function($$FavoriteFoldersTableFilterComposer f) f,
+  ) {
+    final $$FavoriteFoldersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.favoriteFolders,
+      getReferencedColumn: (t) => t.connectionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FavoriteFoldersTableFilterComposer(
+            $db: $db,
+            $table: $db.favoriteFolders,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5238,6 +7233,31 @@ class $$ConnectionsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> favoriteFoldersRefs<T extends Object>(
+    Expression<T> Function($$FavoriteFoldersTableAnnotationComposer a) f,
+  ) {
+    final $$FavoriteFoldersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.favoriteFolders,
+      getReferencedColumn: (t) => t.connectionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FavoriteFoldersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.favoriteFolders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> cachedPointsRefs<T extends Object>(
     Expression<T> Function($$CachedPointsTableAnnotationComposer a) f,
   ) {
@@ -5357,6 +7377,7 @@ class $$ConnectionsTableTableManager
           PrefetchHooks Function({
             bool folderId,
             bool favoritesRefs,
+            bool favoriteFoldersRefs,
             bool cachedPointsRefs,
             bool cachedDeviceInfoRefs,
             bool cachedTrendLogMappingRefs,
@@ -5446,6 +7467,7 @@ class $$ConnectionsTableTableManager
               ({
                 folderId = false,
                 favoritesRefs = false,
+                favoriteFoldersRefs = false,
                 cachedPointsRefs = false,
                 cachedDeviceInfoRefs = false,
                 cachedTrendLogMappingRefs = false,
@@ -5455,6 +7477,7 @@ class $$ConnectionsTableTableManager
                   db: db,
                   explicitlyWatchedTables: [
                     if (favoritesRefs) db.favorites,
+                    if (favoriteFoldersRefs) db.favoriteFolders,
                     if (cachedPointsRefs) db.cachedPoints,
                     if (cachedDeviceInfoRefs) db.cachedDeviceInfo,
                     if (cachedTrendLogMappingRefs) db.cachedTrendLogMapping,
@@ -5511,6 +7534,27 @@ class $$ConnectionsTableTableManager
                                 table,
                                 p0,
                               ).favoritesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.connectionId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (favoriteFoldersRefs)
+                        await $_getPrefetchedData<
+                          Connection,
+                          $ConnectionsTable,
+                          FavoriteFolder
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ConnectionsTableReferences
+                              ._favoriteFoldersRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ConnectionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).favoriteFoldersRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.connectionId == item.id,
@@ -5624,6 +7668,7 @@ typedef $$ConnectionsTableProcessedTableManager =
       PrefetchHooks Function({
         bool folderId,
         bool favoritesRefs,
+        bool favoriteFoldersRefs,
         bool cachedPointsRefs,
         bool cachedDeviceInfoRefs,
         bool cachedTrendLogMappingRefs,
@@ -5640,6 +7685,7 @@ typedef $$FavoritesTableCreateCompanionBuilder =
       required String objectType,
       Value<int> sortOrder,
       Value<bool> isSuperFavorite,
+      Value<bool> wasPromoted,
       Value<DateTime> createdAt,
     });
 typedef $$FavoritesTableUpdateCompanionBuilder =
@@ -5652,6 +7698,7 @@ typedef $$FavoritesTableUpdateCompanionBuilder =
       Value<String> objectType,
       Value<int> sortOrder,
       Value<bool> isSuperFavorite,
+      Value<bool> wasPromoted,
       Value<DateTime> createdAt,
     });
 
@@ -5675,6 +7722,34 @@ final class $$FavoritesTableReferences
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $FavoriteFolderAssignmentsTable,
+    List<FavoriteFolderAssignment>
+  >
+  _favoriteFolderAssignmentsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.favoriteFolderAssignments,
+        aliasName: $_aliasNameGenerator(
+          db.favorites.id,
+          db.favoriteFolderAssignments.favoriteId,
+        ),
+      );
+
+  $$FavoriteFolderAssignmentsTableProcessedTableManager
+  get favoriteFolderAssignmentsRefs {
+    final manager = $$FavoriteFolderAssignmentsTableTableManager(
+      $_db,
+      $_db.favoriteFolderAssignments,
+    ).filter((f) => f.favoriteId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _favoriteFolderAssignmentsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
     );
   }
 }
@@ -5723,6 +7798,11 @@ class $$FavoritesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<bool> get wasPromoted => $composableBuilder(
+    column: $table.wasPromoted,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
@@ -5749,6 +7829,33 @@ class $$FavoritesTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> favoriteFolderAssignmentsRefs(
+    Expression<bool> Function($$FavoriteFolderAssignmentsTableFilterComposer f)
+    f,
+  ) {
+    final $$FavoriteFolderAssignmentsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.favoriteFolderAssignments,
+          getReferencedColumn: (t) => t.favoriteId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FavoriteFolderAssignmentsTableFilterComposer(
+                $db: $db,
+                $table: $db.favoriteFolderAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
   }
 }
 
@@ -5793,6 +7900,11 @@ class $$FavoritesTableOrderingComposer
 
   ColumnOrderings<bool> get isSuperFavorite => $composableBuilder(
     column: $table.isSuperFavorite,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get wasPromoted => $composableBuilder(
+    column: $table.wasPromoted,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5861,6 +7973,11 @@ class $$FavoritesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get wasPromoted => $composableBuilder(
+    column: $table.wasPromoted,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -5886,6 +8003,33 @@ class $$FavoritesTableAnnotationComposer
     );
     return composer;
   }
+
+  Expression<T> favoriteFolderAssignmentsRefs<T extends Object>(
+    Expression<T> Function($$FavoriteFolderAssignmentsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$FavoriteFolderAssignmentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.favoriteFolderAssignments,
+          getReferencedColumn: (t) => t.favoriteId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FavoriteFolderAssignmentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.favoriteFolderAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$FavoritesTableTableManager
@@ -5901,7 +8045,10 @@ class $$FavoritesTableTableManager
           $$FavoritesTableUpdateCompanionBuilder,
           (Favorite, $$FavoritesTableReferences),
           Favorite,
-          PrefetchHooks Function({bool connectionId})
+          PrefetchHooks Function({
+            bool connectionId,
+            bool favoriteFolderAssignmentsRefs,
+          })
         > {
   $$FavoritesTableTableManager(_$AppDatabase db, $FavoritesTable table)
     : super(
@@ -5924,6 +8071,7 @@ class $$FavoritesTableTableManager
                 Value<String> objectType = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isSuperFavorite = const Value.absent(),
+                Value<bool> wasPromoted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => FavoritesCompanion(
                 id: id,
@@ -5934,6 +8082,7 @@ class $$FavoritesTableTableManager
                 objectType: objectType,
                 sortOrder: sortOrder,
                 isSuperFavorite: isSuperFavorite,
+                wasPromoted: wasPromoted,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -5946,6 +8095,7 @@ class $$FavoritesTableTableManager
                 required String objectType,
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isSuperFavorite = const Value.absent(),
+                Value<bool> wasPromoted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => FavoritesCompanion.insert(
                 id: id,
@@ -5956,6 +8106,7 @@ class $$FavoritesTableTableManager
                 objectType: objectType,
                 sortOrder: sortOrder,
                 isSuperFavorite: isSuperFavorite,
+                wasPromoted: wasPromoted,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0
@@ -5966,7 +8117,911 @@ class $$FavoritesTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({connectionId = false}) {
+          prefetchHooksCallback:
+              ({connectionId = false, favoriteFolderAssignmentsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (favoriteFolderAssignmentsRefs)
+                      db.favoriteFolderAssignments,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (connectionId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.connectionId,
+                                    referencedTable: $$FavoritesTableReferences
+                                        ._connectionIdTable(db),
+                                    referencedColumn: $$FavoritesTableReferences
+                                        ._connectionIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (favoriteFolderAssignmentsRefs)
+                        await $_getPrefetchedData<
+                          Favorite,
+                          $FavoritesTable,
+                          FavoriteFolderAssignment
+                        >(
+                          currentTable: table,
+                          referencedTable: $$FavoritesTableReferences
+                              ._favoriteFolderAssignmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$FavoritesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).favoriteFolderAssignmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.favoriteId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$FavoritesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FavoritesTable,
+      Favorite,
+      $$FavoritesTableFilterComposer,
+      $$FavoritesTableOrderingComposer,
+      $$FavoritesTableAnnotationComposer,
+      $$FavoritesTableCreateCompanionBuilder,
+      $$FavoritesTableUpdateCompanionBuilder,
+      (Favorite, $$FavoritesTableReferences),
+      Favorite,
+      PrefetchHooks Function({
+        bool connectionId,
+        bool favoriteFolderAssignmentsRefs,
+      })
+    >;
+typedef $$FavoriteFoldersTableCreateCompanionBuilder =
+    FavoriteFoldersCompanion Function({
+      Value<int> id,
+      required int connectionId,
+      required String name,
+      Value<String> color,
+      Value<String> icon,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+    });
+typedef $$FavoriteFoldersTableUpdateCompanionBuilder =
+    FavoriteFoldersCompanion Function({
+      Value<int> id,
+      Value<int> connectionId,
+      Value<String> name,
+      Value<String> color,
+      Value<String> icon,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+    });
+
+final class $$FavoriteFoldersTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $FavoriteFoldersTable, FavoriteFolder> {
+  $$FavoriteFoldersTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ConnectionsTable _connectionIdTable(_$AppDatabase db) =>
+      db.connections.createAlias(
+        $_aliasNameGenerator(
+          db.favoriteFolders.connectionId,
+          db.connections.id,
+        ),
+      );
+
+  $$ConnectionsTableProcessedTableManager get connectionId {
+    final $_column = $_itemColumn<int>('connection_id')!;
+
+    final manager = $$ConnectionsTableTableManager(
+      $_db,
+      $_db.connections,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_connectionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $FavoriteFolderAssignmentsTable,
+    List<FavoriteFolderAssignment>
+  >
+  _favoriteFolderAssignmentsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.favoriteFolderAssignments,
+        aliasName: $_aliasNameGenerator(
+          db.favoriteFolders.id,
+          db.favoriteFolderAssignments.folderId,
+        ),
+      );
+
+  $$FavoriteFolderAssignmentsTableProcessedTableManager
+  get favoriteFolderAssignmentsRefs {
+    final manager = $$FavoriteFolderAssignmentsTableTableManager(
+      $_db,
+      $_db.favoriteFolderAssignments,
+    ).filter((f) => f.folderId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _favoriteFolderAssignmentsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$FavoriteFoldersTableFilterComposer
+    extends Composer<_$AppDatabase, $FavoriteFoldersTable> {
+  $$FavoriteFoldersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get color => $composableBuilder(
+    column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ConnectionsTableFilterComposer get connectionId {
+    final $$ConnectionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.connectionId,
+      referencedTable: $db.connections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConnectionsTableFilterComposer(
+            $db: $db,
+            $table: $db.connections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> favoriteFolderAssignmentsRefs(
+    Expression<bool> Function($$FavoriteFolderAssignmentsTableFilterComposer f)
+    f,
+  ) {
+    final $$FavoriteFolderAssignmentsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.favoriteFolderAssignments,
+          getReferencedColumn: (t) => t.folderId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FavoriteFolderAssignmentsTableFilterComposer(
+                $db: $db,
+                $table: $db.favoriteFolderAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$FavoriteFoldersTableOrderingComposer
+    extends Composer<_$AppDatabase, $FavoriteFoldersTable> {
+  $$FavoriteFoldersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get color => $composableBuilder(
+    column: $table.color,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ConnectionsTableOrderingComposer get connectionId {
+    final $$ConnectionsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.connectionId,
+      referencedTable: $db.connections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConnectionsTableOrderingComposer(
+            $db: $db,
+            $table: $db.connections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FavoriteFoldersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FavoriteFoldersTable> {
+  $$FavoriteFoldersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get color =>
+      $composableBuilder(column: $table.color, builder: (column) => column);
+
+  GeneratedColumn<String> get icon =>
+      $composableBuilder(column: $table.icon, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$ConnectionsTableAnnotationComposer get connectionId {
+    final $$ConnectionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.connectionId,
+      referencedTable: $db.connections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConnectionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.connections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> favoriteFolderAssignmentsRefs<T extends Object>(
+    Expression<T> Function($$FavoriteFolderAssignmentsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$FavoriteFolderAssignmentsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.favoriteFolderAssignments,
+          getReferencedColumn: (t) => t.folderId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$FavoriteFolderAssignmentsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.favoriteFolderAssignments,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$FavoriteFoldersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FavoriteFoldersTable,
+          FavoriteFolder,
+          $$FavoriteFoldersTableFilterComposer,
+          $$FavoriteFoldersTableOrderingComposer,
+          $$FavoriteFoldersTableAnnotationComposer,
+          $$FavoriteFoldersTableCreateCompanionBuilder,
+          $$FavoriteFoldersTableUpdateCompanionBuilder,
+          (FavoriteFolder, $$FavoriteFoldersTableReferences),
+          FavoriteFolder,
+          PrefetchHooks Function({
+            bool connectionId,
+            bool favoriteFolderAssignmentsRefs,
+          })
+        > {
+  $$FavoriteFoldersTableTableManager(
+    _$AppDatabase db,
+    $FavoriteFoldersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FavoriteFoldersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FavoriteFoldersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FavoriteFoldersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> connectionId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FavoriteFoldersCompanion(
+                id: id,
+                connectionId: connectionId,
+                name: name,
+                color: color,
+                icon: icon,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int connectionId,
+                required String name,
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FavoriteFoldersCompanion.insert(
+                id: id,
+                connectionId: connectionId,
+                name: name,
+                color: color,
+                icon: icon,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$FavoriteFoldersTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({connectionId = false, favoriteFolderAssignmentsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (favoriteFolderAssignmentsRefs)
+                      db.favoriteFolderAssignments,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (connectionId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.connectionId,
+                                    referencedTable:
+                                        $$FavoriteFoldersTableReferences
+                                            ._connectionIdTable(db),
+                                    referencedColumn:
+                                        $$FavoriteFoldersTableReferences
+                                            ._connectionIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (favoriteFolderAssignmentsRefs)
+                        await $_getPrefetchedData<
+                          FavoriteFolder,
+                          $FavoriteFoldersTable,
+                          FavoriteFolderAssignment
+                        >(
+                          currentTable: table,
+                          referencedTable: $$FavoriteFoldersTableReferences
+                              ._favoriteFolderAssignmentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$FavoriteFoldersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).favoriteFolderAssignmentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.folderId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$FavoriteFoldersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FavoriteFoldersTable,
+      FavoriteFolder,
+      $$FavoriteFoldersTableFilterComposer,
+      $$FavoriteFoldersTableOrderingComposer,
+      $$FavoriteFoldersTableAnnotationComposer,
+      $$FavoriteFoldersTableCreateCompanionBuilder,
+      $$FavoriteFoldersTableUpdateCompanionBuilder,
+      (FavoriteFolder, $$FavoriteFoldersTableReferences),
+      FavoriteFolder,
+      PrefetchHooks Function({
+        bool connectionId,
+        bool favoriteFolderAssignmentsRefs,
+      })
+    >;
+typedef $$FavoriteFolderAssignmentsTableCreateCompanionBuilder =
+    FavoriteFolderAssignmentsCompanion Function({
+      Value<int> id,
+      required int favoriteId,
+      required int folderId,
+      Value<DateTime> createdAt,
+    });
+typedef $$FavoriteFolderAssignmentsTableUpdateCompanionBuilder =
+    FavoriteFolderAssignmentsCompanion Function({
+      Value<int> id,
+      Value<int> favoriteId,
+      Value<int> folderId,
+      Value<DateTime> createdAt,
+    });
+
+final class $$FavoriteFolderAssignmentsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $FavoriteFolderAssignmentsTable,
+          FavoriteFolderAssignment
+        > {
+  $$FavoriteFolderAssignmentsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $FavoritesTable _favoriteIdTable(_$AppDatabase db) =>
+      db.favorites.createAlias(
+        $_aliasNameGenerator(
+          db.favoriteFolderAssignments.favoriteId,
+          db.favorites.id,
+        ),
+      );
+
+  $$FavoritesTableProcessedTableManager get favoriteId {
+    final $_column = $_itemColumn<int>('favorite_id')!;
+
+    final manager = $$FavoritesTableTableManager(
+      $_db,
+      $_db.favorites,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_favoriteIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $FavoriteFoldersTable _folderIdTable(_$AppDatabase db) =>
+      db.favoriteFolders.createAlias(
+        $_aliasNameGenerator(
+          db.favoriteFolderAssignments.folderId,
+          db.favoriteFolders.id,
+        ),
+      );
+
+  $$FavoriteFoldersTableProcessedTableManager get folderId {
+    final $_column = $_itemColumn<int>('folder_id')!;
+
+    final manager = $$FavoriteFoldersTableTableManager(
+      $_db,
+      $_db.favoriteFolders,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_folderIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$FavoriteFolderAssignmentsTableFilterComposer
+    extends Composer<_$AppDatabase, $FavoriteFolderAssignmentsTable> {
+  $$FavoriteFolderAssignmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$FavoritesTableFilterComposer get favoriteId {
+    final $$FavoritesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.favoriteId,
+      referencedTable: $db.favorites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FavoritesTableFilterComposer(
+            $db: $db,
+            $table: $db.favorites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$FavoriteFoldersTableFilterComposer get folderId {
+    final $$FavoriteFoldersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.folderId,
+      referencedTable: $db.favoriteFolders,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FavoriteFoldersTableFilterComposer(
+            $db: $db,
+            $table: $db.favoriteFolders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FavoriteFolderAssignmentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FavoriteFolderAssignmentsTable> {
+  $$FavoriteFolderAssignmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$FavoritesTableOrderingComposer get favoriteId {
+    final $$FavoritesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.favoriteId,
+      referencedTable: $db.favorites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FavoritesTableOrderingComposer(
+            $db: $db,
+            $table: $db.favorites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$FavoriteFoldersTableOrderingComposer get folderId {
+    final $$FavoriteFoldersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.folderId,
+      referencedTable: $db.favoriteFolders,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FavoriteFoldersTableOrderingComposer(
+            $db: $db,
+            $table: $db.favoriteFolders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FavoriteFolderAssignmentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FavoriteFolderAssignmentsTable> {
+  $$FavoriteFolderAssignmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$FavoritesTableAnnotationComposer get favoriteId {
+    final $$FavoritesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.favoriteId,
+      referencedTable: $db.favorites,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FavoritesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.favorites,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$FavoriteFoldersTableAnnotationComposer get folderId {
+    final $$FavoriteFoldersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.folderId,
+      referencedTable: $db.favoriteFolders,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FavoriteFoldersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.favoriteFolders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FavoriteFolderAssignmentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FavoriteFolderAssignmentsTable,
+          FavoriteFolderAssignment,
+          $$FavoriteFolderAssignmentsTableFilterComposer,
+          $$FavoriteFolderAssignmentsTableOrderingComposer,
+          $$FavoriteFolderAssignmentsTableAnnotationComposer,
+          $$FavoriteFolderAssignmentsTableCreateCompanionBuilder,
+          $$FavoriteFolderAssignmentsTableUpdateCompanionBuilder,
+          (
+            FavoriteFolderAssignment,
+            $$FavoriteFolderAssignmentsTableReferences,
+          ),
+          FavoriteFolderAssignment,
+          PrefetchHooks Function({bool favoriteId, bool folderId})
+        > {
+  $$FavoriteFolderAssignmentsTableTableManager(
+    _$AppDatabase db,
+    $FavoriteFolderAssignmentsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FavoriteFolderAssignmentsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$FavoriteFolderAssignmentsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$FavoriteFolderAssignmentsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> favoriteId = const Value.absent(),
+                Value<int> folderId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FavoriteFolderAssignmentsCompanion(
+                id: id,
+                favoriteId: favoriteId,
+                folderId: folderId,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int favoriteId,
+                required int folderId,
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FavoriteFolderAssignmentsCompanion.insert(
+                id: id,
+                favoriteId: favoriteId,
+                folderId: folderId,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$FavoriteFolderAssignmentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({favoriteId = false, folderId = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -5986,16 +9041,33 @@ class $$FavoritesTableTableManager
                       dynamic
                     >
                   >(state) {
-                    if (connectionId) {
+                    if (favoriteId) {
                       state =
                           state.withJoin(
                                 currentTable: table,
-                                currentColumn: table.connectionId,
-                                referencedTable: $$FavoritesTableReferences
-                                    ._connectionIdTable(db),
-                                referencedColumn: $$FavoritesTableReferences
-                                    ._connectionIdTable(db)
-                                    .id,
+                                currentColumn: table.favoriteId,
+                                referencedTable:
+                                    $$FavoriteFolderAssignmentsTableReferences
+                                        ._favoriteIdTable(db),
+                                referencedColumn:
+                                    $$FavoriteFolderAssignmentsTableReferences
+                                        ._favoriteIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (folderId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.folderId,
+                                referencedTable:
+                                    $$FavoriteFolderAssignmentsTableReferences
+                                        ._folderIdTable(db),
+                                referencedColumn:
+                                    $$FavoriteFolderAssignmentsTableReferences
+                                        ._folderIdTable(db)
+                                        .id,
                               )
                               as T;
                     }
@@ -6011,19 +9083,19 @@ class $$FavoritesTableTableManager
       );
 }
 
-typedef $$FavoritesTableProcessedTableManager =
+typedef $$FavoriteFolderAssignmentsTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
-      $FavoritesTable,
-      Favorite,
-      $$FavoritesTableFilterComposer,
-      $$FavoritesTableOrderingComposer,
-      $$FavoritesTableAnnotationComposer,
-      $$FavoritesTableCreateCompanionBuilder,
-      $$FavoritesTableUpdateCompanionBuilder,
-      (Favorite, $$FavoritesTableReferences),
-      Favorite,
-      PrefetchHooks Function({bool connectionId})
+      $FavoriteFolderAssignmentsTable,
+      FavoriteFolderAssignment,
+      $$FavoriteFolderAssignmentsTableFilterComposer,
+      $$FavoriteFolderAssignmentsTableOrderingComposer,
+      $$FavoriteFolderAssignmentsTableAnnotationComposer,
+      $$FavoriteFolderAssignmentsTableCreateCompanionBuilder,
+      $$FavoriteFolderAssignmentsTableUpdateCompanionBuilder,
+      (FavoriteFolderAssignment, $$FavoriteFolderAssignmentsTableReferences),
+      FavoriteFolderAssignment,
+      PrefetchHooks Function({bool favoriteId, bool folderId})
     >;
 typedef $$CachedPointsTableCreateCompanionBuilder =
     CachedPointsCompanion Function({
@@ -7730,6 +10802,758 @@ typedef $$CachedObjectsSummaryTableProcessedTableManager =
       CachedObjectsSummaryData,
       PrefetchHooks Function({bool connectionId})
     >;
+typedef $$SynopticsTableCreateCompanionBuilder =
+    SynopticsCompanion Function({
+      Value<int> id,
+      required String name,
+      required String svgAssetPath,
+      Value<int?> connectionId,
+      Value<String?> description,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+typedef $$SynopticsTableUpdateCompanionBuilder =
+    SynopticsCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<String> svgAssetPath,
+      Value<int?> connectionId,
+      Value<String?> description,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+
+final class $$SynopticsTableReferences
+    extends BaseReferences<_$AppDatabase, $SynopticsTable, Synoptic> {
+  $$SynopticsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$SynopticBindingsTable, List<SynopticBinding>>
+  _synopticBindingsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.synopticBindings,
+    aliasName: $_aliasNameGenerator(
+      db.synoptics.id,
+      db.synopticBindings.synopticId,
+    ),
+  );
+
+  $$SynopticBindingsTableProcessedTableManager get synopticBindingsRefs {
+    final manager = $$SynopticBindingsTableTableManager(
+      $_db,
+      $_db.synopticBindings,
+    ).filter((f) => f.synopticId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _synopticBindingsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$SynopticsTableFilterComposer
+    extends Composer<_$AppDatabase, $SynopticsTable> {
+  $$SynopticsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get svgAssetPath => $composableBuilder(
+    column: $table.svgAssetPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get connectionId => $composableBuilder(
+    column: $table.connectionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> synopticBindingsRefs(
+    Expression<bool> Function($$SynopticBindingsTableFilterComposer f) f,
+  ) {
+    final $$SynopticBindingsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.synopticBindings,
+      getReferencedColumn: (t) => t.synopticId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SynopticBindingsTableFilterComposer(
+            $db: $db,
+            $table: $db.synopticBindings,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$SynopticsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SynopticsTable> {
+  $$SynopticsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get svgAssetPath => $composableBuilder(
+    column: $table.svgAssetPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get connectionId => $composableBuilder(
+    column: $table.connectionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SynopticsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SynopticsTable> {
+  $$SynopticsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get svgAssetPath => $composableBuilder(
+    column: $table.svgAssetPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get connectionId => $composableBuilder(
+    column: $table.connectionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> synopticBindingsRefs<T extends Object>(
+    Expression<T> Function($$SynopticBindingsTableAnnotationComposer a) f,
+  ) {
+    final $$SynopticBindingsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.synopticBindings,
+      getReferencedColumn: (t) => t.synopticId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SynopticBindingsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.synopticBindings,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$SynopticsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SynopticsTable,
+          Synoptic,
+          $$SynopticsTableFilterComposer,
+          $$SynopticsTableOrderingComposer,
+          $$SynopticsTableAnnotationComposer,
+          $$SynopticsTableCreateCompanionBuilder,
+          $$SynopticsTableUpdateCompanionBuilder,
+          (Synoptic, $$SynopticsTableReferences),
+          Synoptic,
+          PrefetchHooks Function({bool synopticBindingsRefs})
+        > {
+  $$SynopticsTableTableManager(_$AppDatabase db, $SynopticsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SynopticsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SynopticsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SynopticsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> svgAssetPath = const Value.absent(),
+                Value<int?> connectionId = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => SynopticsCompanion(
+                id: id,
+                name: name,
+                svgAssetPath: svgAssetPath,
+                connectionId: connectionId,
+                description: description,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                required String svgAssetPath,
+                Value<int?> connectionId = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => SynopticsCompanion.insert(
+                id: id,
+                name: name,
+                svgAssetPath: svgAssetPath,
+                connectionId: connectionId,
+                description: description,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$SynopticsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({synopticBindingsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (synopticBindingsRefs) db.synopticBindings,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (synopticBindingsRefs)
+                    await $_getPrefetchedData<
+                      Synoptic,
+                      $SynopticsTable,
+                      SynopticBinding
+                    >(
+                      currentTable: table,
+                      referencedTable: $$SynopticsTableReferences
+                          ._synopticBindingsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$SynopticsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).synopticBindingsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.synopticId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$SynopticsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SynopticsTable,
+      Synoptic,
+      $$SynopticsTableFilterComposer,
+      $$SynopticsTableOrderingComposer,
+      $$SynopticsTableAnnotationComposer,
+      $$SynopticsTableCreateCompanionBuilder,
+      $$SynopticsTableUpdateCompanionBuilder,
+      (Synoptic, $$SynopticsTableReferences),
+      Synoptic,
+      PrefetchHooks Function({bool synopticBindingsRefs})
+    >;
+typedef $$SynopticBindingsTableCreateCompanionBuilder =
+    SynopticBindingsCompanion Function({
+      Value<int> id,
+      required int synopticId,
+      required String svgElementId,
+      required String pointRef,
+      required BindingType bindingType,
+      Value<String?> configJson,
+      Value<String?> pointName,
+      Value<DateTime> createdAt,
+    });
+typedef $$SynopticBindingsTableUpdateCompanionBuilder =
+    SynopticBindingsCompanion Function({
+      Value<int> id,
+      Value<int> synopticId,
+      Value<String> svgElementId,
+      Value<String> pointRef,
+      Value<BindingType> bindingType,
+      Value<String?> configJson,
+      Value<String?> pointName,
+      Value<DateTime> createdAt,
+    });
+
+final class $$SynopticBindingsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $SynopticBindingsTable, SynopticBinding> {
+  $$SynopticBindingsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $SynopticsTable _synopticIdTable(_$AppDatabase db) =>
+      db.synoptics.createAlias(
+        $_aliasNameGenerator(db.synopticBindings.synopticId, db.synoptics.id),
+      );
+
+  $$SynopticsTableProcessedTableManager get synopticId {
+    final $_column = $_itemColumn<int>('synoptic_id')!;
+
+    final manager = $$SynopticsTableTableManager(
+      $_db,
+      $_db.synoptics,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_synopticIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$SynopticBindingsTableFilterComposer
+    extends Composer<_$AppDatabase, $SynopticBindingsTable> {
+  $$SynopticBindingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get svgElementId => $composableBuilder(
+    column: $table.svgElementId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pointRef => $composableBuilder(
+    column: $table.pointRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<BindingType, BindingType, String>
+  get bindingType => $composableBuilder(
+    column: $table.bindingType,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get configJson => $composableBuilder(
+    column: $table.configJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pointName => $composableBuilder(
+    column: $table.pointName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$SynopticsTableFilterComposer get synopticId {
+    final $$SynopticsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.synopticId,
+      referencedTable: $db.synoptics,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SynopticsTableFilterComposer(
+            $db: $db,
+            $table: $db.synoptics,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SynopticBindingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SynopticBindingsTable> {
+  $$SynopticBindingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get svgElementId => $composableBuilder(
+    column: $table.svgElementId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pointRef => $composableBuilder(
+    column: $table.pointRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bindingType => $composableBuilder(
+    column: $table.bindingType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get configJson => $composableBuilder(
+    column: $table.configJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pointName => $composableBuilder(
+    column: $table.pointName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$SynopticsTableOrderingComposer get synopticId {
+    final $$SynopticsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.synopticId,
+      referencedTable: $db.synoptics,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SynopticsTableOrderingComposer(
+            $db: $db,
+            $table: $db.synoptics,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SynopticBindingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SynopticBindingsTable> {
+  $$SynopticBindingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get svgElementId => $composableBuilder(
+    column: $table.svgElementId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pointRef =>
+      $composableBuilder(column: $table.pointRef, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<BindingType, String> get bindingType =>
+      $composableBuilder(
+        column: $table.bindingType,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get configJson => $composableBuilder(
+    column: $table.configJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pointName =>
+      $composableBuilder(column: $table.pointName, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$SynopticsTableAnnotationComposer get synopticId {
+    final $$SynopticsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.synopticId,
+      referencedTable: $db.synoptics,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SynopticsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.synoptics,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SynopticBindingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SynopticBindingsTable,
+          SynopticBinding,
+          $$SynopticBindingsTableFilterComposer,
+          $$SynopticBindingsTableOrderingComposer,
+          $$SynopticBindingsTableAnnotationComposer,
+          $$SynopticBindingsTableCreateCompanionBuilder,
+          $$SynopticBindingsTableUpdateCompanionBuilder,
+          (SynopticBinding, $$SynopticBindingsTableReferences),
+          SynopticBinding,
+          PrefetchHooks Function({bool synopticId})
+        > {
+  $$SynopticBindingsTableTableManager(
+    _$AppDatabase db,
+    $SynopticBindingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SynopticBindingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SynopticBindingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SynopticBindingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> synopticId = const Value.absent(),
+                Value<String> svgElementId = const Value.absent(),
+                Value<String> pointRef = const Value.absent(),
+                Value<BindingType> bindingType = const Value.absent(),
+                Value<String?> configJson = const Value.absent(),
+                Value<String?> pointName = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => SynopticBindingsCompanion(
+                id: id,
+                synopticId: synopticId,
+                svgElementId: svgElementId,
+                pointRef: pointRef,
+                bindingType: bindingType,
+                configJson: configJson,
+                pointName: pointName,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int synopticId,
+                required String svgElementId,
+                required String pointRef,
+                required BindingType bindingType,
+                Value<String?> configJson = const Value.absent(),
+                Value<String?> pointName = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => SynopticBindingsCompanion.insert(
+                id: id,
+                synopticId: synopticId,
+                svgElementId: svgElementId,
+                pointRef: pointRef,
+                bindingType: bindingType,
+                configJson: configJson,
+                pointName: pointName,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$SynopticBindingsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({synopticId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (synopticId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.synopticId,
+                                referencedTable:
+                                    $$SynopticBindingsTableReferences
+                                        ._synopticIdTable(db),
+                                referencedColumn:
+                                    $$SynopticBindingsTableReferences
+                                        ._synopticIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$SynopticBindingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SynopticBindingsTable,
+      SynopticBinding,
+      $$SynopticBindingsTableFilterComposer,
+      $$SynopticBindingsTableOrderingComposer,
+      $$SynopticBindingsTableAnnotationComposer,
+      $$SynopticBindingsTableCreateCompanionBuilder,
+      $$SynopticBindingsTableUpdateCompanionBuilder,
+      (SynopticBinding, $$SynopticBindingsTableReferences),
+      SynopticBinding,
+      PrefetchHooks Function({bool synopticId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7740,6 +11564,13 @@ class $AppDatabaseManager {
       $$ConnectionsTableTableManager(_db, _db.connections);
   $$FavoritesTableTableManager get favorites =>
       $$FavoritesTableTableManager(_db, _db.favorites);
+  $$FavoriteFoldersTableTableManager get favoriteFolders =>
+      $$FavoriteFoldersTableTableManager(_db, _db.favoriteFolders);
+  $$FavoriteFolderAssignmentsTableTableManager get favoriteFolderAssignments =>
+      $$FavoriteFolderAssignmentsTableTableManager(
+        _db,
+        _db.favoriteFolderAssignments,
+      );
   $$CachedPointsTableTableManager get cachedPoints =>
       $$CachedPointsTableTableManager(_db, _db.cachedPoints);
   $$CachedDeviceInfoTableTableManager get cachedDeviceInfo =>
@@ -7748,4 +11579,8 @@ class $AppDatabaseManager {
       $$CachedTrendLogMappingTableTableManager(_db, _db.cachedTrendLogMapping);
   $$CachedObjectsSummaryTableTableManager get cachedObjectsSummary =>
       $$CachedObjectsSummaryTableTableManager(_db, _db.cachedObjectsSummary);
+  $$SynopticsTableTableManager get synoptics =>
+      $$SynopticsTableTableManager(_db, _db.synoptics);
+  $$SynopticBindingsTableTableManager get synopticBindings =>
+      $$SynopticBindingsTableTableManager(_db, _db.synopticBindings);
 }

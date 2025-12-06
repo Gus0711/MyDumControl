@@ -1,0 +1,543 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 540" width="340" height="540">
+    <defs>
+        <!-- Filtres avancés pour le réalisme -->
+        <filter id="metalNoise" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noise"/>
+            <feColorMatrix type="saturate" values="0"/>
+            <feBlend in="SourceGraphic" in2="noise" mode="overlay" result="blend"/>
+            <feComposite in="blend" in2="SourceGraphic" operator="in"/>
+        </filter>
+
+        <filter id="dropShadowStrong" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="3" dy="6" stdDeviation="4" flood-color="#000" flood-opacity="0.4"/>
+        </filter>
+
+        <filter id="innerGlow">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+            <feOffset dx="0" dy="0"/>
+            <feComposite in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1"/>
+            <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0"/>
+            <feMerge>
+                <feMergeNode/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+
+        <filter id="bevel3D">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
+            <feSpecularLighting in="blur" surfaceScale="5" specularConstant="0.8" specularExponent="20" result="spec">
+                <fePointLight x="-5000" y="-10000" z="20000"/>
+            </feSpecularLighting>
+            <feComposite in="spec" in2="SourceAlpha" operator="in" result="spec2"/>
+            <feMerge>
+                <feMergeNode in="SourceGraphic"/>
+                <feMergeNode in="spec2"/>
+            </feMerge>
+        </filter>
+
+        <filter id="metalShine">
+            <feSpecularLighting in="SourceAlpha" surfaceScale="3" specularConstant="1.2" specularExponent="35" result="specOut">
+                <fePointLight x="-80" y="-200" z="300"/>
+            </feSpecularLighting>
+            <feComposite in="specOut" in2="SourceAlpha" operator="in" result="specOut2"/>
+            <feComposite in="SourceGraphic" in2="specOut2" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/>
+        </filter>
+
+        <!-- Gradients améliorés pour tuyaux acier -->
+        <linearGradient id="steelPipe3D" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#4a4f54"/>
+            <stop offset="15%" stop-color="#868e96"/>
+            <stop offset="35%" stop-color="#ced4da"/>
+            <stop offset="50%" stop-color="#f1f3f5"/>
+            <stop offset="65%" stop-color="#adb5bd"/>
+            <stop offset="85%" stop-color="#6c757d"/>
+            <stop offset="100%" stop-color="#343a40"/>
+        </linearGradient>
+
+        <linearGradient id="steelPipeVertical" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#495057"/>
+            <stop offset="20%" stop-color="#adb5bd"/>
+            <stop offset="40%" stop-color="#dee2e6"/>
+            <stop offset="50%" stop-color="#f8f9fa"/>
+            <stop offset="60%" stop-color="#ced4da"/>
+            <stop offset="80%" stop-color="#868e96"/>
+            <stop offset="100%" stop-color="#495057"/>
+        </linearGradient>
+
+        <!-- Gradient fonte réaliste -->
+        <linearGradient id="castIron3D" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#4a4a4a"/>
+            <stop offset="30%" stop-color="#2d2d2d"/>
+            <stop offset="70%" stop-color="#1a1a1a"/>
+            <stop offset="100%" stop-color="#0d0d0d"/>
+        </linearGradient>
+
+        <radialGradient id="castIronRound" cx="40%" cy="30%" r="70%">
+            <stop offset="0%" stop-color="#4a4a4a"/>
+            <stop offset="60%" stop-color="#2d2d2d"/>
+            <stop offset="100%" stop-color="#0d0d0d"/>
+        </radialGradient>
+
+        <!-- Gradient pompe verte premium -->
+        <linearGradient id="pumpGreen3D" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#58d68d"/>
+            <stop offset="20%" stop-color="#2ecc71"/>
+            <stop offset="50%" stop-color="#27ae60"/>
+            <stop offset="80%" stop-color="#1e8449"/>
+            <stop offset="100%" stop-color="#145a32"/>
+        </linearGradient>
+
+        <linearGradient id="pumpGreenSide" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#1e8449"/>
+            <stop offset="30%" stop-color="#27ae60"/>
+            <stop offset="70%" stop-color="#2ecc71"/>
+            <stop offset="100%" stop-color="#1e8449"/>
+        </linearGradient>
+
+        <!-- Gradient laiton ultra-réaliste -->
+        <linearGradient id="brass3D" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#8b6914"/>
+            <stop offset="15%" stop-color="#c9a227"/>
+            <stop offset="30%" stop-color="#e8c547"/>
+            <stop offset="45%" stop-color="#fff8dc"/>
+            <stop offset="55%" stop-color="#f4d03f"/>
+            <stop offset="70%" stop-color="#d4ac0d"/>
+            <stop offset="85%" stop-color="#b7950b"/>
+            <stop offset="100%" stop-color="#7d6608"/>
+        </linearGradient>
+
+        <linearGradient id="brassTop" x1="0%" y1="100%" x2="0%" y2="0%">
+            <stop offset="0%" stop-color="#a07d1c"/>
+            <stop offset="50%" stop-color="#e8c547"/>
+            <stop offset="100%" stop-color="#f9e79f"/>
+        </linearGradient>
+
+        <!-- Gradient actionneur orange premium -->
+        <linearGradient id="actuator3D" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#f39c12"/>
+            <stop offset="30%" stop-color="#e67e22"/>
+            <stop offset="70%" stop-color="#d35400"/>
+            <stop offset="100%" stop-color="#a04000"/>
+        </linearGradient>
+
+        <linearGradient id="actuatorTop" x1="0%" y1="100%" x2="0%" y2="0%">
+            <stop offset="0%" stop-color="#d35400"/>
+            <stop offset="50%" stop-color="#e67e22"/>
+            <stop offset="100%" stop-color="#f5b041"/>
+        </linearGradient>
+
+        <!-- Gradient sonde température -->
+        <linearGradient id="probeMetal" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#555"/>
+            <stop offset="25%" stop-color="#999"/>
+            <stop offset="50%" stop-color="#ddd"/>
+            <stop offset="75%" stop-color="#999"/>
+            <stop offset="100%" stop-color="#444"/>
+        </linearGradient>
+
+        <linearGradient id="probeBody" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#2980b9"/>
+            <stop offset="50%" stop-color="#1a5276"/>
+            <stop offset="100%" stop-color="#154360"/>
+        </linearGradient>
+
+        <radialGradient id="ledGreen" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#7dcea0"/>
+            <stop offset="40%" stop-color="#27ae60"/>
+            <stop offset="100%" stop-color="#1e8449"/>
+        </radialGradient>
+
+        <radialGradient id="ledRed" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#f1948a"/>
+            <stop offset="40%" stop-color="#e74c3c"/>
+            <stop offset="100%" stop-color="#922b21"/>
+        </radialGradient>
+
+        <!-- Gradient eau chaude/froide -->
+        <linearGradient id="hotWater" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#e74c3c"/>
+            <stop offset="100%" stop-color="#c0392b"/>
+        </linearGradient>
+
+        <linearGradient id="coldWater" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#3498db"/>
+            <stop offset="100%" stop-color="#2980b9"/>
+        </linearGradient>
+
+        <!-- Reflets et brillances -->
+        <linearGradient id="pipeHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.6)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+        </linearGradient>
+
+        <!-- Texture brossée -->
+        <pattern id="brushedMetal" patternUnits="userSpaceOnUse" width="4" height="4">
+            <line x1="0" y1="0" x2="4" y2="0" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+            <line x1="0" y1="2" x2="4" y2="2" stroke="rgba(0,0,0,0.05)" stroke-width="0.5"/>
+        </pattern>
+
+        <!-- Clip pour reflets -->
+        <clipPath id="pumpClip">
+            <rect x="15" y="30" width="80" height="60" rx="5"/>
+        </clipPath>
+
+        <!-- Filtres glow pour animations fluides -->
+        <filter id="glowRed" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+
+        <filter id="glowBlue" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+
+        <filter id="glowOrange" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+            <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+    </defs>
+
+    <!-- Fond subtil -->
+    <rect width="340" height="540" fill="#f0f0f0"/>
+
+    <g filter="url(#dropShadowStrong)">
+
+        <!-- ============ TUYAUTERIE PRINCIPALE ============ -->
+
+        <!-- Tuyau vertical droit (retour) -->
+        <g>
+            <rect x="200" y="20" width="34" height="500" fill="url(#steelPipeVertical)" rx="2"/>
+            <rect x="200" y="20" width="8" height="500" fill="url(#pipeHighlight)" opacity="0.3"/>
+            <!-- Texture brossée -->
+            <rect x="200" y="20" width="34" height="500" fill="url(#brushedMetal)" opacity="0.4"/>
+            <!-- Brides de fixation -->
+            <rect x="194" y="80" width="46" height="8" rx="2" fill="url(#castIron3D)"/>
+            <rect x="194" y="280" width="46" height="8" rx="2" fill="url(#castIron3D)"/>
+            <rect x="194" y="450" width="46" height="8" rx="2" fill="url(#castIron3D)"/>
+        </g>
+
+        <!-- Tuyau vertical gauche haut (départ chaud) - de la sortie pompe vers le haut -->
+        <g>
+            <rect x="85" y="20" width="34" height="145" fill="url(#steelPipeVertical)" rx="2"/>
+            <rect x="85" y="20" width="8" height="145" fill="url(#pipeHighlight)" opacity="0.3"/>
+            <rect x="85" y="20" width="34" height="145" fill="url(#brushedMetal)" opacity="0.4"/>
+            <!-- Bride -->
+            <rect x="79" y="60" width="46" height="8" rx="2" fill="url(#castIron3D)"/>
+        </g>
+
+        <!-- Tuyau vertical entre V3V et Pompe (liaison) -->
+        <g>
+            <rect x="85" y="297" width="34" height="38" fill="url(#steelPipeVertical)" rx="2"/>
+            <rect x="85" y="297" width="8" height="38" fill="url(#pipeHighlight)" opacity="0.3"/>
+            <rect x="85" y="297" width="34" height="38" fill="url(#brushedMetal)" opacity="0.4"/>
+        </g>
+
+        <!-- Tuyau vertical gauche bas (retour froid vers vanne) -->
+        <g>
+            <rect x="85" y="413" width="34" height="107" fill="url(#steelPipeVertical)" rx="2"/>
+            <rect x="85" y="413" width="8" height="107" fill="url(#pipeHighlight)" opacity="0.3"/>
+            <rect x="85" y="413" width="34" height="107" fill="url(#brushedMetal)" opacity="0.4"/>
+            <!-- Brides -->
+            <rect x="79" y="460" width="46" height="8" rx="2" fill="url(#castIron3D)"/>
+        </g>
+
+        <!-- Tuyau horizontal (bypass vers collecteur) -->
+        <g>
+            <rect x="119" y="358" width="81" height="24" fill="url(#steelPipe3D)" rx="2"/>
+            <rect x="119" y="358" width="81" height="6" fill="url(#pipeHighlight)" opacity="0.25"/>
+            <rect x="119" y="358" width="81" height="24" fill="url(#brushedMetal)" opacity="0.4"/>
+            <!-- Raccord côté collecteur -->
+            <ellipse cx="198" cy="370" rx="6" ry="14" fill="url(#castIron3D)"/>
+        </g>
+
+        <!-- ============ SONDE DE TEMPÉRATURE DÉPART (style doigt de gant horizontal) ============ -->
+        <g transform="translate(119, 95)">
+            <!-- Doigt de gant traversant le tuyau -->
+            <rect x="0" y="-4" width="50" height="8" rx="2" fill="url(#probeMetal)" filter="url(#metalShine)"/>
+            <ellipse cx="50" cy="0" rx="3" ry="4" fill="#888"/>
+
+            <!-- Raccord fileté sur le tuyau -->
+            <rect x="-4" y="-8" width="10" height="16" rx="1" fill="url(#brass3D)"/>
+            <rect x="-8" y="-6" width="6" height="12" rx="1" fill="url(#brass3D)"/>
+
+            <!-- Tête de sonde / boîtier compact -->
+            <rect x="-35" y="-12" width="28" height="24" rx="3" fill="#e8e8e8" stroke="#ccc" stroke-width="1"/>
+
+            <!-- Partie supérieure colorée (bleu ou gris) -->
+            <rect x="-35" y="-12" width="28" height="10" rx="3" fill="#5d6d7e"/>
+            <rect x="-35" y="-5" width="28" height="3" fill="#5d6d7e"/>
+
+            <!-- Connecteur électrique -->
+            <rect x="-28" y="12" width="14" height="8" rx="1" fill="#f4d03f" stroke="#d4ac0d" stroke-width="1"/>
+            <rect x="-26" y="14" width="4" height="4" fill="#333"/>
+            <rect x="-20" y="14" width="4" height="4" fill="#333"/>
+
+            <!-- Étiquette -->
+            <rect x="-50" y="-6" width="12" height="14" rx="1" fill="#fff" stroke="#ccc" stroke-width="0.5"/>
+            <text x="-44" y="0" font-family="Arial" font-size="5" fill="#333" text-anchor="middle" transform="rotate(-90 -44 0)">T°</text>
+
+            <!-- Affichage valeur température -->
+            <rect x="-75" y="-10" width="22" height="16" rx="2" fill="#1a2634"/>
+            <text id="val_temp_depart" x="-64" y="2" font-family="monospace" font-size="9" fill="#f39c12" text-anchor="middle">--°C</text>
+        </g>
+
+        <!-- ============ POMPE DE CIRCULATION ============ -->
+        <g transform="translate(60, 175)">
+            <!-- Brides fonte entrée/sortie -->
+            <rect x="20" y="-12" width="44" height="14" rx="3" fill="url(#castIronRound)" filter="url(#innerGlow)"/>
+            <circle cx="26" cy="-5" r="3" fill="#1a1a1a"/>
+            <circle cx="34" cy="-5" r="3" fill="#1a1a1a"/>
+            <circle cx="50" cy="-5" r="3" fill="#1a1a1a"/>
+            <circle cx="58" cy="-5" r="3" fill="#1a1a1a"/>
+            <!-- Vis hexagonales -->
+            <polygon points="26,-5 28,-4 28,-2 26,-1 24,-2 24,-4" fill="#555"/>
+            <polygon points="58,-5 60,-4 60,-2 58,-1 56,-2 56,-4" fill="#555"/>
+
+            <rect x="20" y="118" width="44" height="14" rx="3" fill="url(#castIronRound)" filter="url(#innerGlow)"/>
+            <circle cx="26" cy="125" r="3" fill="#1a1a1a"/>
+            <circle cx="58" cy="125" r="3" fill="#1a1a1a"/>
+            <polygon points="26,125 28,126 28,128 26,129 24,128 24,126" fill="#555"/>
+            <polygon points="58,125 60,126 60,128 58,129 56,128 56,126" fill="#555"/>
+
+            <!-- Corps volute fonte -->
+            <path d="M28 0 H56 V18 C72 28 78 48 78 60 C78 82 62 102 56 105 L56 118 H28 V105 C12 95 6 75 6 60 C6 38 18 18 28 18 Z"
+                  fill="url(#castIronRound)" filter="url(#innerGlow)"/>
+
+            <!-- Nervures de refroidissement fonte -->
+            <rect x="6" y="40" width="5" height="40" rx="1" fill="#2d2d2d"/>
+            <rect x="73" y="40" width="5" height="40" rx="1" fill="#2d2d2d"/>
+
+            <!-- Corps moteur vert avec légère vibration -->
+            <g>
+                <animateTransform attributeName="transform" type="translate" values="0,0; 0.3,0; 0,0; -0.3,0; 0,0" dur="0.1s" repeatCount="indefinite"/>
+                <rect x="15" y="28" width="85" height="64" rx="6" fill="url(#pumpGreen3D)" filter="url(#bevel3D)"/>
+
+                <!-- Ailettes de refroidissement moteur -->
+                <g opacity="0.6">
+                    <line x1="20" y1="32" x2="95" y2="32" stroke="#1e8449" stroke-width="2"/>
+                    <line x1="20" y1="40" x2="95" y2="40" stroke="#1e8449" stroke-width="2"/>
+                    <line x1="20" y1="48" x2="95" y2="48" stroke="#1e8449" stroke-width="2"/>
+                    <line x1="20" y1="56" x2="95" y2="56" stroke="#1e8449" stroke-width="2"/>
+                    <line x1="20" y1="64" x2="95" y2="64" stroke="#1e8449" stroke-width="2"/>
+                    <line x1="20" y1="72" x2="95" y2="72" stroke="#1e8449" stroke-width="2"/>
+                    <line x1="20" y1="80" x2="95" y2="80" stroke="#1e8449" stroke-width="2"/>
+                    <line x1="20" y1="88" x2="95" y2="88" stroke="#1e8449" stroke-width="2"/>
+                </g>
+            </g>
+
+            <!-- Zone centrale moteur avec halo pulsant -->
+            <circle cx="57" cy="60" r="26" fill="#27ae60" opacity="0.3">
+                <animate attributeName="r" values="24;28;24" dur="1s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="0.2;0.5;0.2" dur="1s" repeatCount="indefinite"/>
+            </circle>
+            <circle cx="57" cy="60" r="22" fill="#1a2634" stroke="#27ae60" stroke-width="3"/>
+            <circle cx="57" cy="60" r="16" fill="#2c3e50"/>
+
+            <!-- Arbre central -->
+            <circle cx="57" cy="60" r="8" fill="url(#probeMetal)"/>
+
+            <!-- HÉLICE / ROTOR ANIMÉ - Beaucoup plus visible -->
+            <g id="anim_pompe_rotation" transform="translate(57, 60)">
+                <g>
+                    <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.5s" repeatCount="indefinite"/>
+                    <!-- Pales de l'hélice -->
+                    <path d="M0,-14 L4,-4 L0,-6 L-4,-4 Z" fill="#95a5a6"/>
+                    <path d="M14,0 L4,4 L6,0 L4,-4 Z" fill="#7f8c8d"/>
+                    <path d="M0,14 L-4,4 L0,6 L4,4 Z" fill="#95a5a6"/>
+                    <path d="M-14,0 L-4,-4 L-6,0 L-4,4 Z" fill="#7f8c8d"/>
+                    <!-- Centre du rotor -->
+                    <circle cx="0" cy="0" r="5" fill="#bdc3c7"/>
+                    <circle cx="0" cy="0" r="2" fill="#7f8c8d"/>
+                </g>
+            </g>
+
+            <!-- Effet de flux traversant la pompe (eau qui passe) -->
+            <clipPath id="pumpFlowClip">
+                <circle cx="57" cy="60" r="20"/>
+            </clipPath>
+            <g clip-path="url(#pumpFlowClip)">
+                <circle r="4" fill="#e74c3c" opacity="0.6">
+                    <animateMotion dur="0.8s" repeatCount="indefinite" path="M57,80 Q70,60 57,40"/>
+                </circle>
+                <circle r="3" fill="#e74c3c" opacity="0.5">
+                    <animateMotion dur="0.8s" repeatCount="indefinite" path="M57,80 Q45,60 57,40" begin="0.4s"/>
+                </circle>
+            </g>
+
+            <!-- Anneau lumineux de fonctionnement -->
+            <circle cx="57" cy="60" r="22" fill="none" stroke="#2ecc71" stroke-width="2" opacity="0.8">
+                <animate attributeName="stroke-width" values="2;4;2" dur="1.5s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="0.5;1;0.5" dur="1.5s" repeatCount="indefinite"/>
+            </circle>
+
+            <!-- Boîtier électrique -->
+            <path d="M85 38 H112 V82 H90 L85 72 Z" fill="#0d0d0d" filter="url(#innerGlow)"/>
+            <rect x="90" y="46" width="18" height="28" rx="2" fill="#1a1a1a"/>
+
+            <!-- Sélecteur de vitesse -->
+            <circle cx="99" cy="55" r="6" fill="#2c3e50" stroke="#444" stroke-width="1"/>
+            <text x="99" y="53" font-family="Arial" font-size="4" fill="#7dcea0" text-anchor="middle">I</text>
+            <text x="95" y="58" font-family="Arial" font-size="3" fill="#666" text-anchor="middle">II</text>
+            <text x="103" y="58" font-family="Arial" font-size="3" fill="#666" text-anchor="middle">III</text>
+            <line x1="99" y1="55" x2="99" y2="50" stroke="#7dcea0" stroke-width="1.5" stroke-linecap="round"/>
+
+            <!-- LED fonctionnement avec pulsation forte -->
+            <g id="ind_pompe_etat">
+                <circle cx="99" cy="68" r="4" fill="#27ae60">
+                    <animate attributeName="r" values="3;5;3" dur="0.8s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="99" cy="68" r="3" fill="url(#ledGreen)">
+                    <animate attributeName="opacity" values="1;0.4;1" dur="0.8s" repeatCount="indefinite"/>
+                </circle>
+                <!-- Halo LED -->
+                <circle cx="99" cy="68" r="8" fill="#2ecc71" opacity="0.3">
+                    <animate attributeName="r" values="6;10;6" dur="0.8s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.4;0.1;0.4" dur="0.8s" repeatCount="indefinite"/>
+                </circle>
+            </g>
+
+            <!-- Presse-étoupe câble -->
+            <rect x="95" y="82" width="10" height="12" rx="2" fill="#444"/>
+            <ellipse cx="100" cy="94" rx="4" ry="2" fill="#333"/>
+
+            <!-- Plaque signalétique -->
+            <rect x="22" y="70" width="30" height="18" rx="1" fill="#c0c0c0" stroke="#888" stroke-width="0.5"/>
+            <text x="37" y="78" font-family="Arial" font-size="4" fill="#333" text-anchor="middle" font-weight="bold">WILO</text>
+            <text x="37" y="84" font-family="Arial" font-size="3" fill="#555" text-anchor="middle">25-60</text>
+        </g>
+
+        <!-- ============ VANNE 3 VOIES MÉLANGEUSE ============ -->
+        <g transform="translate(68, 335)">
+            <!-- Corps vanne laiton -->
+            <path d="M17 0 H49 V22 H64 V42 H49 V64 H17 V42 H2 V22 H17 Z"
+                  fill="url(#brass3D)" filter="url(#bevel3D)"/>
+
+            <!-- Ports avec brides -->
+            <!-- Port haut (départ mélangé) -->
+            <path d="M12 -8 H54 L56 2 H10 Z" fill="url(#brassTop)"/>
+            <rect x="14" y="-14" width="38" height="8" rx="2" fill="url(#brass3D)"/>
+            <circle cx="20" cy="-10" r="2" fill="#8b6914"/>
+            <circle cx="46" cy="-10" r="2" fill="#8b6914"/>
+
+            <!-- Port bas (retour) -->
+            <path d="M12 72 H54 L56 62 H10 Z" fill="url(#brassTop)"/>
+            <rect x="14" y="70" width="38" height="8" rx="2" fill="url(#brass3D)"/>
+            <circle cx="20" cy="74" r="2" fill="#8b6914"/>
+            <circle cx="46" cy="74" r="2" fill="#8b6914"/>
+
+            <!-- Port latéral (bypass) -->
+            <path d="M64 17 V47 L76 45 V19 Z" fill="url(#brass3D)"/>
+            <rect x="74" y="20" width="8" height="24" rx="2" fill="url(#brass3D)"/>
+
+            <!-- Détails internes visibles -->
+            <ellipse cx="33" cy="32" rx="12" ry="10" fill="#7d6608" opacity="0.5"/>
+
+            <!-- Tige de commande -->
+            <rect x="28" y="-28" width="10" height="16" rx="2" fill="url(#probeMetal)"/>
+            <circle cx="33" cy="-28" r="6" fill="url(#probeMetal)"/>
+
+            <!-- Actionneur électrique -->
+            <rect x="-8" y="8" width="58" height="48" rx="5" fill="url(#actuator3D)" filter="url(#bevel3D)"/>
+
+            <!-- Face supérieure actionneur (3D) -->
+            <path d="M-8 8 L-3 3 H55 L50 8 Z" fill="url(#actuatorTop)"/>
+
+            <!-- Afficheur position -->
+            <rect x="2" y="16" width="36" height="14" rx="2" fill="#1a2634"/>
+            <text id="val_v3v_position" x="20" y="26" font-family="monospace" font-size="8" fill="#7dcea0" text-anchor="middle">--%</text>
+
+            <!-- Boutons -->
+            <circle cx="10" cy="42" r="4" fill="#2c3e50" stroke="#444" stroke-width="1"/>
+            <circle cx="22" cy="42" r="4" fill="#2c3e50" stroke="#444" stroke-width="1"/>
+            <circle cx="34" cy="42" r="4" fill="#2c3e50" stroke="#444" stroke-width="1"/>
+            <text x="10" y="44" font-family="Arial" font-size="5" fill="#aaa" text-anchor="middle">◀</text>
+            <text x="22" y="44" font-family="Arial" font-size="5" fill="#aaa" text-anchor="middle">M</text>
+            <text x="34" y="44" font-family="Arial" font-size="5" fill="#aaa" text-anchor="middle">▶</text>
+
+            <!-- LED status -->
+            <circle id="ind_v3v_etat" cx="42" cy="20" r="3" fill="url(#ledGreen)">
+                <animate attributeName="opacity" values="1;0.7;1" dur="1.5s" repeatCount="indefinite"/>
+            </circle>
+
+            <!-- Étiquette -->
+            <rect x="-6" y="58" width="50" height="10" rx="1" fill="#fff" stroke="#ccc" stroke-width="0.5"/>
+            <text x="19" y="65" font-family="Arial" font-size="5" fill="#333" text-anchor="middle">V3V Mélange</text>
+        </g>
+
+        <!-- ============ INDICATEURS DE FLUX ============ -->
+
+        <!-- Flèche départ chaud (haut gauche) -->
+        <g transform="translate(102, 28)">
+            <polygon points="0,0 -12,12 -6,12 -6,25 6,25 6,12 12,12" fill="url(#hotWater)" opacity="0.9"/>
+            <text x="0" y="38" font-family="Arial" font-size="7" fill="#c0392b" text-anchor="middle" font-weight="bold">DÉPART</text>
+        </g>
+
+        <!-- Flèche retour froid (bas droite) -->
+        <g transform="translate(217, 505)">
+            <polygon points="0,0 12,-12 6,-12 6,-25 -6,-25 -6,-12 -12,-12" fill="url(#coldWater)" opacity="0.9"/>
+            <text x="0" y="15" font-family="Arial" font-size="7" fill="#2980b9" text-anchor="middle" font-weight="bold">RETOUR</text>
+        </g>
+
+        <!-- ============ ANIMATIONS FLUX EAU - DESIGN ÉPURÉ ============ -->
+
+        <!-- FLUX CHAUD - Sortie pompe vers haut (départ) - Rouge -->
+        <g>
+            <circle r="5" fill="#e74c3c" filter="url(#glowRed)">
+                <animateMotion dur="3s" repeatCount="indefinite" path="M102,165 L102,35"/>
+                <animate attributeName="opacity" values="0.95;0.6;0.95" dur="1s" repeatCount="indefinite"/>
+            </circle>
+            <circle r="5" fill="#e74c3c" filter="url(#glowRed)">
+                <animateMotion dur="3s" repeatCount="indefinite" path="M102,165 L102,35" begin="1.5s"/>
+                <animate attributeName="opacity" values="0.95;0.6;0.95" dur="1s" repeatCount="indefinite"/>
+            </circle>
+        </g>
+
+        <!-- FLUX CHAUD - De V3V vers pompe (montée) - Rouge/Orange -->
+        <g>
+            <circle r="4" fill="#e67e22" filter="url(#glowOrange)">
+                <animateMotion dur="1.5s" repeatCount="indefinite" path="M102,330 L102,295"/>
+                <animate attributeName="opacity" values="0.9;0.5;0.9" dur="0.8s" repeatCount="indefinite"/>
+            </circle>
+        </g>
+
+        <!-- FLUX FROID - Retour collecteur descente - Bleu -->
+        <g>
+            <circle r="5" fill="#3498db" filter="url(#glowBlue)">
+                <animateMotion dur="4s" repeatCount="indefinite" path="M217,35 L217,510"/>
+                <animate attributeName="opacity" values="0.95;0.6;0.95" dur="1s" repeatCount="indefinite"/>
+            </circle>
+            <circle r="5" fill="#3498db" filter="url(#glowBlue)">
+                <animateMotion dur="4s" repeatCount="indefinite" path="M217,35 L217,510" begin="2s"/>
+                <animate attributeName="opacity" values="0.95;0.6;0.95" dur="1s" repeatCount="indefinite"/>
+            </circle>
+        </g>
+
+        <!-- FLUX BYPASS - Horizontal V3V vers collecteur - Mélange -->
+        <g>
+            <circle r="3.5" fill="#e67e22" filter="url(#glowOrange)">
+                <animateMotion dur="1.8s" repeatCount="indefinite" path="M142,370 L198,370"/>
+                <animate attributeName="opacity" values="0.85;0.4;0.85" dur="0.6s" repeatCount="indefinite"/>
+            </circle>
+        </g>
+
+        <!-- FLUX RETOUR - Bas vers V3V - Bleu -->
+        <g>
+            <circle r="4" fill="#2980b9" filter="url(#glowBlue)">
+                <animateMotion dur="2.5s" repeatCount="indefinite" path="M102,515 L102,410"/>
+                <animate attributeName="opacity" values="0.9;0.5;0.9" dur="0.8s" repeatCount="indefinite"/>
+            </circle>
+        </g>
+
+    </g>
+
+</svg>

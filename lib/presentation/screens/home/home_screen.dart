@@ -288,10 +288,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         badge: favoritesCount > 0 ? favoritesCount.toString() : null,
       ),
       _MenuItem(
-        icon: Icons.show_chart,
-        title: 'Boucles PID',
-        color: Colors.blueGrey.shade600,
-        route: Routes.pidLoops,
+        icon: Icons.dashboard,
+        title: 'Synoptique',
+        color: Colors.teal.shade600,
+        route: Routes.synoptics,
       ),
       _MenuItem(
         icon: Icons.settings,
@@ -422,7 +422,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           _buildDrawerItem(context, icon: Icons.notifications_active, title: l10n.alarms, route: Routes.alarms),
           _buildDrawerItem(context, icon: Icons.settings_backup_restore, title: l10n.overrides, route: Routes.overrides),
           _buildDrawerItem(context, icon: Icons.star, title: 'Favoris', route: Routes.favorites),
-          _buildDrawerItem(context, icon: Icons.show_chart, title: 'Boucles PID', route: Routes.pidLoops),
+          _buildDrawerItem(context, icon: Icons.dashboard, title: 'Synoptique', route: Routes.synoptics),
           const Divider(),
           _buildDrawerItem(context, icon: Icons.info_outline, title: l10n.deviceInfo, route: Routes.deviceInfo),
           _buildDrawerItem(context, icon: Icons.settings, title: l10n.settings, route: Routes.settings),

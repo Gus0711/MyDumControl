@@ -13,6 +13,9 @@ import '../../presentation/screens/favorites/favorites_screen.dart';
 import '../../presentation/screens/schedules/schedules_list_screen.dart';
 import '../../presentation/screens/schedules/schedule_detail_screen.dart';
 import '../../presentation/screens/alarms/alarms_screen.dart';
+import '../../presentation/screens/synoptics/synoptics_list_screen.dart';
+import '../../presentation/screens/synoptics/synoptic_viewer_screen.dart';
+import '../../presentation/screens/synoptics/synoptic_editor_screen.dart';
 
 /// Configuration du router de l'application
 class AppRouter {
@@ -126,13 +129,41 @@ class AppRouter {
         builder: (context, state) => const FavoritesScreen(),
       ),
 
-      // Boucles PID - À implémenter
+      // Synoptiques
       GoRoute(
-        path: Routes.pidLoops,
-        name: 'pidLoops',
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Boucles PID - À implémenter')),
-        ),
+        path: Routes.synoptics,
+        name: 'synoptics',
+        builder: (context, state) => const SynopticsListScreen(),
+        routes: [
+          // Créer un synoptique
+          GoRoute(
+            path: 'create',
+            name: 'synopticCreate',
+            builder: (context, state) => const SynopticsListScreen(), // Redirige vers la liste avec dialog
+          ),
+          // Visualiser un synoptique
+          GoRoute(
+            path: ':id',
+            name: 'synopticView',
+            builder: (context, state) {
+              final idStr = state.pathParameters['id']!;
+              final id = int.tryParse(idStr) ?? 0;
+              return SynopticViewerScreen(synopticId: id);
+            },
+            routes: [
+              // Éditer les liaisons d'un synoptique
+              GoRoute(
+                path: 'edit',
+                name: 'synopticEdit',
+                builder: (context, state) {
+                  final idStr = state.pathParameters['id']!;
+                  final id = int.tryParse(idStr) ?? 0;
+                  return SynopticEditorScreen(synopticId: id);
+                },
+              ),
+            ],
+          ),
+        ],
       ),
 
       // Paramètres - À implémenter

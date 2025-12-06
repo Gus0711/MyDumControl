@@ -79,6 +79,7 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/synoptics/
 
 # Configuration flutter_launcher_icons
 flutter_launcher_icons:

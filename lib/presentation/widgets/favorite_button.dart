@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/providers/favorites_provider.dart';
 import '../../domain/models/bacnet_object.dart';
 
-/// Bouton pour ajouter/retirer un point des favoris
+/// Bouton pour gérer l'état favori d'un point (cycle à 3 états)
+/// ☆ (gris) → ⭐ (jaune) → ✨ (orange) → ☆ (gris)
 class FavoriteButton extends ConsumerWidget {
   final BacnetObject point;
   final double size;
@@ -16,26 +17,10 @@ class FavoriteButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isFavoriteAsync = ref.watch(isFavoriteProvider(point.objectId));
+    final favoriteStateAsync = ref.watch(favoriteStateProvider(point.objectId));
 
-    return isFavoriteAsync.when(
-      data: (isFavorite) => IconButton(
-        icon: Icon(
-          isFavorite ? Icons.star : Icons.star_border,
-          color: isFavorite ? Colors.amber : Colors.grey,
-          size: size,
-        ),
-        padding: EdgeInsets.zero,
-        constraints: BoxConstraints(
-          minWidth: size + 8,
-          minHeight: size + 8,
-        ),
-        tooltip: isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
-        onPressed: () async {
-          final notifier = ref.read(favoritesNotifierProvider.notifier);
-          await notifier.toggleFavorite(point);
-        },
-      ),
+    return favoriteStateAsync.when(
+      data: (state) => _buildButton(context, ref, state),
       loading: () => SizedBox(
         width: size + 8,
         height: size + 8,
@@ -44,22 +29,49 @@ class FavoriteButton extends ConsumerWidget {
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
-      error: (_, __) => IconButton(
-        icon: Icon(
-          Icons.star_border,
-          color: Colors.grey,
-          size: size,
-        ),
-        padding: EdgeInsets.zero,
-        constraints: BoxConstraints(
-          minWidth: size + 8,
-          minHeight: size + 8,
-        ),
-        onPressed: () async {
-          final notifier = ref.read(favoritesNotifierProvider.notifier);
-          await notifier.toggleFavorite(point);
-        },
-      ),
+      error: (_, _) => _buildButton(context, ref, FavoriteState.none),
     );
+  }
+
+  Widget _buildButton(BuildContext context, WidgetRef ref, FavoriteState state) {
+    final (icon, color, tooltip) = _getIconData(state);
+
+    return IconButton(
+      icon: Icon(icon, color: color, size: size),
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(
+        minWidth: size + 8,
+        minHeight: size + 8,
+      ),
+      tooltip: tooltip,
+      onPressed: () async {
+        final notifier = ref.read(favoritesNotifierProvider.notifier);
+        await notifier.cycleFavoriteState(point);
+      },
+    );
+  }
+
+  /// Retourne l'icône, la couleur et le tooltip selon l'état
+  (IconData, Color, String) _getIconData(FavoriteState state) {
+    switch (state) {
+      case FavoriteState.none:
+        return (
+          Icons.star_border,
+          Colors.grey,
+          'Ajouter aux favoris',
+        );
+      case FavoriteState.favorite:
+        return (
+          Icons.star,
+          Colors.amber,
+          'Promouvoir en super favori',
+        );
+      case FavoriteState.superFavorite:
+        return (
+          Icons.auto_awesome,
+          Colors.amber.shade600,
+          'Rétrograder en favori',
+        );
+    }
   }
 }

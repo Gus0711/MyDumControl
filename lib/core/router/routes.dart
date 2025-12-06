@@ -17,8 +17,12 @@ class Routes {
   static const String scheduleDetail = '/schedules/:instance';
   static const String overrides = '/overrides';
   static const String favorites = '/favorites';
-  static const String pidLoops = '/pid-loops';
-  static const String pidLoopDetail = '/pid-loops/:id';
+
+  // Routes des synoptiques
+  static const String synoptics = '/synoptics';
+  static const String synopticCreate = '/synoptics/create';
+  static const String synopticView = '/synoptics/:id';
+  static const String synopticEdit = '/synoptics/:id/edit';
 
   // Routes des paramètres et infos
   static const String settings = '/settings';
@@ -33,6 +37,9 @@ class Routes {
   /// Génère le chemin pour le détail d'un schedule
   static String scheduleDetailPath(String id) => '/schedules/$id';
 
-  /// Génère le chemin pour le détail d'une boucle PID
-  static String pidLoopDetailPath(String id) => '/pid-loops/$id';
+  /// Génère le chemin pour visualiser un synoptique
+  static String synopticViewPath(int id) => '/synoptics/$id';
+
+  /// Génère le chemin pour éditer les liaisons d'un synoptique
+  static String synopticEditPath(int id) => '/synoptics/$id/edit';
 }

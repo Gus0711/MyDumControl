@@ -28,7 +28,12 @@
       "Bash(where:*)",
       "Bash(py:*)",
       "Bash(powershell -Command \"''{\"\"model\"\": {\"\"display_name\"\": \"\"Claude Opus 4.5\"\"}}'' | py C:\\Users\\augus\\.claude\\statusline.py\")",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(cd:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "WebSearch",
+      "WebFetch(domain:pub.dev)"
     ],
     "deny": [],
     "ask": []

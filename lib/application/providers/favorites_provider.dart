@@ -8,6 +8,13 @@ import 'active_connection_provider.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
+/// État du favori : 0 = pas favori, 1 = favori, 2 = super favori
+enum FavoriteState {
+  none,       // ☆ Pas favori
+  favorite,   // ⭐ Favori (étoile jaune)
+  superFavorite, // ✨ Super favori (étoile étincelante)
+}
+
 /// Provider pour les favoris de la connexion active
 final favoritesProvider = StreamProvider<List<Favorite>>((ref) {
   final database = ref.watch(databaseProvider);
@@ -30,6 +37,28 @@ final isFavoriteProvider = StreamProvider.family<bool, String>((ref, pointRef) {
   }
 
   return database.watchIsFavorite(activeConnection.connection!.id, pointRef);
+});
+
+/// Provider pour l'état complet du favori (none, favorite, superFavorite)
+final favoriteStateProvider = StreamProvider.family<FavoriteState, String>((ref, pointRef) {
+  final database = ref.watch(databaseProvider);
+  final activeConnection = ref.watch(activeConnectionProvider);
+
+  if (activeConnection.connection == null) {
+    return Stream.value(FavoriteState.none);
+  }
+
+  final connectionId = activeConnection.connection!.id;
+
+  // On écoute la liste des favoris et on détermine l'état
+  return database.watchFavoritesByConnection(connectionId).map((favorites) {
+    try {
+      final favorite = favorites.firstWhere((f) => f.pointRef == pointRef);
+      return favorite.isSuperFavorite ? FavoriteState.superFavorite : FavoriteState.favorite;
+    } catch (_) {
+      return FavoriteState.none;
+    }
+  });
 });
 
 /// Provider pour le nombre de favoris
@@ -82,6 +111,71 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
       _logger.e('toggleFavorite error: $e');
       state = AsyncValue.error(e, st);
       return false;
+    }
+  }
+
+  /// Cycle l'état du favori : none → favorite → superFavorite → favorite → none
+  /// Le cycle "monte" puis "descend" pour une UX plus douce
+  /// Retourne le nouvel état
+  Future<FavoriteState> cycleFavoriteState(BacnetObject object) async {
+    final activeConnection = _ref.read(activeConnectionProvider);
+    if (activeConnection.connection == null) {
+      _logger.w('cycleFavoriteState: no active connection');
+      return FavoriteState.none;
+    }
+
+    final database = _ref.read(databaseProvider);
+    final connectionId = activeConnection.connection!.id;
+
+    try {
+      state = const AsyncValue.loading();
+
+      // Récupérer l'état actuel
+      final favorites = await database.getFavoritesByConnection(connectionId);
+      Favorite? existing;
+      try {
+        existing = favorites.firstWhere((f) => f.pointRef == object.objectId);
+      } catch (_) {
+        existing = null;
+      }
+
+      FavoriteState newState;
+
+      if (existing == null) {
+        // ☆ Pas favori → ⭐ Favori (on monte)
+        await database.addFavorite(FavoritesCompanion.insert(
+          connectionId: connectionId,
+          pointRef: object.objectId,
+          pointName: object.objectName,
+          pointDescription: Value(object.description),
+          objectType: object.type.apiName,
+          // wasPromoted = false par défaut
+        ));
+        newState = FavoriteState.favorite;
+        _logger.i('cycleFavoriteState: ${object.objectId} ☆ → ⭐ (favori)');
+      } else if (!existing.isSuperFavorite && !existing.wasPromoted) {
+        // ⭐ Favori (montée) → ✨ Super favori
+        await database.setSuperFavorite(existing.id, true);
+        newState = FavoriteState.superFavorite;
+        _logger.i('cycleFavoriteState: ${object.objectId} ⭐ → ✨ (super favori)');
+      } else if (existing.isSuperFavorite) {
+        // ✨ Super favori → ⭐ Favori (on descend, marquer wasPromoted)
+        await database.demoteSuperFavorite(existing.id);
+        newState = FavoriteState.favorite;
+        _logger.i('cycleFavoriteState: ${object.objectId} ✨ → ⭐ (rétrogradé)');
+      } else {
+        // ⭐ Favori (wasPromoted = true) → ☆ Pas favori (suppression)
+        await database.deleteFavoriteById(existing.id);
+        newState = FavoriteState.none;
+        _logger.i('cycleFavoriteState: ${object.objectId} ⭐ → ☆ (supprimé)');
+      }
+
+      state = const AsyncValue.data(null);
+      return newState;
+    } catch (e, st) {
+      _logger.e('cycleFavoriteState error: $e');
+      state = AsyncValue.error(e, st);
+      return FavoriteState.none;
     }
   }
 

@@ -4,7 +4,11 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'tables/connections_table.dart';
 import 'tables/folders_table.dart';
 import 'tables/favorites_table.dart';
+import 'tables/favorite_folders_table.dart';
+import 'tables/favorite_folder_assignments_table.dart';
 import 'tables/cache_tables.dart';
+import 'tables/synoptics_table.dart';
+import 'tables/synoptic_bindings_table.dart';
 
 part 'app_database.g.dart';
 
@@ -13,16 +17,20 @@ part 'app_database.g.dart';
   Folders,
   Connections,
   Favorites,
+  FavoriteFolders,
+  FavoriteFolderAssignments,
   CachedPoints,
   CachedDeviceInfo,
   CachedTrendLogMapping,
   CachedObjectsSummary,
+  Synoptics,
+  SynopticBindings,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -49,6 +57,20 @@ class AppDatabase extends _$AppDatabase {
           if (from < 5) {
             // Migration de v4 à v5 : ajout de isSuperFavorite aux favoris
             await m.addColumn(favorites, favorites.isSuperFavorite);
+          }
+          if (from < 6) {
+            // Migration de v5 à v6 : ajout de wasPromoted pour le cycle de favoris
+            await m.addColumn(favorites, favorites.wasPromoted);
+          }
+          if (from < 7) {
+            // Migration de v6 à v7 : ajout des dossiers de favoris
+            await m.createTable(favoriteFolders);
+            await m.createTable(favoriteFolderAssignments);
+          }
+          if (from < 8) {
+            // Migration de v7 à v8 : ajout des synoptiques
+            await m.createTable(synoptics);
+            await m.createTable(synopticBindings);
           }
         },
       );
@@ -394,6 +416,17 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Rétrograde un super favori en favori simple (pour le cycle)
+  /// Met isSuperFavorite = false et wasPromoted = true
+  Future<void> demoteSuperFavorite(int favoriteId) async {
+    await (update(favorites)..where((f) => f.id.equals(favoriteId))).write(
+      const FavoritesCompanion(
+        isSuperFavorite: Value(false),
+        wasPromoted: Value(true),
+      ),
+    );
+  }
+
   /// Compte les super favoris pour une connexion
   Future<int> countSuperFavorites(int connectionId) async {
     final count = favorites.id.count();
@@ -643,5 +676,438 @@ class AppDatabase extends _$AppDatabase {
     // Objects summary cache (30min)
     final summaryExpiry = now.subtract(objectsSummaryCacheMaxAge);
     await (delete(cachedObjectsSummary)..where((c) => c.cachedAt.isSmallerThanValue(summaryExpiry))).go();
+  }
+
+  // ==========================================================================
+  // === DOSSIERS DE FAVORIS ===
+  // ==========================================================================
+
+  /// Récupère tous les dossiers de favoris pour une connexion
+  Future<List<FavoriteFolder>> getFavoriteFoldersByConnection(int connectionId) {
+    return (select(favoriteFolders)
+          ..where((f) => f.connectionId.equals(connectionId))
+          ..orderBy([(f) => OrderingTerm.asc(f.sortOrder)]))
+        .get();
+  }
+
+  /// Stream des dossiers de favoris pour une connexion
+  Stream<List<FavoriteFolder>> watchFavoriteFoldersByConnection(int connectionId) {
+    return (select(favoriteFolders)
+          ..where((f) => f.connectionId.equals(connectionId))
+          ..orderBy([(f) => OrderingTerm.asc(f.sortOrder)]))
+        .watch();
+  }
+
+  /// Crée un nouveau dossier de favoris
+  Future<int> createFavoriteFolder(FavoriteFoldersCompanion folder) async {
+    // Calculer le prochain sortOrder
+    final maxOrder = favoriteFolders.sortOrder.max();
+    final query = selectOnly(favoriteFolders)
+      ..addColumns([maxOrder])
+      ..where(favoriteFolders.connectionId.equals(folder.connectionId.value));
+    final result = await query.getSingleOrNull();
+    final nextOrder = (result?.read(maxOrder) ?? -1) + 1;
+
+    return into(favoriteFolders).insert(
+      folder.copyWith(sortOrder: Value(nextOrder)),
+    );
+  }
+
+  /// Met à jour un dossier de favoris
+  Future<bool> updateFavoriteFolder(FavoriteFolder folder) {
+    return update(favoriteFolders).replace(folder);
+  }
+
+  /// Met à jour les propriétés d'un dossier
+  Future<void> updateFavoriteFolderProperties({
+    required int folderId,
+    String? name,
+    String? color,
+    String? icon,
+  }) async {
+    await (update(favoriteFolders)..where((f) => f.id.equals(folderId))).write(
+      FavoriteFoldersCompanion(
+        name: name != null ? Value(name) : const Value.absent(),
+        color: color != null ? Value(color) : const Value.absent(),
+        icon: icon != null ? Value(icon) : const Value.absent(),
+      ),
+    );
+  }
+
+  /// Supprime un dossier de favoris (et ses assignations)
+  Future<void> deleteFavoriteFolder(int folderId) async {
+    // D'abord supprimer les assignations
+    await (delete(favoriteFolderAssignments)
+          ..where((a) => a.folderId.equals(folderId)))
+        .go();
+    // Puis le dossier
+    await (delete(favoriteFolders)..where((f) => f.id.equals(folderId))).go();
+  }
+
+  /// Réordonne les dossiers de favoris
+  Future<void> reorderFavoriteFolders(int connectionId, List<int> folderIds) async {
+    await transaction(() async {
+      for (int i = 0; i < folderIds.length; i++) {
+        await (update(favoriteFolders)..where((f) => f.id.equals(folderIds[i])))
+            .write(FavoriteFoldersCompanion(sortOrder: Value(i)));
+      }
+    });
+  }
+
+  // ==========================================================================
+  // === ASSIGNATION FAVORIS <-> DOSSIERS ===
+  // ==========================================================================
+
+  /// Récupère les dossiers assignés à un favori
+  Future<List<FavoriteFolder>> getFoldersForFavorite(int favoriteId) async {
+    final query = select(favoriteFolders).join([
+      innerJoin(
+        favoriteFolderAssignments,
+        favoriteFolderAssignments.folderId.equalsExp(favoriteFolders.id),
+      ),
+    ])
+      ..where(favoriteFolderAssignments.favoriteId.equals(favoriteId))
+      ..orderBy([OrderingTerm.asc(favoriteFolders.sortOrder)]);
+
+    final results = await query.get();
+    return results.map((row) => row.readTable(favoriteFolders)).toList();
+  }
+
+  /// Stream des IDs de dossiers assignés à un favori
+  Stream<List<int>> watchFolderIdsForFavorite(int favoriteId) {
+    return (select(favoriteFolderAssignments)
+          ..where((a) => a.favoriteId.equals(favoriteId)))
+        .watch()
+        .map((assignments) => assignments.map((a) => a.folderId).toList());
+  }
+
+  /// Récupère les favoris d'un dossier
+  Future<List<Favorite>> getFavoritesInFolder(int folderId) async {
+    final query = select(favorites).join([
+      innerJoin(
+        favoriteFolderAssignments,
+        favoriteFolderAssignments.favoriteId.equalsExp(favorites.id),
+      ),
+    ])
+      ..where(favoriteFolderAssignments.folderId.equals(folderId))
+      ..orderBy([OrderingTerm.asc(favorites.sortOrder)]);
+
+    final results = await query.get();
+    return results.map((row) => row.readTable(favorites)).toList();
+  }
+
+  /// Stream des favoris d'un dossier
+  Stream<List<Favorite>> watchFavoritesInFolder(int folderId) {
+    final query = select(favorites).join([
+      innerJoin(
+        favoriteFolderAssignments,
+        favoriteFolderAssignments.favoriteId.equalsExp(favorites.id),
+      ),
+    ])
+      ..where(favoriteFolderAssignments.folderId.equals(folderId))
+      ..orderBy([OrderingTerm.asc(favorites.sortOrder)]);
+
+    return query.watch().map(
+          (rows) => rows.map((row) => row.readTable(favorites)).toList(),
+        );
+  }
+
+  /// Récupère les favoris sans dossier pour une connexion
+  Future<List<Favorite>> getUnassignedFavorites(int connectionId) async {
+    // Sous-requête : IDs des favoris qui ont au moins un dossier
+    final assignedIds = selectOnly(favoriteFolderAssignments, distinct: true)
+      ..addColumns([favoriteFolderAssignments.favoriteId]);
+
+    final query = select(favorites)
+      ..where((f) =>
+          f.connectionId.equals(connectionId) &
+          f.id.isNotInQuery(assignedIds))
+      ..orderBy([(f) => OrderingTerm.asc(f.sortOrder)]);
+
+    return query.get();
+  }
+
+  /// Stream des favoris sans dossier pour une connexion
+  Stream<List<Favorite>> watchUnassignedFavorites(int connectionId) {
+    final assignedIds = selectOnly(favoriteFolderAssignments, distinct: true)
+      ..addColumns([favoriteFolderAssignments.favoriteId]);
+
+    final query = select(favorites)
+      ..where((f) =>
+          f.connectionId.equals(connectionId) &
+          f.id.isNotInQuery(assignedIds))
+      ..orderBy([(f) => OrderingTerm.asc(f.sortOrder)]);
+
+    return query.watch();
+  }
+
+  /// Assigne un favori à un dossier
+  Future<void> assignFavoriteToFolder(int favoriteId, int folderId) async {
+    await into(favoriteFolderAssignments).insert(
+      FavoriteFolderAssignmentsCompanion.insert(
+        favoriteId: favoriteId,
+        folderId: folderId,
+      ),
+      mode: InsertMode.insertOrIgnore,
+    );
+  }
+
+  /// Retire un favori d'un dossier
+  Future<void> unassignFavoriteFromFolder(int favoriteId, int folderId) async {
+    await (delete(favoriteFolderAssignments)
+          ..where((a) =>
+              a.favoriteId.equals(favoriteId) & a.folderId.equals(folderId)))
+        .go();
+  }
+
+  /// Met à jour les dossiers d'un favori (remplace toutes les assignations)
+  Future<void> setFavoriteFolders(int favoriteId, List<int> folderIds) async {
+    await transaction(() async {
+      // Supprimer les anciennes assignations
+      await (delete(favoriteFolderAssignments)
+            ..where((a) => a.favoriteId.equals(favoriteId)))
+          .go();
+
+      // Ajouter les nouvelles
+      for (final folderId in folderIds) {
+        await into(favoriteFolderAssignments).insert(
+          FavoriteFolderAssignmentsCompanion.insert(
+            favoriteId: favoriteId,
+            folderId: folderId,
+          ),
+        );
+      }
+    });
+  }
+
+  /// Compte les favoris dans un dossier
+  Future<int> countFavoritesInFolder(int folderId) async {
+    final count = favoriteFolderAssignments.id.count();
+    final query = selectOnly(favoriteFolderAssignments)
+      ..addColumns([count])
+      ..where(favoriteFolderAssignments.folderId.equals(folderId));
+    final result = await query.getSingle();
+    return result.read(count) ?? 0;
+  }
+
+  /// Récupère tous les dossiers avec leur nombre de favoris pour une connexion
+  Future<Map<int, int>> getFolderFavoriteCounts(int connectionId) async {
+    final folders = await getFavoriteFoldersByConnection(connectionId);
+    final counts = <int, int>{};
+    for (final folder in folders) {
+      counts[folder.id] = await countFavoritesInFolder(folder.id);
+    }
+    return counts;
+  }
+
+  // ==========================================================================
+  // === SYNOPTIQUES ===
+  // ==========================================================================
+
+  /// Récupère tous les synoptiques (globaux + spécifiques à une connexion)
+  Future<List<Synoptic>> getAllSynoptics() {
+    return (select(synoptics)..orderBy([(s) => OrderingTerm.asc(s.sortOrder)])).get();
+  }
+
+  /// Stream de tous les synoptiques
+  Stream<List<Synoptic>> watchAllSynoptics() {
+    return (select(synoptics)..orderBy([(s) => OrderingTerm.asc(s.sortOrder)])).watch();
+  }
+
+  /// Récupère les synoptiques disponibles pour une connexion (globaux + spécifiques)
+  Future<List<Synoptic>> getSynopticsForConnection(int? connectionId) {
+    if (connectionId == null) {
+      // Seulement les globaux
+      return (select(synoptics)
+            ..where((s) => s.connectionId.isNull())
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+          .get();
+    }
+    // Globaux + spécifiques à cette connexion
+    return (select(synoptics)
+          ..where((s) => s.connectionId.isNull() | s.connectionId.equals(connectionId))
+          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+        .get();
+  }
+
+  /// Stream des synoptiques pour une connexion
+  Stream<List<Synoptic>> watchSynopticsForConnection(int? connectionId) {
+    if (connectionId == null) {
+      return (select(synoptics)
+            ..where((s) => s.connectionId.isNull())
+            ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+          .watch();
+    }
+    return (select(synoptics)
+          ..where((s) => s.connectionId.isNull() | s.connectionId.equals(connectionId))
+          ..orderBy([(s) => OrderingTerm.asc(s.sortOrder)]))
+        .watch();
+  }
+
+  /// Récupère un synoptique par son ID
+  Future<Synoptic?> getSynopticById(int id) {
+    return (select(synoptics)..where((s) => s.id.equals(id))).getSingleOrNull();
+  }
+
+  /// Crée un nouveau synoptique
+  Future<int> createSynoptic(SynopticsCompanion synoptic) async {
+    // Calculer le prochain sortOrder
+    final maxOrder = synoptics.sortOrder.max();
+    final query = selectOnly(synoptics)..addColumns([maxOrder]);
+    final result = await query.getSingleOrNull();
+    final nextOrder = (result?.read(maxOrder) ?? -1) + 1;
+
+    return into(synoptics).insert(
+      synoptic.copyWith(sortOrder: Value(nextOrder)),
+    );
+  }
+
+  /// Met à jour un synoptique
+  Future<bool> updateSynoptic(Synoptic synoptic) {
+    return update(synoptics).replace(synoptic);
+  }
+
+  /// Met à jour les propriétés d'un synoptique
+  Future<void> updateSynopticProperties({
+    required int synopticId,
+    String? name,
+    String? description,
+    int? connectionId,
+  }) async {
+    await (update(synoptics)..where((s) => s.id.equals(synopticId))).write(
+      SynopticsCompanion(
+        name: name != null ? Value(name) : const Value.absent(),
+        description: description != null ? Value(description) : const Value.absent(),
+        connectionId: connectionId != null ? Value(connectionId) : const Value.absent(),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Supprime un synoptique et ses liaisons
+  Future<void> deleteSynoptic(int synopticId) async {
+    await transaction(() async {
+      // D'abord supprimer les liaisons
+      await (delete(synopticBindings)..where((b) => b.synopticId.equals(synopticId))).go();
+      // Puis le synoptique
+      await (delete(synoptics)..where((s) => s.id.equals(synopticId))).go();
+    });
+  }
+
+  /// Réordonne les synoptiques
+  Future<void> reorderSynoptics(List<int> synopticIds) async {
+    await transaction(() async {
+      for (int i = 0; i < synopticIds.length; i++) {
+        await (update(synoptics)..where((s) => s.id.equals(synopticIds[i])))
+            .write(SynopticsCompanion(sortOrder: Value(i)));
+      }
+    });
+  }
+
+  // ==========================================================================
+  // === LIAISONS SYNOPTIQUES (BINDINGS) ===
+  // ==========================================================================
+
+  /// Récupère toutes les liaisons d'un synoptique
+  Future<List<SynopticBinding>> getBindingsForSynoptic(int synopticId) {
+    return (select(synopticBindings)..where((b) => b.synopticId.equals(synopticId))).get();
+  }
+
+  /// Stream des liaisons d'un synoptique
+  Stream<List<SynopticBinding>> watchBindingsForSynoptic(int synopticId) {
+    return (select(synopticBindings)..where((b) => b.synopticId.equals(synopticId))).watch();
+  }
+
+  /// Récupère une liaison par son ID
+  Future<SynopticBinding?> getBindingById(int id) {
+    return (select(synopticBindings)..where((b) => b.id.equals(id))).getSingleOrNull();
+  }
+
+  /// Récupère une liaison par synoptique et élément SVG
+  Future<SynopticBinding?> getBindingByElement(int synopticId, String svgElementId) {
+    return (select(synopticBindings)
+          ..where((b) => b.synopticId.equals(synopticId) & b.svgElementId.equals(svgElementId)))
+        .getSingleOrNull();
+  }
+
+  /// Crée ou met à jour une liaison (upsert)
+  Future<int> upsertBinding(SynopticBindingsCompanion binding) async {
+    // On doit d'abord vérifier si une liaison existe déjà pour cet élément SVG
+    final existing = await getBindingByElement(
+      binding.synopticId.value,
+      binding.svgElementId.value,
+    );
+
+    if (existing != null) {
+      // Mettre à jour la liaison existante
+      await (update(synopticBindings)..where((b) => b.id.equals(existing.id))).write(
+        SynopticBindingsCompanion(
+          pointRef: binding.pointRef,
+          bindingType: binding.bindingType,
+          configJson: binding.configJson,
+          pointName: binding.pointName,
+        ),
+      );
+      return existing.id;
+    } else {
+      // Créer une nouvelle liaison
+      return into(synopticBindings).insert(binding);
+    }
+  }
+
+  /// Crée une nouvelle liaison
+  Future<int> createBinding(SynopticBindingsCompanion binding) {
+    return into(synopticBindings).insert(binding);
+  }
+
+  /// Met à jour une liaison existante
+  Future<void> updateBinding({
+    required int bindingId,
+    String? pointRef,
+    BindingType? bindingType,
+    String? configJson,
+    String? pointName,
+  }) async {
+    await (update(synopticBindings)..where((b) => b.id.equals(bindingId))).write(
+      SynopticBindingsCompanion(
+        pointRef: pointRef != null ? Value(pointRef) : const Value.absent(),
+        bindingType: bindingType != null ? Value(bindingType) : const Value.absent(),
+        configJson: configJson != null ? Value(configJson) : const Value.absent(),
+        pointName: pointName != null ? Value(pointName) : const Value.absent(),
+      ),
+    );
+  }
+
+  /// Supprime une liaison
+  Future<int> deleteBinding(int bindingId) {
+    return (delete(synopticBindings)..where((b) => b.id.equals(bindingId))).go();
+  }
+
+  /// Supprime une liaison par synoptique et élément
+  Future<int> deleteBindingByElement(int synopticId, String svgElementId) {
+    return (delete(synopticBindings)
+          ..where((b) => b.synopticId.equals(synopticId) & b.svgElementId.equals(svgElementId)))
+        .go();
+  }
+
+  /// Supprime toutes les liaisons d'un synoptique
+  Future<int> deleteAllBindingsForSynoptic(int synopticId) {
+    return (delete(synopticBindings)..where((b) => b.synopticId.equals(synopticId))).go();
+  }
+
+  /// Compte les liaisons d'un synoptique
+  Future<int> countBindings(int synopticId) async {
+    final count = synopticBindings.id.count();
+    final query = selectOnly(synopticBindings)
+      ..addColumns([count])
+      ..where(synopticBindings.synopticId.equals(synopticId));
+    final result = await query.getSingle();
+    return result.read(count) ?? 0;
+  }
+
+  /// Récupère les points référencés par un synoptique (pour chargement batch)
+  Future<List<String>> getPointRefsForSynoptic(int synopticId) async {
+    final bindings = await getBindingsForSynoptic(synopticId);
+    return bindings.map((b) => b.pointRef).toSet().toList();
   }
 }
