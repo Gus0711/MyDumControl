@@ -56,12 +56,13 @@ class BacnetService {
     _logger.d('BACnet service initialized on port ${_socket!.port}');
   }
 
-  /// Ferme le socket
+  /// Ferme le socket et libère les ressources
   void dispose() {
     _socket?.close();
     _socket = null;
     _isInitialized = false;
     _pendingRequests.clear();
+    _iAmController.close(); // Fermer le StreamController pour éviter les fuites mémoire
     _logger.d('BACnet service disposed');
   }
 
@@ -1113,7 +1114,9 @@ class BacnetService {
   }) async {
     _logger.i('readTrendLogBuffer: starting for TrendLog $trendLogInstance on $host:$port');
 
-    final allRecords = <TrendLogRecordData>[];
+    // Utiliser une liste temporaire pour éviter insertAll(0,...) qui est O(n)
+    // On collecte les records en ordre inverse puis on inverse à la fin -> O(n) total
+    final tempRecords = <TrendLogRecordData>[];
 
     // Lire par chunks (le BACnet peut limiter la taille de réponse)
     // Note: Les contrôleurs Distech retournent max ~65 records par requête
@@ -1128,9 +1131,9 @@ class BacnetService {
 
     _logger.i('readTrendLogBuffer: reading up to $recordsToRead records backwards from ${referenceTime.toIso8601String()}');
 
-    while (moreData && allRecords.length < recordsToRead) {
+    while (moreData && tempRecords.length < recordsToRead) {
       iteration++;
-      final remaining = recordsToRead - allRecords.length;
+      final remaining = recordsToRead - tempRecords.length;
       // Count négatif = lire vers le passé depuis referenceTime
       final requestCount = -remaining.clamp(1, chunkSize);
 
@@ -1168,8 +1171,8 @@ class BacnetService {
       }
 
       // Les records sont retournés du plus récent au plus ancien avec count négatif
-      // On les ajoute au début pour garder l'ordre chronologique
-      allRecords.insertAll(0, result.records);
+      // On les ajoute à la fin (ordre inverse), on inversera à la fin
+      tempRecords.addAll(result.records);
 
       // Mettre à jour referenceTime pour la prochaine itération
       // Prendre le timestamp du record le plus ancien reçu
@@ -1183,8 +1186,11 @@ class BacnetService {
       final receivedLessThanRequested = result.records.length < requestCount.abs();
       moreData = !receivedLessThanRequested && result.records.isNotEmpty;
 
-      _logger.d('readTrendLogBuffer: total so far: ${allRecords.length}, receivedLessThanRequested=$receivedLessThanRequested, continue: $moreData');
+      _logger.d('readTrendLogBuffer: total so far: ${tempRecords.length}, receivedLessThanRequested=$receivedLessThanRequested, continue: $moreData');
     }
+
+    // Inverser pour obtenir l'ordre chronologique (du plus ancien au plus récent)
+    final allRecords = tempRecords.reversed.toList();
 
     _logger.i('readTrendLogBuffer: completed with ${allRecords.length} total records');
     return allRecords;

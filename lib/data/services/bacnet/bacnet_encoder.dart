@@ -1,8 +1,37 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'bacnet_constants.dart';
 
 /// Encodeur de paquets BACnet/IP
 class BacnetEncoder {
+  // =========================================================================
+  // Méthode utilitaire pour l'assemblage des paquets
+  // =========================================================================
+
+  /// Assemble un paquet BACnet/IP complet (BVLC + NPDU + APDU)
+  /// Réduit la duplication de code dans les méthodes d'encodage
+  static Uint8List _assemblePacket({
+    required Uint8List apdu,
+    required bool expectingReply,
+    bool broadcast = false,
+  }) {
+    final npdu = _encodeNpduUnicast(expectingReply: expectingReply);
+    final totalLength = 4 + npdu.length + apdu.length;
+    final bvlc = broadcast
+        ? _encodeBvlcBroadcast(totalLength)
+        : _encodeBvlcUnicast(totalLength);
+
+    return (BytesBuilder()
+          ..add(bvlc)
+          ..add(npdu)
+          ..add(apdu))
+        .toBytes();
+  }
+
+  // =========================================================================
+  // Public API
+  // =========================================================================
+
   /// Encode un paquet BACnet/IP complet pour ReadProperty
   static Uint8List encodeReadPropertyRequest({
     required int invokeId,
@@ -11,7 +40,6 @@ class BacnetEncoder {
     required int propertyId,
     int? arrayIndex,
   }) {
-    // 1. Construire l'APDU
     final apdu = _encodeReadPropertyApdu(
       invokeId: invokeId,
       objectType: objectType,
@@ -19,21 +47,7 @@ class BacnetEncoder {
       propertyId: propertyId,
       arrayIndex: arrayIndex,
     );
-
-    // 2. Construire le NPDU (unicast simple, expecting reply)
-    final npdu = _encodeNpduUnicast(expectingReply: true);
-
-    // 3. Construire le BVLC
-    final totalLength = 4 + npdu.length + apdu.length;
-    final bvlc = _encodeBvlcUnicast(totalLength);
-
-    // 4. Assembler le paquet complet
-    final packet = BytesBuilder();
-    packet.add(bvlc);
-    packet.add(npdu);
-    packet.add(apdu);
-
-    return packet.toBytes();
+    return _assemblePacket(apdu: apdu, expectingReply: true);
   }
 
   /// Encode un paquet BACnet/IP complet pour WriteProperty
@@ -46,7 +60,6 @@ class BacnetEncoder {
     int? priority,
     int? arrayIndex,
   }) {
-    // 1. Construire l'APDU
     final apdu = _encodeWritePropertyApdu(
       invokeId: invokeId,
       objectType: objectType,
@@ -56,21 +69,7 @@ class BacnetEncoder {
       priority: priority,
       arrayIndex: arrayIndex,
     );
-
-    // 2. Construire le NPDU
-    final npdu = _encodeNpduUnicast(expectingReply: true);
-
-    // 3. Construire le BVLC
-    final totalLength = 4 + npdu.length + apdu.length;
-    final bvlc = _encodeBvlcUnicast(totalLength);
-
-    // 4. Assembler
-    final packet = BytesBuilder();
-    packet.add(bvlc);
-    packet.add(npdu);
-    packet.add(apdu);
-
-    return packet.toBytes();
+    return _assemblePacket(apdu: apdu, expectingReply: true);
   }
 
   /// Encode un paquet Who-Is (broadcast ou unicast)
@@ -79,25 +78,12 @@ class BacnetEncoder {
     int? highLimit,
     bool broadcast = true,
   }) {
-    // 1. Construire l'APDU Who-Is
     final apdu = _encodeWhoIsApdu(lowLimit: lowLimit, highLimit: highLimit);
-
-    // 2. Construire le NPDU
-    final npdu = _encodeNpduUnicast(expectingReply: false);
-
-    // 3. Construire le BVLC
-    final totalLength = 4 + npdu.length + apdu.length;
-    final bvlc = broadcast
-        ? _encodeBvlcBroadcast(totalLength)
-        : _encodeBvlcUnicast(totalLength);
-
-    // 4. Assembler
-    final packet = BytesBuilder();
-    packet.add(bvlc);
-    packet.add(npdu);
-    packet.add(apdu);
-
-    return packet.toBytes();
+    return _assemblePacket(
+      apdu: apdu,
+      expectingReply: false,
+      broadcast: broadcast,
+    );
   }
 
   /// Encode un paquet ReadPropertyMultiple
@@ -105,26 +91,11 @@ class BacnetEncoder {
     required int invokeId,
     required List<ReadPropertyMultipleItem> items,
   }) {
-    // 1. Construire l'APDU
     final apdu = _encodeReadPropertyMultipleApdu(
       invokeId: invokeId,
       items: items,
     );
-
-    // 2. NPDU
-    final npdu = _encodeNpduUnicast(expectingReply: true);
-
-    // 3. BVLC
-    final totalLength = 4 + npdu.length + apdu.length;
-    final bvlc = _encodeBvlcUnicast(totalLength);
-
-    // 4. Assembler
-    final packet = BytesBuilder();
-    packet.add(bvlc);
-    packet.add(npdu);
-    packet.add(apdu);
-
-    return packet.toBytes();
+    return _assemblePacket(apdu: apdu, expectingReply: true);
   }
 
   // =========================================================================
@@ -431,11 +402,12 @@ class BacnetEncoder {
   }
 
   /// Encode une CharacterString avec application tag
+  /// Utilise l'encodage UTF-8 pour supporter les caractères internationaux
   static void _encodeApplicationCharacterString(
     BytesBuilder builder,
     String value,
   ) {
-    final utf8Bytes = value.codeUnits; // Simple ASCII, pour UTF-8 utiliser utf8.encode
+    final utf8Bytes = utf8.encode(value); // Encodage UTF-8 correct
     final length = utf8Bytes.length + 1; // +1 for encoding byte
 
     if (length <= 4) {
@@ -450,7 +422,7 @@ class BacnetEncoder {
       builder.addByte(length & 0xFF);
     }
 
-    // Character encoding: 0 = UTF-8 (ANSI X3.4)
+    // Character encoding: 0 = UTF-8
     builder.addByte(0x00);
     builder.add(utf8Bytes);
   }
@@ -485,7 +457,6 @@ class BacnetEncoder {
     int? count,
     DateTime? referenceTime,
   }) {
-    // 1. Construire l'APDU
     final apdu = _encodeReadRangeApdu(
       invokeId: invokeId,
       objectType: objectType,
@@ -497,21 +468,7 @@ class BacnetEncoder {
       count: count,
       referenceTime: referenceTime,
     );
-
-    // 2. NPDU
-    final npdu = _encodeNpduUnicast(expectingReply: true);
-
-    // 3. BVLC
-    final totalLength = 4 + npdu.length + apdu.length;
-    final bvlc = _encodeBvlcUnicast(totalLength);
-
-    // 4. Assembler
-    final packet = BytesBuilder();
-    packet.add(bvlc);
-    packet.add(npdu);
-    packet.add(apdu);
-
-    return packet.toBytes();
+    return _assemblePacket(apdu: apdu, expectingReply: true);
   }
 
   /// Encode l'APDU pour ReadRange
