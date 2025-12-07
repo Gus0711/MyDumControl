@@ -9,6 +9,7 @@ import 'database_provider.dart';
 import 'cache_provider.dart';
 import 'points_provider.dart';
 import 'schedule_provider.dart';
+import 'bacnet_provider.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
@@ -28,6 +29,10 @@ class ActiveConnectionState {
   final bool deviceInfoFromCache;
   final bool summaryFromCache;
 
+  /// Pour les connexions BACnet natives
+  final bool isBacnetConnection;
+  final int? bacnetDeviceId;
+
   const ActiveConnectionState({
     this.connection,
     this.client,
@@ -40,9 +45,12 @@ class ActiveConnectionState {
     this.error,
     this.deviceInfoFromCache = false,
     this.summaryFromCache = false,
+    this.isBacnetConnection = false,
+    this.bacnetDeviceId,
   });
 
-  bool get isConnected => client != null && connection != null;
+  /// Connexion établie (API ou BACnet)
+  bool get isConnected => (client != null || isBacnetConnection) && connection != null;
   bool get isLoading => isConnecting || isLoadingDeviceInfo || isLoadingSummary;
 
   ActiveConnectionState copyWith({
@@ -57,6 +65,8 @@ class ActiveConnectionState {
     String? error,
     bool? deviceInfoFromCache,
     bool? summaryFromCache,
+    bool? isBacnetConnection,
+    int? bacnetDeviceId,
   }) {
     return ActiveConnectionState(
       connection: connection ?? this.connection,
@@ -70,6 +80,8 @@ class ActiveConnectionState {
       error: error,
       deviceInfoFromCache: deviceInfoFromCache ?? this.deviceInfoFromCache,
       summaryFromCache: summaryFromCache ?? this.summaryFromCache,
+      isBacnetConnection: isBacnetConnection ?? this.isBacnetConnection,
+      bacnetDeviceId: bacnetDeviceId ?? this.bacnetDeviceId,
     );
   }
 }
@@ -111,76 +123,19 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
         return false;
       }
 
-      _logger.i('connect: connection=${connection.name}, host=${connection.host}:${connection.port}, apiVersion=${connection.apiVersion}');
+      _logger.i('connect: connection=${connection.name}, host=${connection.host}:${connection.port}, type=${connection.connectionType}');
 
-      // Récupérer le mot de passe
-      final secureStorage = _ref.read(secureStorageProvider);
-      final password = await secureStorage.read(key: connection.passwordKey);
-
-      if (password == null) {
-        _logger.e('connect: mot de passe introuvable');
-        state = state.copyWith(
-          isConnecting: false,
-          error: 'Mot de passe introuvable',
-        );
-        return false;
+      // ========================================
+      // CONNEXION BACNET NATIVE
+      // ========================================
+      if (connection.connectionType == 'bacnet') {
+        return _connectBacnet(connection);
       }
 
-      // Construire l'URL et l'auth
-      final scheme = connection.useHttps ? 'https' : 'http';
-      final baseUrl = '$scheme://${connection.host}:${connection.port}';
-      final basicAuth = 'Basic ${base64Encode(utf8.encode('${connection.username}:$password'))}';
-      final apiVersion = connection.apiVersion ?? 'V2';
-
-      _logger.i('connect: baseUrl=$baseUrl, apiVersion=$apiVersion');
-
-      // Créer le client
-      final client = ConnectedApiClient(
-        baseUrl: baseUrl,
-        basicAuth: basicAuth,
-        apiVersion: apiVersion,
-      );
-
-      // Mettre à jour la date de dernière connexion
-      await database.updateLastConnectedAt(connectionId);
-
-      // CONNEXION IMMÉDIATE - L'UI peut naviguer maintenant!
-      _logger.i('connect: connected! Loading cache first, then fresh data...');
-
-      // Charger immédiatement depuis le cache (si disponible)
-      final cacheService = _ref.read(cacheServiceProvider);
-      final cachedDeviceInfo = await cacheService.getCachedDeviceInfo(connectionId);
-      final cachedSummary = await cacheService.getCachedObjectsSummary(connectionId);
-
-      if (cachedDeviceInfo != null) {
-        _logger.i('connect: deviceInfo loaded from cache: ${cachedDeviceInfo.objectName}');
-      }
-      if (cachedSummary != null) {
-        _logger.i('connect: objectsSummary loaded from cache: ${cachedSummary.total} objets');
-      }
-
-      // TOUJOURS afficher l'animation de chargement (même avec cache)
-      // pour une UX cohérente entre V1 et V2
-      state = ActiveConnectionState(
-        connection: connection,
-        client: client,
-        isConnecting: false,
-        // Afficher les données du cache immédiatement
-        deviceInfo: cachedDeviceInfo,
-        objectsSummary: cachedSummary,
-        deviceInfoFromCache: cachedDeviceInfo != null,
-        summaryFromCache: cachedSummary != null,
-        // Toujours mettre isLoading à true pour afficher l'animation
-        // Le chargement en arrière-plan les passera à false
-        isLoadingDeviceInfo: true,
-        isLoadingSummary: true,
-      );
-
-      // CHARGER LES DONNÉES FRAÎCHES EN ARRIÈRE-PLAN (sans bloquer)
-      // Cela mettra à jour le cache et l'UI
-      _loadDataInBackground(client, connectionId, connection.name);
-
-      return true;
+      // ========================================
+      // CONNEXION API DISTECH (comportement existant)
+      // ========================================
+      return _connectDistechApi(connection);
     } catch (e) {
       _logger.e('connect: error: $e');
       state = state.copyWith(
@@ -189,6 +144,222 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       );
       return false;
     }
+  }
+
+  /// Connexion BACnet native
+  Future<bool> _connectBacnet(Connection connection) async {
+    _logger.i('_connectBacnet: connecting to ${connection.host}:${connection.port}');
+
+    final bacnetService = _ref.read(bacnetServiceProvider);
+    final database = _ref.read(databaseProvider);
+
+    // Déterminer le Device ID (soit enregistré, soit à découvrir)
+    int? deviceId = connection.bacnetDeviceId;
+
+    if (deviceId == null) {
+      // Essayer de découvrir le device ID
+      _logger.i('_connectBacnet: discovering device ID via Who-Is...');
+      final devices = await bacnetService.whoIs(
+        host: connection.host,
+        port: connection.port,
+        timeout: const Duration(seconds: 3),
+      );
+
+      if (devices.isEmpty) {
+        _logger.e('_connectBacnet: no BACnet device responded');
+        state = state.copyWith(
+          isConnecting: false,
+          error: 'Aucun device BACnet n\'a répondu',
+        );
+        return false;
+      }
+
+      deviceId = devices.first.deviceId;
+      _logger.i('_connectBacnet: discovered device ID: $deviceId');
+    }
+
+    // Mettre à jour la date de dernière connexion
+    await database.updateLastConnectedAt(connection.id);
+
+    // Mettre à jour le provider BACnet actif
+    _ref.read(activeBacnetConnectionProvider.notifier).state = ActiveBacnetConnection(
+      connectionId: connection.id,
+      host: connection.host,
+      port: connection.port,
+      deviceId: deviceId,
+    );
+
+    // CONNEXION ÉTABLIE
+    _logger.i('_connectBacnet: connected! Device ID: $deviceId');
+
+    state = ActiveConnectionState(
+      connection: connection,
+      client: null, // Pas de client API pour BACnet
+      isConnecting: false,
+      isBacnetConnection: true,
+      bacnetDeviceId: deviceId,
+      isLoadingDeviceInfo: true,
+      isLoadingSummary: true,
+    );
+
+    // Charger les données BACnet en arrière-plan
+    _loadBacnetDataInBackground(connection, deviceId);
+
+    return true;
+  }
+
+  /// Charge les données BACnet en arrière-plan
+  void _loadBacnetDataInBackground(Connection connection, int deviceId) async {
+    final bacnetService = _ref.read(bacnetServiceProvider);
+
+    try {
+      // Lire les propriétés du device
+      final nameResult = await bacnetService.readProperty(
+        host: connection.host,
+        port: connection.port,
+        objectType: 8, // Device
+        objectInstance: deviceId,
+        propertyId: 77, // object-name
+      );
+
+      String deviceName = connection.name;
+      if (nameResult.isSuccess && nameResult.value is String) {
+        deviceName = nameResult.value as String;
+      }
+
+      // Lire vendor-name
+      String? vendorName;
+      final vendorResult = await bacnetService.readProperty(
+        host: connection.host,
+        port: connection.port,
+        objectType: 8,
+        objectInstance: deviceId,
+        propertyId: 121, // vendor-name
+      );
+      if (vendorResult.isSuccess && vendorResult.value is String) {
+        vendorName = vendorResult.value as String;
+      }
+
+      // Lire model-name
+      String? modelName;
+      final modelResult = await bacnetService.readProperty(
+        host: connection.host,
+        port: connection.port,
+        objectType: 8,
+        objectInstance: deviceId,
+        propertyId: 70, // model-name
+      );
+      if (modelResult.isSuccess && modelResult.value is String) {
+        modelName = modelResult.value as String;
+      }
+
+      if (mounted) {
+        state = state.copyWith(
+          deviceInfo: DeviceInfo(
+            objectName: deviceName,
+            vendorName: vendorName,
+            modelName: modelName,
+            deviceInstance: deviceId,
+          ),
+          isLoadingDeviceInfo: false,
+        );
+      }
+
+      _logger.i('_loadBacnetDataInBackground: deviceInfo loaded: $deviceName');
+    } catch (e) {
+      _logger.w('_loadBacnetDataInBackground: failed to load device info: $e');
+      if (mounted) {
+        state = state.copyWith(
+          deviceInfo: DeviceInfo(objectName: connection.name, deviceInstance: deviceId),
+          isLoadingDeviceInfo: false,
+        );
+      }
+    }
+
+    // Pour l'instant, objectsSummary n'est pas disponible via BACnet natif
+    // On pourrait le calculer en lisant object-list mais c'est lent
+    if (mounted) {
+      state = state.copyWith(
+        objectsSummary: ObjectsSummary(), // Vide pour l'instant
+        isLoadingSummary: false,
+      );
+    }
+  }
+
+  /// Connexion API Distech
+  Future<bool> _connectDistechApi(Connection connection) async {
+    _logger.i('_connectDistechApi: connecting to ${connection.host}:${connection.port}');
+
+    // Récupérer le mot de passe
+    final secureStorage = _ref.read(secureStorageProvider);
+    final password = await secureStorage.read(key: connection.passwordKey);
+
+    if (password == null) {
+      _logger.e('_connectDistechApi: mot de passe introuvable');
+      state = state.copyWith(
+        isConnecting: false,
+        error: 'Mot de passe introuvable',
+      );
+      return false;
+    }
+
+    // Construire l'URL et l'auth
+    final scheme = connection.useHttps ? 'https' : 'http';
+    final baseUrl = '$scheme://${connection.host}:${connection.port}';
+    final basicAuth = 'Basic ${base64Encode(utf8.encode('${connection.username}:$password'))}';
+    final apiVersion = connection.apiVersion ?? 'V2';
+
+    _logger.i('_connectDistechApi: baseUrl=$baseUrl, apiVersion=$apiVersion');
+
+    // Créer le client
+    final client = ConnectedApiClient(
+      baseUrl: baseUrl,
+      basicAuth: basicAuth,
+      apiVersion: apiVersion,
+    );
+
+    // Mettre à jour la date de dernière connexion
+    final database = _ref.read(databaseProvider);
+    await database.updateLastConnectedAt(connection.id);
+
+    // CONNEXION IMMÉDIATE - L'UI peut naviguer maintenant!
+    _logger.i('_connectDistechApi: connected! Loading cache first, then fresh data...');
+
+    // Charger immédiatement depuis le cache (si disponible)
+    final cacheService = _ref.read(cacheServiceProvider);
+    final cachedDeviceInfo = await cacheService.getCachedDeviceInfo(connection.id);
+    final cachedSummary = await cacheService.getCachedObjectsSummary(connection.id);
+
+    if (cachedDeviceInfo != null) {
+      _logger.i('_connectDistechApi: deviceInfo loaded from cache: ${cachedDeviceInfo.objectName}');
+    }
+    if (cachedSummary != null) {
+      _logger.i('_connectDistechApi: objectsSummary loaded from cache: ${cachedSummary.total} objets');
+    }
+
+    // TOUJOURS afficher l'animation de chargement (même avec cache)
+    // pour une UX cohérente entre V1 et V2
+    state = ActiveConnectionState(
+      connection: connection,
+      client: client,
+      isConnecting: false,
+      isBacnetConnection: false,
+      // Afficher les données du cache immédiatement
+      deviceInfo: cachedDeviceInfo,
+      objectsSummary: cachedSummary,
+      deviceInfoFromCache: cachedDeviceInfo != null,
+      summaryFromCache: cachedSummary != null,
+      // Toujours mettre isLoading à true pour afficher l'animation
+      // Le chargement en arrière-plan les passera à false
+      isLoadingDeviceInfo: true,
+      isLoadingSummary: true,
+    );
+
+    // CHARGER LES DONNÉES FRAÎCHES EN ARRIÈRE-PLAN (sans bloquer)
+    // Cela mettra à jour le cache et l'UI
+    _loadDataInBackground(client, connection.id, connection.name);
+
+    return true;
   }
 
   /// Charge les données en arrière-plan sans bloquer l'UI

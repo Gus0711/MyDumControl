@@ -5,8 +5,26 @@ import 'package:go_router/go_router.dart';
 import 'package:mydumcontrol/l10n/app_localizations.dart';
 import '../../../application/providers/api_provider.dart';
 import '../../../application/providers/connection_providers.dart';
+import '../../../application/providers/bacnet_provider.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/validators.dart';
+
+/// Types de connexion supportés
+enum ConnectionType {
+  distechApi('distech_api', 'API Distech'),
+  bacnet('bacnet', 'BACnet/IP');
+
+  final String value;
+  final String label;
+  const ConnectionType(this.value, this.label);
+
+  static ConnectionType fromValue(String value) {
+    return ConnectionType.values.firstWhere(
+      (e) => e.value == value,
+      orElse: () => ConnectionType.distechApi,
+    );
+  }
+}
 
 /// Écran d'ajout/modification d'une connexion
 class AddConnectionScreen extends ConsumerStatefulWidget {
@@ -29,12 +47,14 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
   );
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _bacnetDeviceIdController = TextEditingController();
 
   bool _isPasswordVisible = false;
   bool _useHttps = true;
   bool _isTesting = false;
   bool _isSaving = false;
   String? _detectedApiVersion;
+  ConnectionType _connectionType = ConnectionType.distechApi;
 
   @override
   void initState() {
@@ -55,8 +75,27 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         _usernameController.text = connection.username;
         _useHttps = connection.useHttps;
         _detectedApiVersion = connection.apiVersion;
+        _connectionType = ConnectionType.fromValue(connection.connectionType);
+        if (connection.bacnetDeviceId != null) {
+          _bacnetDeviceIdController.text = connection.bacnetDeviceId.toString();
+        }
       });
     }
+  }
+
+  void _onConnectionTypeChanged(ConnectionType type) {
+    setState(() {
+      _connectionType = type;
+      // Ajuster le port par défaut selon le type
+      if (type == ConnectionType.bacnet) {
+        _portController.text = '47808';
+        _useHttps = false;
+      } else {
+        _portController.text = _useHttps
+            ? ApiConstants.defaultHttpsPort.toString()
+            : ApiConstants.defaultHttpPort.toString();
+      }
+    });
   }
 
   @override
@@ -66,6 +105,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     _portController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _bacnetDeviceIdController.dispose();
     super.dispose();
   }
 
@@ -82,6 +122,10 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Sélecteur de type de connexion
+            _buildConnectionTypeSelector(),
+            const SizedBox(height: 24),
+
             // Nom de la connexion
             TextFormField(
               controller: _nameController,
@@ -127,6 +171,9 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
               decoration: InputDecoration(
                 labelText: l10n.port,
                 prefixIcon: const Icon(Icons.numbers),
+                helperText: _connectionType == ConnectionType.bacnet
+                    ? 'Port BACnet (défaut: 47808)'
+                    : null,
               ),
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -143,72 +190,116 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
             ),
             const SizedBox(height: 16),
 
-            // HTTPS Switch
-            SwitchListTile(
-              title: const Text('HTTPS'),
-              subtitle: const Text('Utiliser une connexion sécurisée'),
-              value: _useHttps,
-              onChanged: (value) {
-                setState(() {
-                  _useHttps = value;
-                  if (value) {
-                    _portController.text =
-                        ApiConstants.defaultHttpsPort.toString();
-                  } else {
-                    _portController.text =
-                        ApiConstants.defaultHttpPort.toString();
-                  }
-                });
-              },
-              secondary: Icon(_useHttps ? Icons.lock : Icons.lock_open),
-            ),
-            const Divider(height: 32),
-
-            // Nom d'utilisateur
-            TextFormField(
-              controller: _usernameController,
-              decoration: InputDecoration(
-                labelText: l10n.username,
-                prefixIcon: const Icon(Icons.person_outline),
+            // Champs spécifiques selon le type de connexion
+            if (_connectionType == ConnectionType.distechApi) ...[
+              // HTTPS Switch (API Distech uniquement)
+              SwitchListTile(
+                title: const Text('HTTPS'),
+                subtitle: const Text('Utiliser une connexion sécurisée'),
+                value: _useHttps,
+                onChanged: (value) {
+                  setState(() {
+                    _useHttps = value;
+                    if (value) {
+                      _portController.text =
+                          ApiConstants.defaultHttpsPort.toString();
+                    } else {
+                      _portController.text =
+                          ApiConstants.defaultHttpPort.toString();
+                    }
+                  });
+                },
+                secondary: Icon(_useHttps ? Icons.lock : Icons.lock_open),
               ),
-              textInputAction: TextInputAction.next,
-              validator: (value) {
-                if (!Validators.isNotEmpty(value)) {
-                  return l10n.fieldRequired;
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
+              const Divider(height: 32),
 
-            // Mot de passe
-            TextFormField(
-              controller: _passwordController,
-              decoration: InputDecoration(
-                labelText: l10n.password,
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _isPasswordVisible
-                        ? Icons.visibility_off
-                        : Icons.visibility,
+              // Nom d'utilisateur
+              TextFormField(
+                controller: _usernameController,
+                decoration: InputDecoration(
+                  labelText: l10n.username,
+                  prefixIcon: const Icon(Icons.person_outline),
+                ),
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  if (!Validators.isNotEmpty(value)) {
+                    return l10n.fieldRequired;
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Mot de passe
+              TextFormField(
+                controller: _passwordController,
+                decoration: InputDecoration(
+                  labelText: l10n.password,
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _isPasswordVisible
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _isPasswordVisible = !_isPasswordVisible;
+                      });
+                    },
                   ),
-                  onPressed: () {
-                    setState(() {
-                      _isPasswordVisible = !_isPasswordVisible;
-                    });
-                  },
+                ),
+                obscureText: !_isPasswordVisible,
+                textInputAction: TextInputAction.done,
+                validator: (value) {
+                  if (!widget.isEditing && !Validators.isNotEmpty(value)) {
+                    return l10n.fieldRequired;
+                  }
+                  return null;
+                },
+              ),
+            ] else ...[
+              // Champs BACnet
+              const Divider(height: 32),
+
+              // Info BACnet
+              Card(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'BACnet/IP ne nécessite pas d\'authentification. '
+                          'Le Device ID est optionnel et sera découvert automatiquement.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              obscureText: !_isPasswordVisible,
-              textInputAction: TextInputAction.done,
-              validator: (value) {
-                if (!Validators.isNotEmpty(value)) {
-                  return l10n.fieldRequired;
-                }
-                return null;
-              },
-            ),
+              const SizedBox(height: 16),
+
+              // Device ID BACnet (optionnel)
+              TextFormField(
+                controller: _bacnetDeviceIdController,
+                decoration: const InputDecoration(
+                  labelText: 'Device ID BACnet (optionnel)',
+                  prefixIcon: Icon(Icons.memory),
+                  helperText: 'Laissez vide pour découverte automatique',
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                textInputAction: TextInputAction.done,
+              ),
+            ],
             const SizedBox(height: 32),
 
             // Boutons d'action
@@ -253,43 +344,49 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     );
   }
 
+  Widget _buildConnectionTypeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Type de connexion',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 8),
+        SegmentedButton<ConnectionType>(
+          segments: [
+            ButtonSegment<ConnectionType>(
+              value: ConnectionType.distechApi,
+              label: const Text('API Distech'),
+              icon: const Icon(Icons.api),
+            ),
+            ButtonSegment<ConnectionType>(
+              value: ConnectionType.bacnet,
+              label: const Text('BACnet/IP'),
+              icon: const Icon(Icons.device_hub),
+            ),
+          ],
+          selected: {_connectionType},
+          onSelectionChanged: (selection) {
+            _onConnectionTypeChanged(selection.first);
+          },
+        ),
+      ],
+    );
+  }
+
   Future<void> _testConnection() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isTesting = true);
 
     try {
-      final apiService = ref.read(apiServiceProvider);
-      final result = await apiService.testConnection(
-        host: _hostController.text.trim(),
-        port: int.parse(_portController.text),
-        useHttps: _useHttps,
-        username: _usernameController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      if (mounted) {
-        if (result.success) {
-          // Stocker la version API détectée
-          setState(() {
-            _detectedApiVersion = result.apiVersion;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${AppLocalizations.of(context)!.connectionSuccess} (API ${result.apiVersion})',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result.errorMessage ?? 'Échec de la connexion'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (_connectionType == ConnectionType.distechApi) {
+        await _testDistechConnection();
+      } else {
+        await _testBacnetConnection();
       }
     } catch (e) {
       if (mounted) {
@@ -307,6 +404,78 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     }
   }
 
+  Future<void> _testDistechConnection() async {
+    final apiService = ref.read(apiServiceProvider);
+    final result = await apiService.testConnection(
+      host: _hostController.text.trim(),
+      port: int.parse(_portController.text),
+      useHttps: _useHttps,
+      username: _usernameController.text.trim(),
+      password: _passwordController.text,
+    );
+
+    if (mounted) {
+      if (result.success) {
+        setState(() {
+          _detectedApiVersion = result.apiVersion;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context)!.connectionSuccess} (API ${result.apiVersion})',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? 'Échec de la connexion'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _testBacnetConnection() async {
+    final bacnetService = ref.read(bacnetServiceProvider);
+
+    final result = await bacnetService.testConnection(
+      host: _hostController.text.trim(),
+      port: int.parse(_portController.text),
+      deviceId: _bacnetDeviceIdController.text.isNotEmpty
+          ? int.parse(_bacnetDeviceIdController.text)
+          : null,
+    );
+
+    if (mounted) {
+      if (result.success) {
+        // Mettre à jour le Device ID si découvert
+        if (result.deviceId != null && _bacnetDeviceIdController.text.isEmpty) {
+          setState(() {
+            _bacnetDeviceIdController.text = result.deviceId.toString();
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Connexion BACnet réussie! Device ID: ${result.deviceId ?? "non découvert"}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? 'Échec de la connexion BACnet'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _saveConnection() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -315,30 +484,41 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     try {
       final repository = ref.read(connectionRepositoryProvider);
 
+      // Préparer les valeurs selon le type de connexion
+      final username = _connectionType == ConnectionType.bacnet
+          ? 'bacnet'  // Placeholder pour BACnet
+          : _usernameController.text.trim();
+      final password = _connectionType == ConnectionType.bacnet
+          ? ''  // Pas de mot de passe pour BACnet
+          : _passwordController.text;
+      final bacnetDeviceId = _bacnetDeviceIdController.text.isNotEmpty
+          ? int.parse(_bacnetDeviceIdController.text)
+          : null;
+
       if (widget.isEditing) {
-        // Mode édition
         await repository.updateConnection(
           id: int.parse(widget.connectionId!),
           name: _nameController.text.trim(),
           host: _hostController.text.trim(),
           port: int.parse(_portController.text),
           useHttps: _useHttps,
-          username: _usernameController.text.trim(),
-          password: _passwordController.text.isNotEmpty
-              ? _passwordController.text
-              : null,
+          username: username,
+          password: password.isNotEmpty ? password : null,
           apiVersion: _detectedApiVersion,
+          connectionType: _connectionType.value,
+          bacnetDeviceId: bacnetDeviceId,
         );
       } else {
-        // Mode création
         await repository.createConnection(
           name: _nameController.text.trim(),
           host: _hostController.text.trim(),
           port: int.parse(_portController.text),
           useHttps: _useHttps,
-          username: _usernameController.text.trim(),
-          password: _passwordController.text,
+          username: username,
+          password: password,
           apiVersion: _detectedApiVersion,
+          connectionType: _connectionType.value,
+          bacnetDeviceId: bacnetDeviceId,
         );
       }
 

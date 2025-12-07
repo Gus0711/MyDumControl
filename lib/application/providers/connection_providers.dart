@@ -44,11 +44,13 @@ class ConnectionRepository {
     required String username,
     required String password,
     String? apiVersion,
+    String connectionType = 'distech_api',
+    int? bacnetDeviceId,
   }) async {
     // Générer une clé unique pour le mot de passe
     final passwordKey = 'conn_pwd_${DateTime.now().millisecondsSinceEpoch}';
 
-    // Stocker le mot de passe de manière sécurisée
+    // Stocker le mot de passe de manière sécurisée (même vide pour BACnet)
     await secureStorage.write(key: passwordKey, value: password);
 
     // Insérer la connexion dans la base de données
@@ -61,6 +63,8 @@ class ConnectionRepository {
         username: username,
         passwordKey: passwordKey,
         apiVersion: Value(apiVersion),
+        connectionType: Value(connectionType),
+        bacnetDeviceId: Value(bacnetDeviceId),
       ),
     );
 
@@ -77,6 +81,8 @@ class ConnectionRepository {
     required String username,
     String? password,
     String? apiVersion,
+    String? connectionType,
+    int? bacnetDeviceId,
   }) async {
     final existing = await database.getConnectionById(id);
     if (existing == null) return;
@@ -95,6 +101,8 @@ class ConnectionRepository {
         useHttps: useHttps,
         username: username,
         apiVersion: Value(apiVersion ?? existing.apiVersion),
+        connectionType: connectionType ?? existing.connectionType,
+        bacnetDeviceId: Value(bacnetDeviceId),
         updatedAt: DateTime.now(),
       ),
     );

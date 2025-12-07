@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/trend_log_provider.dart';
 import '../../../application/providers/favorites_provider.dart';
+import '../../../application/providers/active_connection_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
@@ -22,6 +24,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   bool _showSearch = false;
+  Timer? _autoRefreshTimer;
 
   /// Les catégories dans l'ordre des onglets
   static const _categories = [
@@ -46,15 +49,80 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
       }
       // Mettre à jour les favoris pour le tri
       _updateFavoriteIds();
+      // Démarrer l'auto-refresh si configuré
+      _setupAutoRefresh();
     });
   }
 
   @override
   void dispose() {
+    _autoRefreshTimer?.cancel();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _setupAutoRefresh() {
+    final interval = ref.read(autoRefreshIntervalProvider);
+    _autoRefreshTimer?.cancel();
+
+    if (interval > 0) {
+      _autoRefreshTimer = Timer.periodic(
+        Duration(seconds: interval),
+        (_) => _doAutoRefresh(),
+      );
+    }
+  }
+
+  void _doAutoRefresh() {
+    final pointsState = ref.read(pointsProvider);
+    if (!pointsState.isLoading) {
+      ref.read(pointsProvider.notifier).refresh();
+    }
+  }
+
+  Widget _buildAutoRefreshButton() {
+    final currentInterval = ref.watch(autoRefreshIntervalProvider);
+    final isActive = currentInterval > 0;
+
+    return PopupMenuButton<int>(
+      icon: Icon(
+        isActive ? Icons.sync : Icons.sync_disabled,
+        color: isActive ? Colors.green : null,
+      ),
+      tooltip: isActive
+          ? 'Auto-refresh: ${autoRefreshOptions.firstWhere((o) => o.value == currentInterval).label}'
+          : 'Auto-refresh désactivé',
+      onSelected: (interval) {
+        ref.read(autoRefreshIntervalProvider.notifier).state = interval;
+        _setupAutoRefresh();
+      },
+      itemBuilder: (context) => autoRefreshOptions.map((option) {
+        final isSelected = currentInterval == option.value;
+        return PopupMenuItem(
+          value: option.value,
+          child: Row(
+            children: [
+              if (isSelected)
+                const Icon(Icons.check, size: 18, color: Colors.green)
+              else
+                const SizedBox(width: 18),
+              const SizedBox(width: 8),
+              Text(option.label),
+              if (option.value > 0) ...[
+                const Spacer(),
+                Icon(
+                  Icons.timer,
+                  size: 14,
+                  color: Colors.grey.shade500,
+                ),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
+    );
   }
 
   void _onTabChanged() {
@@ -121,12 +189,15 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
               );
             }).toList(),
           ),
-          // Rafraîchir
+          // Auto-refresh (seulement pour BACnet)
+          if (ref.watch(activeConnectionProvider).isBacnetConnection)
+            _buildAutoRefreshButton(),
+          // Rafraîchir (optimisé pour BACnet)
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: pointsState.isLoading
                 ? null
-                : () => ref.read(pointsProvider.notifier).loadPoints(forceRefresh: true),
+                : () => ref.read(pointsProvider.notifier).refresh(),
           ),
         ],
         bottom: TabBar(
@@ -306,7 +377,7 @@ class _PointsCategoryTab extends ConsumerWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: () => ref.read(pointsProvider.notifier).loadPoints(),
+      onRefresh: () => ref.read(pointsProvider.notifier).refresh(),
       child: ListView.builder(
         itemCount: filteredPoints.length,
         itemBuilder: (context, index) {

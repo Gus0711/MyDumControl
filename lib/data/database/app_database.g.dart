@@ -538,6 +538,29 @@ class $ConnectionsTable extends Connections
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _connectionTypeMeta = const VerificationMeta(
+    'connectionType',
+  );
+  @override
+  late final GeneratedColumn<String> connectionType = GeneratedColumn<String>(
+    'connection_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('distech_api'),
+  );
+  static const VerificationMeta _bacnetDeviceIdMeta = const VerificationMeta(
+    'bacnetDeviceId',
+  );
+  @override
+  late final GeneratedColumn<int> bacnetDeviceId = GeneratedColumn<int>(
+    'bacnet_device_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -586,6 +609,8 @@ class $ConnectionsTable extends Connections
     passwordKey,
     apiVersion,
     certificateFingerprint,
+    connectionType,
+    bacnetDeviceId,
     createdAt,
     updatedAt,
     lastConnectedAt,
@@ -673,6 +698,24 @@ class $ConnectionsTable extends Connections
         ),
       );
     }
+    if (data.containsKey('connection_type')) {
+      context.handle(
+        _connectionTypeMeta,
+        connectionType.isAcceptableOrUnknown(
+          data['connection_type']!,
+          _connectionTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('bacnet_device_id')) {
+      context.handle(
+        _bacnetDeviceIdMeta,
+        bacnetDeviceId.isAcceptableOrUnknown(
+          data['bacnet_device_id']!,
+          _bacnetDeviceIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -743,6 +786,14 @@ class $ConnectionsTable extends Connections
         DriftSqlType.string,
         data['${effectivePrefix}certificate_fingerprint'],
       ),
+      connectionType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}connection_type'],
+      )!,
+      bacnetDeviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bacnet_device_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -780,21 +831,30 @@ class Connection extends DataClass implements Insertable<Connection> {
   /// Port
   final int port;
 
-  /// Utiliser HTTPS
+  /// Utiliser HTTPS (ignoré si connectionType = 'bacnet')
   final bool useHttps;
 
-  /// Nom d'utilisateur
+  /// Nom d'utilisateur (ignoré si connectionType = 'bacnet')
   final String username;
 
   /// Mot de passe (sera chiffré via flutter_secure_storage séparément)
-  /// Ici on stocke juste une référence/clé
+  /// Ici on stocke juste une référence/clé (ignoré si connectionType = 'bacnet')
   final String passwordKey;
 
   /// Version de l'API détectée (v1, v2, ou null si pas encore testé)
+  /// Pour BACnet, contiendra la version du protocole si disponible
   final String? apiVersion;
 
-  /// Empreinte du certificat (pour TOFU)
+  /// Empreinte du certificat (pour TOFU) - API Distech uniquement
   final String? certificateFingerprint;
+
+  /// Type de connexion : 'distech_api' (défaut) ou 'bacnet'
+  final String connectionType;
+
+  /// Device ID BACnet (instance number du device object)
+  /// Utilisé pour adresser un device spécifique (ex: via routeur BACnet)
+  /// Null = auto-détection ou device unique
+  final int? bacnetDeviceId;
 
   /// Date de création
   final DateTime createdAt;
@@ -815,6 +875,8 @@ class Connection extends DataClass implements Insertable<Connection> {
     required this.passwordKey,
     this.apiVersion,
     this.certificateFingerprint,
+    required this.connectionType,
+    this.bacnetDeviceId,
     required this.createdAt,
     required this.updatedAt,
     this.lastConnectedAt,
@@ -837,6 +899,10 @@ class Connection extends DataClass implements Insertable<Connection> {
     }
     if (!nullToAbsent || certificateFingerprint != null) {
       map['certificate_fingerprint'] = Variable<String>(certificateFingerprint);
+    }
+    map['connection_type'] = Variable<String>(connectionType);
+    if (!nullToAbsent || bacnetDeviceId != null) {
+      map['bacnet_device_id'] = Variable<int>(bacnetDeviceId);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -864,6 +930,10 @@ class Connection extends DataClass implements Insertable<Connection> {
       certificateFingerprint: certificateFingerprint == null && nullToAbsent
           ? const Value.absent()
           : Value(certificateFingerprint),
+      connectionType: Value(connectionType),
+      bacnetDeviceId: bacnetDeviceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bacnetDeviceId),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       lastConnectedAt: lastConnectedAt == null && nullToAbsent
@@ -890,6 +960,8 @@ class Connection extends DataClass implements Insertable<Connection> {
       certificateFingerprint: serializer.fromJson<String?>(
         json['certificateFingerprint'],
       ),
+      connectionType: serializer.fromJson<String>(json['connectionType']),
+      bacnetDeviceId: serializer.fromJson<int?>(json['bacnetDeviceId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       lastConnectedAt: serializer.fromJson<DateTime?>(json['lastConnectedAt']),
@@ -911,6 +983,8 @@ class Connection extends DataClass implements Insertable<Connection> {
       'certificateFingerprint': serializer.toJson<String?>(
         certificateFingerprint,
       ),
+      'connectionType': serializer.toJson<String>(connectionType),
+      'bacnetDeviceId': serializer.toJson<int?>(bacnetDeviceId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'lastConnectedAt': serializer.toJson<DateTime?>(lastConnectedAt),
@@ -928,6 +1002,8 @@ class Connection extends DataClass implements Insertable<Connection> {
     String? passwordKey,
     Value<String?> apiVersion = const Value.absent(),
     Value<String?> certificateFingerprint = const Value.absent(),
+    String? connectionType,
+    Value<int?> bacnetDeviceId = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> lastConnectedAt = const Value.absent(),
@@ -944,6 +1020,10 @@ class Connection extends DataClass implements Insertable<Connection> {
     certificateFingerprint: certificateFingerprint.present
         ? certificateFingerprint.value
         : this.certificateFingerprint,
+    connectionType: connectionType ?? this.connectionType,
+    bacnetDeviceId: bacnetDeviceId.present
+        ? bacnetDeviceId.value
+        : this.bacnetDeviceId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     lastConnectedAt: lastConnectedAt.present
@@ -968,6 +1048,12 @@ class Connection extends DataClass implements Insertable<Connection> {
       certificateFingerprint: data.certificateFingerprint.present
           ? data.certificateFingerprint.value
           : this.certificateFingerprint,
+      connectionType: data.connectionType.present
+          ? data.connectionType.value
+          : this.connectionType,
+      bacnetDeviceId: data.bacnetDeviceId.present
+          ? data.bacnetDeviceId.value
+          : this.bacnetDeviceId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       lastConnectedAt: data.lastConnectedAt.present
@@ -989,6 +1075,8 @@ class Connection extends DataClass implements Insertable<Connection> {
           ..write('passwordKey: $passwordKey, ')
           ..write('apiVersion: $apiVersion, ')
           ..write('certificateFingerprint: $certificateFingerprint, ')
+          ..write('connectionType: $connectionType, ')
+          ..write('bacnetDeviceId: $bacnetDeviceId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastConnectedAt: $lastConnectedAt')
@@ -1008,6 +1096,8 @@ class Connection extends DataClass implements Insertable<Connection> {
     passwordKey,
     apiVersion,
     certificateFingerprint,
+    connectionType,
+    bacnetDeviceId,
     createdAt,
     updatedAt,
     lastConnectedAt,
@@ -1026,6 +1116,8 @@ class Connection extends DataClass implements Insertable<Connection> {
           other.passwordKey == this.passwordKey &&
           other.apiVersion == this.apiVersion &&
           other.certificateFingerprint == this.certificateFingerprint &&
+          other.connectionType == this.connectionType &&
+          other.bacnetDeviceId == this.bacnetDeviceId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.lastConnectedAt == this.lastConnectedAt);
@@ -1042,6 +1134,8 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
   final Value<String> passwordKey;
   final Value<String?> apiVersion;
   final Value<String?> certificateFingerprint;
+  final Value<String> connectionType;
+  final Value<int?> bacnetDeviceId;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> lastConnectedAt;
@@ -1056,6 +1150,8 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     this.passwordKey = const Value.absent(),
     this.apiVersion = const Value.absent(),
     this.certificateFingerprint = const Value.absent(),
+    this.connectionType = const Value.absent(),
+    this.bacnetDeviceId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastConnectedAt = const Value.absent(),
@@ -1071,6 +1167,8 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     required String passwordKey,
     this.apiVersion = const Value.absent(),
     this.certificateFingerprint = const Value.absent(),
+    this.connectionType = const Value.absent(),
+    this.bacnetDeviceId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastConnectedAt = const Value.absent(),
@@ -1089,6 +1187,8 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     Expression<String>? passwordKey,
     Expression<String>? apiVersion,
     Expression<String>? certificateFingerprint,
+    Expression<String>? connectionType,
+    Expression<int>? bacnetDeviceId,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? lastConnectedAt,
@@ -1105,6 +1205,8 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
       if (apiVersion != null) 'api_version': apiVersion,
       if (certificateFingerprint != null)
         'certificate_fingerprint': certificateFingerprint,
+      if (connectionType != null) 'connection_type': connectionType,
+      if (bacnetDeviceId != null) 'bacnet_device_id': bacnetDeviceId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (lastConnectedAt != null) 'last_connected_at': lastConnectedAt,
@@ -1122,6 +1224,8 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     Value<String>? passwordKey,
     Value<String?>? apiVersion,
     Value<String?>? certificateFingerprint,
+    Value<String>? connectionType,
+    Value<int?>? bacnetDeviceId,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? lastConnectedAt,
@@ -1138,6 +1242,8 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
       apiVersion: apiVersion ?? this.apiVersion,
       certificateFingerprint:
           certificateFingerprint ?? this.certificateFingerprint,
+      connectionType: connectionType ?? this.connectionType,
+      bacnetDeviceId: bacnetDeviceId ?? this.bacnetDeviceId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
@@ -1179,6 +1285,12 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
         certificateFingerprint.value,
       );
     }
+    if (connectionType.present) {
+      map['connection_type'] = Variable<String>(connectionType.value);
+    }
+    if (bacnetDeviceId.present) {
+      map['bacnet_device_id'] = Variable<int>(bacnetDeviceId.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1204,6 +1316,8 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
           ..write('passwordKey: $passwordKey, ')
           ..write('apiVersion: $apiVersion, ')
           ..write('certificateFingerprint: $certificateFingerprint, ')
+          ..write('connectionType: $connectionType, ')
+          ..write('bacnetDeviceId: $bacnetDeviceId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastConnectedAt: $lastConnectedAt')
@@ -6606,6 +6720,8 @@ typedef $$ConnectionsTableCreateCompanionBuilder =
       required String passwordKey,
       Value<String?> apiVersion,
       Value<String?> certificateFingerprint,
+      Value<String> connectionType,
+      Value<int?> bacnetDeviceId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> lastConnectedAt,
@@ -6622,6 +6738,8 @@ typedef $$ConnectionsTableUpdateCompanionBuilder =
       Value<String> passwordKey,
       Value<String?> apiVersion,
       Value<String?> certificateFingerprint,
+      Value<String> connectionType,
+      Value<int?> bacnetDeviceId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> lastConnectedAt,
@@ -6846,6 +6964,16 @@ class $$ConnectionsTableFilterComposer
 
   ColumnFilters<String> get certificateFingerprint => $composableBuilder(
     column: $table.certificateFingerprint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get connectionType => $composableBuilder(
+    column: $table.connectionType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bacnetDeviceId => $composableBuilder(
+    column: $table.bacnetDeviceId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7093,6 +7221,16 @@ class $$ConnectionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get connectionType => $composableBuilder(
+    column: $table.connectionType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bacnetDeviceId => $composableBuilder(
+    column: $table.bacnetDeviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -7171,6 +7309,16 @@ class $$ConnectionsTableAnnotationComposer
 
   GeneratedColumn<String> get certificateFingerprint => $composableBuilder(
     column: $table.certificateFingerprint,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get connectionType => $composableBuilder(
+    column: $table.connectionType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bacnetDeviceId => $composableBuilder(
+    column: $table.bacnetDeviceId,
     builder: (column) => column,
   );
 
@@ -7407,6 +7555,8 @@ class $$ConnectionsTableTableManager
                 Value<String> passwordKey = const Value.absent(),
                 Value<String?> apiVersion = const Value.absent(),
                 Value<String?> certificateFingerprint = const Value.absent(),
+                Value<String> connectionType = const Value.absent(),
+                Value<int?> bacnetDeviceId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> lastConnectedAt = const Value.absent(),
@@ -7421,6 +7571,8 @@ class $$ConnectionsTableTableManager
                 passwordKey: passwordKey,
                 apiVersion: apiVersion,
                 certificateFingerprint: certificateFingerprint,
+                connectionType: connectionType,
+                bacnetDeviceId: bacnetDeviceId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastConnectedAt: lastConnectedAt,
@@ -7437,6 +7589,8 @@ class $$ConnectionsTableTableManager
                 required String passwordKey,
                 Value<String?> apiVersion = const Value.absent(),
                 Value<String?> certificateFingerprint = const Value.absent(),
+                Value<String> connectionType = const Value.absent(),
+                Value<int?> bacnetDeviceId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> lastConnectedAt = const Value.absent(),
@@ -7451,6 +7605,8 @@ class $$ConnectionsTableTableManager
                 passwordKey: passwordKey,
                 apiVersion: apiVersion,
                 certificateFingerprint: certificateFingerprint,
+                connectionType: connectionType,
+                bacnetDeviceId: bacnetDeviceId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastConnectedAt: lastConnectedAt,

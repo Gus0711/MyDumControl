@@ -30,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -71,6 +71,11 @@ class AppDatabase extends _$AppDatabase {
             // Migration de v7 à v8 : ajout des synoptiques
             await m.createTable(synoptics);
             await m.createTable(synopticBindings);
+          }
+          if (from < 9) {
+            // Migration de v8 à v9 : ajout du support BACnet natif
+            await m.addColumn(connections, connections.connectionType);
+            await m.addColumn(connections, connections.bacnetDeviceId);
           }
         },
       );
