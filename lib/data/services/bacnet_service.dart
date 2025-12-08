@@ -1102,6 +1102,7 @@ class BacnetService {
           final propertyIds = [
             BacnetPropertyId.presentValue,
             BacnetPropertyId.statusFlags, // Pour détecter les alarmes
+            BacnetPropertyId.units, // Pour afficher les unités
           ];
 
           // Ajouter priority-array pour les objets commandables (AO, BO, MSO, AV, BV, MSV)
@@ -1177,6 +1178,15 @@ class BacnetService {
               }
             }
 
+            // Extraire et parser les unités
+            String? units;
+            for (final prop in props) {
+              if (prop.propertyId == BacnetPropertyId.units) {
+                units = _parseUnit(prop.value);
+                break;
+              }
+            }
+
             return MapEntry(key, RefreshedPointData(
               presentValue: presentValue,
               isOverridden: overrideInfo.isOverridden,
@@ -1184,6 +1194,7 @@ class BacnetService {
               overrideValue: overrideInfo.value,
               outOfService: outOfService,
               inAlarm: statusInfo.inAlarm,
+              units: units,
             ));
           }
         } catch (e) {
@@ -2104,6 +2115,7 @@ class RefreshedPointData {
   final dynamic overrideValue;
   final bool? outOfService;
   final bool inAlarm;
+  final String? units;
 
   RefreshedPointData({
     this.presentValue,
@@ -2112,6 +2124,7 @@ class RefreshedPointData {
     this.overrideValue,
     this.outOfService,
     this.inAlarm = false,
+    this.units,
   });
 }
 

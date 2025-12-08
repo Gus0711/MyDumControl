@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import '../../data/database/app_database.dart';
 import '../../data/services/api_service.dart';
+import '../../data/services/bacnet/bacnet_constants.dart';
 import '../../domain/models/bacnet_object.dart';
 import 'active_connection_provider.dart';
+import 'bacnet_provider.dart';
 import 'connection_providers.dart';
 import 'database_provider.dart';
 
@@ -191,43 +193,240 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     );
 
     try {
-      // Récupérer ou créer le ConnectedApiClient pour cette connexion
-      final apiClient = await _getApiClientForConnection(connectionId);
-      if (apiClient == null) {
-        _logger.e('refreshConnection: failed to create ApiClient for $connectionId');
-        _setError(connectionId, 'Connectez-vous à cet automate');
+      // Récupérer les infos de connexion pour connaître le type
+      final database = _ref.read(databaseProvider);
+      final connection = await database.getConnectionById(connectionId);
+      if (connection == null) {
+        _logger.e('refreshConnection: connection $connectionId not found');
+        _setError(connectionId, 'Connexion introuvable');
         return;
       }
 
-      // Collecter les pointRefs
-      final pointRefs = superFavs.map((sf) => sf.favorite.pointRef).toList();
+      // Dispatcher selon le type de connexion
+      if (connection.connectionType == 'bacnet') {
+        await _refreshBacnetConnection(connectionId, connection, superFavs);
+      } else {
+        await _refreshApiConnection(connectionId, connection, superFavs);
+      }
+    } catch (e) {
+      _logger.e('refreshConnection error: $e');
+      _setError(connectionId, e.toString());
+    }
+  }
 
-      // Faire la requête batch
-      final results = await apiClient.readMultiplePoints(pointRefs);
-      _logger.i('refreshConnection: got ${results.length} results');
+  /// Refresh les super favoris via API REST (Distech V1/V2)
+  Future<void> _refreshApiConnection(
+    int connectionId,
+    Connection connection,
+    List<SuperFavoriteWithValue> superFavs,
+  ) async {
+    // Récupérer ou créer le ConnectedApiClient pour cette connexion
+    final apiClient = await _getApiClientForConnection(connectionId);
+    if (apiClient == null) {
+      _logger.e('_refreshApiConnection: failed to create ApiClient for $connectionId');
+      _setError(connectionId, 'Connectez-vous à cet automate');
+      return;
+    }
 
-      // Mettre à jour les valeurs
-      final now = DateTime.now();
-      final updatedList = superFavs.map((sf) {
-        final liveData = results[sf.favorite.pointRef];
+    // Collecter les pointRefs
+    final pointRefs = superFavs.map((sf) => sf.favorite.pointRef).toList();
+
+    // Faire la requête batch
+    final results = await apiClient.readMultiplePoints(pointRefs);
+    _logger.i('_refreshApiConnection: got ${results.length} results');
+
+    // Mettre à jour les valeurs
+    final now = DateTime.now();
+    final updatedList = superFavs.map((sf) {
+      final liveData = results[sf.favorite.pointRef];
+      return sf.copyWith(
+        liveData: liveData,
+        lastRefreshed: now,
+        isLoading: false,
+        error: liveData == null ? 'Point non trouvé' : null,
+      );
+    }).toList();
+
+    final newByConnection = Map<int, List<SuperFavoriteWithValue>>.from(state.byConnection);
+    newByConnection[connectionId] = updatedList;
+
+    state = state.copyWith(
+      byConnection: newByConnection,
+      refreshingConnections: state.refreshingConnections.difference({connectionId}),
+    );
+  }
+
+  /// Refresh les super favoris via BACnet/IP natif
+  Future<void> _refreshBacnetConnection(
+    int connectionId,
+    Connection connection,
+    List<SuperFavoriteWithValue> superFavs,
+  ) async {
+    final bacnetService = _ref.read(bacnetServiceProvider);
+
+    // Parser les pointRefs BACnet (format "shortName:instance", ex: "AI:1", "AV:5")
+    final points = <({int objectType, int objectInstance, bool isCommandable, bool isInput})>[];
+    final pointRefToIndex = <String, int>{};
+
+    for (int i = 0; i < superFavs.length; i++) {
+      final sf = superFavs[i];
+      final parts = sf.favorite.pointRef.split(':');
+      if (parts.length == 2) {
+        final shortName = parts[0];
+        final objectInstance = int.tryParse(parts[1]);
+
+        // Convertir le shortName en objectType
+        final bacnetType = BacnetObjectType.fromShortName(shortName);
+        final objectType = bacnetType != null ? _bacnetTypeToObjectTypeCode(bacnetType) : null;
+
+        if (objectType != null && objectInstance != null) {
+          // Déterminer si commandable (AO, BO, MSO, AV, BV, MSV) ou input (AI, BI, MSI)
+          final isCommandable = [
+            BacnetObjectTypeCode.analogOutput,
+            BacnetObjectTypeCode.binaryOutput,
+            BacnetObjectTypeCode.multiStateOutput,
+            BacnetObjectTypeCode.analogValue,
+            BacnetObjectTypeCode.binaryValue,
+            BacnetObjectTypeCode.multiStateValue,
+          ].contains(objectType);
+          final isInput = [
+            BacnetObjectTypeCode.analogInput,
+            BacnetObjectTypeCode.binaryInput,
+            BacnetObjectTypeCode.multiStateInput,
+          ].contains(objectType);
+
+          points.add((
+            objectType: objectType,
+            objectInstance: objectInstance,
+            isCommandable: isCommandable,
+            isInput: isInput,
+          ));
+          pointRefToIndex[sf.favorite.pointRef] = i;
+          _logger.d('_refreshBacnetConnection: parsed ${sf.favorite.pointRef} -> type=$objectType, instance=$objectInstance');
+        } else {
+          _logger.w('_refreshBacnetConnection: failed to parse pointRef "${sf.favorite.pointRef}"');
+        }
+      }
+    }
+
+    if (points.isEmpty) {
+      _logger.w('_refreshBacnetConnection: no valid points to refresh');
+      _setError(connectionId, 'Aucun point valide');
+      return;
+    }
+
+    _logger.i('_refreshBacnetConnection: refreshing ${points.length} BACnet points on ${connection.host}:${connection.port}');
+
+    // Faire la requête batch BACnet
+    final results = await bacnetService.refreshMultiplePointValues(
+      host: connection.host,
+      port: connection.port,
+      points: points,
+    );
+
+    _logger.i('_refreshBacnetConnection: got ${results.length} results');
+
+    // Mettre à jour les valeurs
+    final now = DateTime.now();
+    final updatedList = superFavs.map((sf) {
+      final pointRef = sf.favorite.pointRef;
+      final parts = pointRef.split(':');
+
+      if (parts.length != 2) {
+        return sf.copyWith(
+          lastRefreshed: now,
+          isLoading: false,
+          error: 'Format invalide',
+        );
+      }
+
+      final shortName = parts[0];
+      final objectInstance = int.tryParse(parts[1]);
+      final bacnetType = BacnetObjectType.fromShortName(shortName);
+      final objectTypeCode = bacnetType != null ? _bacnetTypeToObjectTypeCode(bacnetType) : null;
+
+      if (objectTypeCode == null || objectInstance == null) {
+        return sf.copyWith(
+          lastRefreshed: now,
+          isLoading: false,
+          error: 'Type inconnu',
+        );
+      }
+
+      // La clé dans les résultats BACnet est "objectType:instance" (ex: "2:5")
+      final resultKey = '$objectTypeCode:$objectInstance';
+      final data = results[resultKey];
+
+      if (data != null) {
+        // Créer un BacnetObject à partir des données rafraîchies
+        final liveData = BacnetObject(
+          type: bacnetType!,
+          instance: objectInstance,
+          objectName: sf.favorite.pointName,
+          presentValue: data.presentValue,
+          units: data.units,
+          isOverridden: data.isOverridden,
+          overridePriority: data.overridePriority,
+          overrideValue: data.overrideValue,
+          outOfService: data.outOfService,
+          inAlarm: data.inAlarm,
+        );
+
         return sf.copyWith(
           liveData: liveData,
           lastRefreshed: now,
           isLoading: false,
-          error: liveData == null ? 'Point non trouvé' : null,
+          error: null,
         );
-      }).toList();
+      } else {
+        return sf.copyWith(
+          lastRefreshed: now,
+          isLoading: false,
+          error: 'Point non trouvé',
+        );
+      }
+    }).toList();
 
-      final newByConnection = Map<int, List<SuperFavoriteWithValue>>.from(state.byConnection);
-      newByConnection[connectionId] = updatedList;
+    final newByConnection = Map<int, List<SuperFavoriteWithValue>>.from(state.byConnection);
+    newByConnection[connectionId] = updatedList;
 
-      state = state.copyWith(
-        byConnection: newByConnection,
-        refreshingConnections: state.refreshingConnections.difference({connectionId}),
-      );
-    } catch (e) {
-      _logger.e('refreshConnection error: $e');
-      _setError(connectionId, e.toString());
+    state = state.copyWith(
+      byConnection: newByConnection,
+      refreshingConnections: state.refreshingConnections.difference({connectionId}),
+    );
+  }
+
+  /// Convertit un BacnetObjectType en code numérique BACnet
+  int? _bacnetTypeToObjectTypeCode(BacnetObjectType type) {
+    switch (type) {
+      case BacnetObjectType.analogInput:
+        return BacnetObjectTypeCode.analogInput;
+      case BacnetObjectType.analogOutput:
+        return BacnetObjectTypeCode.analogOutput;
+      case BacnetObjectType.analogValue:
+        return BacnetObjectTypeCode.analogValue;
+      case BacnetObjectType.binaryInput:
+        return BacnetObjectTypeCode.binaryInput;
+      case BacnetObjectType.binaryOutput:
+        return BacnetObjectTypeCode.binaryOutput;
+      case BacnetObjectType.binaryValue:
+        return BacnetObjectTypeCode.binaryValue;
+      case BacnetObjectType.multiStateInput:
+        return BacnetObjectTypeCode.multiStateInput;
+      case BacnetObjectType.multiStateOutput:
+        return BacnetObjectTypeCode.multiStateOutput;
+      case BacnetObjectType.multiStateValue:
+        return BacnetObjectTypeCode.multiStateValue;
+      case BacnetObjectType.schedule:
+        return BacnetObjectTypeCode.schedule;
+      case BacnetObjectType.calendar:
+        return BacnetObjectTypeCode.calendar;
+      case BacnetObjectType.trendLog:
+        return BacnetObjectTypeCode.trendLog;
+      case BacnetObjectType.device:
+        return BacnetObjectTypeCode.device;
+      default:
+        return null;
     }
   }
 
