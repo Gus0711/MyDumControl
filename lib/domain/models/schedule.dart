@@ -603,8 +603,20 @@ class Schedule {
   String getStateText(dynamic value) {
     if (value == null) return 'Auto';
 
+    // Normaliser la valeur en int si possible
+    int? intValue;
+    if (value is int) {
+      intValue = value;
+    } else if (value is bool) {
+      intValue = value ? 1 : 0;
+    } else if (value == 'active' || value == 'true') {
+      intValue = 1;
+    } else if (value == 'inactive' || value == 'false') {
+      intValue = 0;
+    }
+
     if (valueType == ScheduleValueType.boolean) {
-      if (value == true || value == 'active' || value == 1) {
+      if (intValue == 1) {
         // Chercher le texte pour l'état actif (généralement index 1)
         final activeText = stateTexts.where((s) => s.index == 1).firstOrNull;
         return activeText?.text ?? 'Actif';
@@ -616,9 +628,9 @@ class Schedule {
     }
 
     // Pour les valeurs énumérées
-    if (value is int) {
-      final stateText = stateTexts.where((s) => s.index == value).firstOrNull;
-      return stateText?.text ?? 'État $value';
+    if (intValue != null) {
+      final stateText = stateTexts.where((s) => s.index == intValue).firstOrNull;
+      return stateText?.text ?? 'État $intValue';
     }
 
     return value.toString();
@@ -628,16 +640,37 @@ class Schedule {
   List<({dynamic value, String text})> get possibleValues {
     if (valueType == ScheduleValueType.boolean) {
       return [
-        (value: true, text: getStateText(true)),
-        (value: false, text: getStateText(false)),
+        (value: 1, text: getStateText(1)),
+        (value: 0, text: getStateText(0)),
         (value: null, text: 'Auto'),
       ];
     }
 
     // Pour les énumérés, utiliser les state texts
     final values = <({dynamic value, String text})>[];
-    for (final state in stateTexts) {
-      values.add((value: state.index, text: state.text));
+    if (stateTexts.isNotEmpty) {
+      for (final state in stateTexts) {
+        values.add((value: state.index, text: state.text));
+      }
+    } else {
+      // Fallback: générer des états par défaut si pas de state-texts
+      // Analyser le weeklySchedule pour trouver les valeurs utilisées
+      final usedValues = <int>{};
+      for (final day in weeklySchedule.days.values) {
+        for (final transition in day.transitions) {
+          if (transition.value is int) {
+            usedValues.add(transition.value as int);
+          }
+        }
+      }
+      // Générer les états pour les valeurs trouvées
+      // BACnet multistate commence à 1, pas 0
+      final minVal = usedValues.isEmpty ? 1 : usedValues.reduce((a, b) => a < b ? a : b);
+      final maxVal = usedValues.isEmpty ? 4 : usedValues.reduce((a, b) => a > b ? a : b);
+      final startVal = minVal < 1 ? minVal : 1; // Si données utilisent 0, l'inclure
+      for (int i = startVal; i <= maxVal; i++) {
+        values.add((value: i, text: 'État $i'));
+      }
     }
     values.add((value: null, text: 'Auto'));
     return values;
@@ -709,5 +742,153 @@ class ScheduleSummary {
       presentValue: presentValue,
       valueType: ScheduleValueType.fromValue(presentValue),
     );
+  }
+}
+
+// =========================================================================
+// BACnet Schedule Converters
+// =========================================================================
+
+/// Import nécessaire pour les types BACnet - à utiliser avec:
+/// import 'package:my_dum_control/data/services/bacnet_service.dart';
+
+/// Extension pour convertir les modèles Schedule vers/depuis le format BACnet natif
+class BacnetScheduleConverter {
+  /// Convertit un DecodedWeeklySchedule BACnet en WeeklySchedule du modèle
+  static WeeklySchedule fromBacnetWeeklySchedule(
+    dynamic decodedWeeklySchedule, {
+    ScheduleValueType valueType = ScheduleValueType.enumerated,
+  }) {
+    final days = <WeekDay, DaySchedule>{};
+
+    // decodedWeeklySchedule.days est une List<DecodedDailySchedule>
+    if (decodedWeeklySchedule != null && decodedWeeklySchedule.days != null) {
+      for (int i = 0; i < 7 && i < decodedWeeklySchedule.days.length; i++) {
+        final weekDay = WeekDay.values[i];
+        final decodedDay = decodedWeeklySchedule.days[i];
+
+        final transitions = <ScheduleTransition>[];
+        if (decodedDay.timeValues != null) {
+          for (final tv in decodedDay.timeValues) {
+            transitions.add(ScheduleTransition(
+              time: tv.timeString,
+              value: tv.value,
+              type: _valueTagToTypeString(tv.valueTag),
+            ));
+          }
+        }
+
+        days[weekDay] = DaySchedule(day: weekDay, transitions: transitions);
+      }
+    }
+
+    // Remplir les jours manquants
+    for (final day in WeekDay.values) {
+      days.putIfAbsent(day, () => DaySchedule.empty(day));
+    }
+
+    return WeeklySchedule(days: days);
+  }
+
+  /// Convertit le type de tag BACnet en string pour le modèle
+  static String _valueTagToTypeString(int valueTag) {
+    switch (valueTag) {
+      case 0: return 'null';
+      case 1: return 'boolean';
+      case 2: return 'unsigned';
+      case 3: return 'signed';
+      case 4: return 'real';
+      case 9: return 'enumerated';
+      default: return 'unknown';
+    }
+  }
+
+  /// Crée un BacnetScheduleInfo depuis le modèle Schedule
+  /// Note: Nécessite l'import de bacnet_service.dart pour BacnetWeeklySchedule
+  static dynamic toBacnetWeeklySchedule(
+    WeeklySchedule weeklySchedule, {
+    bool useEnumerated = true, // true = enumerated (9), false = boolean (1)
+  }) {
+    // Cette méthode retourne un objet compatible avec BacnetWeeklySchedule
+    // L'appelant doit créer le BacnetWeeklySchedule avec les données retournées
+    return _WeeklyScheduleData(
+      days: WeekDay.values.map((weekDay) {
+        final daySchedule = weeklySchedule.getDay(weekDay);
+        return _DailyScheduleData(
+          timeValues: daySchedule.sortedTransitions.map((transition) {
+            return _TimeValueData(
+              time: transition.time,
+              value: transition.value,
+              useEnumerated: useEnumerated,
+            );
+          }).toList(),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// Données internes pour la conversion (évite la dépendance circulaire)
+class _WeeklyScheduleData {
+  final List<_DailyScheduleData> days;
+  _WeeklyScheduleData({required this.days});
+}
+
+class _DailyScheduleData {
+  final List<_TimeValueData> timeValues;
+  _DailyScheduleData({required this.timeValues});
+}
+
+class _TimeValueData {
+  final String time;
+  final dynamic value;
+  final bool useEnumerated;
+  _TimeValueData({required this.time, required this.value, required this.useEnumerated});
+}
+
+/// Extension sur Schedule pour la conversion BACnet
+extension ScheduleBacnetExtension on Schedule {
+  /// Crée un Schedule depuis un BacnetScheduleInfo
+  static Schedule fromBacnetInfo(
+    dynamic bacnetInfo, {
+    ScheduleValueType? forceValueType,
+  }) {
+    // bacnetInfo est de type BacnetScheduleInfo
+    final valueType = forceValueType ?? _detectValueType(bacnetInfo.presentValue);
+
+    WeeklySchedule weeklySchedule;
+    if (bacnetInfo.weeklySchedule != null) {
+      weeklySchedule = BacnetScheduleConverter.fromBacnetWeeklySchedule(
+        bacnetInfo.weeklySchedule,
+        valueType: valueType,
+      );
+    } else {
+      weeklySchedule = WeeklySchedule.empty();
+    }
+
+    // Parser les state texts
+    final stateTexts = <ScheduleStateText>[];
+    if (bacnetInfo.stateTexts != null) {
+      for (int i = 0; i < bacnetInfo.stateTexts.length; i++) {
+        stateTexts.add(ScheduleStateText(index: i + 1, text: bacnetInfo.stateTexts[i]));
+      }
+    }
+
+    return Schedule(
+      instance: bacnetInfo.instance,
+      objectName: bacnetInfo.objectName,
+      description: bacnetInfo.description,
+      weeklySchedule: weeklySchedule,
+      stateTexts: stateTexts,
+      valueType: valueType,
+      presentValue: bacnetInfo.presentValue,
+      scheduleDefault: bacnetInfo.scheduleDefault,
+    );
+  }
+
+  static ScheduleValueType _detectValueType(dynamic value) {
+    if (value == null) return ScheduleValueType.enumerated;
+    if (value is bool) return ScheduleValueType.boolean;
+    return ScheduleValueType.enumerated;
   }
 }

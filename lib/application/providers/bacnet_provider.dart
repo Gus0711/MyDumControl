@@ -2,13 +2,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/services/bacnet_service.dart';
 
 /// Provider singleton pour le service BACnet
+/// Note: Ne pas appeler init() ici car c'est asynchrone et les méthodes
+/// du service l'appellent déjà automatiquement quand nécessaire
+/// keepAlive() garde le service en vie entre les navigations d'écrans
 final bacnetServiceProvider = Provider<BacnetService>((ref) {
   final service = BacnetService();
 
-  // Initialiser le service au démarrage
-  service.init();
+  // Garder le service en vie même quand plus observé
+  // Évite de recréer le socket à chaque navigation
+  ref.keepAlive();
 
-  // Fermer le socket à la destruction du provider
+  // Fermer le socket à la destruction du provider (fin de l'app)
   ref.onDispose(() {
     service.dispose();
   });

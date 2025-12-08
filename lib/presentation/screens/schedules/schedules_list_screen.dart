@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../application/providers/schedule_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/schedule.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Écran de liste des schedules (plannings)
 class SchedulesListScreen extends ConsumerWidget {
@@ -11,16 +12,17 @@ class SchedulesListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final schedulesAsync = ref.watch(schedulesListProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Plannings'),
+        title: Text(l10n.plannings),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.invalidate(schedulesListProvider),
-            tooltip: 'Actualiser',
+            tooltip: l10n.refresh,
           ),
         ],
       ),
@@ -35,7 +37,7 @@ class SchedulesListScreen extends ConsumerWidget {
               const Icon(Icons.error_outline, size: 64, color: Colors.red),
               const SizedBox(height: 16),
               Text(
-                'Erreur de chargement',
+                l10n.loadingError,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
@@ -48,7 +50,7 @@ class SchedulesListScreen extends ConsumerWidget {
               ElevatedButton.icon(
                 onPressed: () => ref.invalidate(schedulesListProvider),
                 icon: const Icon(Icons.refresh),
-                label: const Text('Réessayer'),
+                label: Text(l10n.retry),
               ),
             ],
           ),
@@ -66,12 +68,12 @@ class SchedulesListScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Aucun planning',
+                    l10n.noPlanning,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Cet automate n\'a pas de schedules configurés.',
+                    l10n.noScheduleConfigured,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.outline,
                         ),
@@ -109,6 +111,7 @@ class _ScheduleListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -155,7 +158,7 @@ class _ScheduleListTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  'Instance ${schedule.instance}',
+                  l10n.instanceLabel(schedule.instance.toString()),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colorScheme.outline,
                   ),
@@ -171,8 +174,8 @@ class _ScheduleListTile extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   schedule.valueType == ScheduleValueType.boolean
-                      ? 'On/Off'
-                      : 'Multi-états',
+                      ? l10n.onOff
+                      : l10n.multiState,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colorScheme.outline,
                   ),

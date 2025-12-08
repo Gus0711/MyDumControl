@@ -8,8 +8,9 @@ import '../../../application/providers/connection_providers.dart';
 import '../../../application/providers/bacnet_provider.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/router/routes.dart';
 
-/// Types de connexion supportés
+/// Types de connexion supportes
 enum ConnectionType {
   distechApi('distech_api', 'API Distech'),
   bacnet('bacnet', 'BACnet/IP');
@@ -26,7 +27,7 @@ enum ConnectionType {
   }
 }
 
-/// Écran d'ajout/modification d'une connexion
+/// Ecran d'ajout/modification d'une connexion
 class AddConnectionScreen extends ConsumerStatefulWidget {
   final String? connectionId;
 
@@ -86,7 +87,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
   void _onConnectionTypeChanged(ConnectionType type) {
     setState(() {
       _connectionType = type;
-      // Ajuster le port par défaut selon le type
+      // Ajuster le port par defaut selon le type
       if (type == ConnectionType.bacnet) {
         _portController.text = '47808';
         _useHttps = false;
@@ -109,6 +110,62 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     super.dispose();
   }
 
+  /// Ouvre la page de decouverte ECLYPSE et recupere le resultat
+  Future<void> _openDiscoverEclypse() async {
+    final result = await context.push<Map<String, dynamic>>(Routes.discoverEclypse);
+    if (result != null && mounted) {
+      setState(() {
+        if (result['name'] != null && _nameController.text.isEmpty) {
+          _nameController.text = result['name'];
+        }
+        if (result['host'] != null) {
+          _hostController.text = result['host'];
+        }
+        if (result['port'] != null) {
+          _portController.text = result['port'].toString();
+        }
+        if (result['useHttps'] != null) {
+          _useHttps = result['useHttps'];
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${result['name'] ?? result['host']} selectionne'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// Ouvre la page de decouverte BACnet et recupere le resultat
+  Future<void> _openDiscoverBacnet() async {
+    final result = await context.push<Map<String, dynamic>>(Routes.discoverBacnet);
+    if (result != null && mounted) {
+      setState(() {
+        if (result['name'] != null && _nameController.text.isEmpty) {
+          _nameController.text = result['name'];
+        }
+        if (result['host'] != null) {
+          _hostController.text = result['host'];
+        }
+        if (result['port'] != null) {
+          _portController.text = result['port'].toString();
+        }
+        if (result['deviceId'] != null) {
+          _bacnetDeviceIdController.text = result['deviceId'].toString();
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${result['name'] ?? result['host']} selectionne'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -122,8 +179,30 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Sélecteur de type de connexion
+            // Selecteur de type de connexion
             _buildConnectionTypeSelector(),
+            const SizedBox(height: 24),
+
+            // Bouton de decouverte (en premier!)
+            _buildDiscoverButton(l10n),
+            const SizedBox(height: 24),
+
+            // Separateur "ou saisie manuelle"
+            Row(
+              children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    l10n.orManualEntry,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const Expanded(child: Divider()),
+              ],
+            ),
             const SizedBox(height: 24),
 
             // Nom de la connexion
@@ -143,7 +222,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Hôte
+            // Hote
             TextFormField(
               controller: _hostController,
               decoration: InputDecoration(
@@ -172,7 +251,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                 labelText: l10n.port,
                 prefixIcon: const Icon(Icons.numbers),
                 helperText: _connectionType == ConnectionType.bacnet
-                    ? 'Port BACnet (défaut: 47808)'
+                    ? l10n.bacnetPortHelper
                     : null,
               ),
               keyboardType: TextInputType.number,
@@ -190,12 +269,12 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Champs spécifiques selon le type de connexion
+            // Champs specifiques selon le type de connexion
             if (_connectionType == ConnectionType.distechApi) ...[
               // HTTPS Switch (API Distech uniquement)
               SwitchListTile(
                 title: const Text('HTTPS'),
-                subtitle: const Text('Utiliser une connexion sécurisée'),
+                subtitle: const Text('Utiliser une connexion securisee'),
                 value: _useHttps,
                 onChanged: (value) {
                   setState(() {
@@ -260,40 +339,14 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
               ),
             ] else ...[
               // Champs BACnet
-              const Divider(height: 32),
-
-              // Info BACnet
-              Card(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'BACnet/IP ne nécessite pas d\'authentification. '
-                          'Le Device ID est optionnel et sera découvert automatiquement.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Device ID BACnet (optionnel)
+              // Device ID BACnet (optionnel en local)
               TextFormField(
                 controller: _bacnetDeviceIdController,
-                decoration: const InputDecoration(
-                  labelText: 'Device ID BACnet (optionnel)',
-                  prefixIcon: Icon(Icons.memory),
-                  helperText: 'Laissez vide pour découverte automatique',
+                decoration: InputDecoration(
+                  labelText: l10n.bacnetDeviceIdOptional,
+                  prefixIcon: const Icon(Icons.memory),
+                  helperText: l10n.bacnetDeviceIdHelper,
+                  helperMaxLines: 2,
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -377,6 +430,122 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     );
   }
 
+  Widget _buildDiscoverButton(AppLocalizations l10n) {
+    final theme = Theme.of(context);
+
+    if (_connectionType == ConnectionType.distechApi) {
+      // Bouton decouverte ECLYPSE
+      return Card(
+        color: theme.colorScheme.primaryContainer,
+        child: InkWell(
+          onTap: _openDiscoverEclypse,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.wifi_find,
+                    color: theme.colorScheme.primary,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.discoverEclypse,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.discoverEclypseSubtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      // Bouton decouverte BACnet
+      return Card(
+        color: theme.colorScheme.primaryContainer,
+        child: InkWell(
+          onTap: _openDiscoverBacnet,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.device_hub,
+                    color: theme.colorScheme.primary,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.discoverDevices,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.broadcastDiscoverySubtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _testConnection() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -430,7 +599,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.errorMessage ?? 'Échec de la connexion'),
+            content: Text(result.errorMessage ?? 'Echec de la connexion'),
             backgroundColor: Colors.red,
           ),
         );
@@ -451,7 +620,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
 
     if (mounted) {
       if (result.success) {
-        // Mettre à jour le Device ID si découvert
+        // Mettre a jour le Device ID si decouvert
         if (result.deviceId != null && _bacnetDeviceIdController.text.isEmpty) {
           setState(() {
             _bacnetDeviceIdController.text = result.deviceId.toString();
@@ -460,7 +629,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Connexion BACnet réussie! Device ID: ${result.deviceId ?? "non découvert"}',
+              'Connexion BACnet reussie! Device ID: ${result.deviceId ?? "non decouvert"}',
             ),
             backgroundColor: Colors.green,
           ),
@@ -468,7 +637,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.errorMessage ?? 'Échec de la connexion BACnet'),
+            content: Text(result.errorMessage ?? 'Echec de la connexion BACnet'),
             backgroundColor: Colors.red,
           ),
         );
@@ -484,7 +653,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     try {
       final repository = ref.read(connectionRepositoryProvider);
 
-      // Préparer les valeurs selon le type de connexion
+      // Preparer les valeurs selon le type de connexion
       final username = _connectionType == ConnectionType.bacnet
           ? 'bacnet'  // Placeholder pour BACnet
           : _usernameController.text.trim();
@@ -526,8 +695,8 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(widget.isEditing
-                ? 'Connexion modifiée'
-                : 'Connexion enregistrée'),
+                ? 'Connexion modifiee'
+                : 'Connexion enregistree'),
             backgroundColor: Colors.green,
           ),
         );

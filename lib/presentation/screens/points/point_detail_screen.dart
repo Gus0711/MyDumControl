@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/trend_log_provider.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/trend_log_viewer.dart';
 import '../../widgets/favorite_button.dart';
@@ -34,12 +35,14 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     // Parser l'ID du point (format: "type:instance")
     final parts = widget.pointId.split(':');
     if (parts.length != 2) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Erreur')),
-        body: const Center(child: Text('ID de point invalide')),
+        appBar: AppBar(title: Text(l10n.error)),
+        body: Center(child: Text(l10n.invalidPointId)),
       );
     }
 
@@ -47,8 +50,8 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     final instance = int.tryParse(parts[1]);
     if (instance == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Erreur')),
-        body: const Center(child: Text('Instance invalide')),
+        appBar: AppBar(title: Text(l10n.error)),
+        body: Center(child: Text(l10n.invalidInstance)),
       );
     }
 
@@ -60,8 +63,8 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
     if (type == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Erreur')),
-        body: Center(child: Text('Type inconnu: $typeName')),
+        appBar: AppBar(title: Text(l10n.error)),
+        body: Center(child: Text(l10n.unknownType(typeName))),
       );
     }
 
@@ -70,7 +73,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
     if (point == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Point non trouvé')),
+        appBar: AppBar(title: Text(l10n.pointNotFound)),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -78,14 +81,14 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
               const SizedBox(height: 16),
               Text(
-                'Point ${type.shortName}:$instance non trouvé',
+                l10n.pointNotFoundMessage(type.shortName, instance.toString()),
                 style: TextStyle(color: Colors.grey.shade600),
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
                 icon: const Icon(Icons.refresh),
-                label: const Text('Recharger les points'),
+                label: Text(l10n.reloadPoints),
               ),
             ],
           ),
@@ -117,30 +120,36 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           // Carte principale avec la valeur
-          _buildValueCard(context, point),
+          _buildValueCard(context, point, l10n),
           const SizedBox(height: 16),
+
+          // Carte d'alarme (si point en alarme)
+          if (point.inAlarm) ...[
+            _buildAlarmCard(context, point, l10n),
+            const SizedBox(height: 16),
+          ],
 
           // Carte de forçage (si point forcé via priority-array)
           if (point.isOverridden) ...[
-            _buildOverrideCard(context, point),
+            _buildOverrideCard(context, point, l10n),
             const SizedBox(height: 16),
           ],
 
           // Carte de forçage pour les entrées (si out-of-service = true)
           if (point.type.isInput && point.outOfService == true) ...[
-            _buildInputForcedCard(context, point),
+            _buildInputForcedCard(context, point, l10n),
             const SizedBox(height: 16),
           ],
 
           // Informations générales
-          _buildInfoCard(context, point),
+          _buildInfoCard(context, point, l10n),
           const SizedBox(height: 16),
 
           // Historique (si disponible)
           _buildTrendLogSection(context, point),
 
           // Propriétés techniques
-          _buildPropertiesCard(context, point),
+          _buildPropertiesCard(context, point, l10n),
         ],
       ),
     );
@@ -172,7 +181,44 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     );
   }
 
-  Widget _buildValueCard(BuildContext context, BacnetObject point) {
+  Widget _buildStatusIndicators(BuildContext context, BacnetObject point, AppLocalizations l10n) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        // Indicateur d'alarme
+        if (point.inAlarm)
+          Chip(
+            avatar: Icon(Icons.warning_amber, color: Colors.red.shade700, size: 18),
+            label: Text(l10n.alarm),
+            backgroundColor: Colors.red.shade100,
+            labelStyle: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.bold),
+          ),
+        // Indicateur de forçage
+        if (point.isOverridden)
+          Chip(
+            avatar: Icon(Icons.lock, color: Colors.red.shade700, size: 18),
+            label: Text(l10n.forcedP(point.overridePriority?.toString() ?? '?')),
+            backgroundColor: Colors.red.shade100,
+            labelStyle: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.bold),
+          ),
+        if (point.outOfService == true)
+          Chip(
+            label: Text(l10n.outOfService),
+            backgroundColor: Colors.orange.shade100,
+            labelStyle: TextStyle(color: Colors.orange.shade800),
+          ),
+        if (point.reliability != null && point.reliability != 'no-fault-detected')
+          Chip(
+            label: Text(point.reliability!),
+            backgroundColor: Colors.red.shade100,
+            labelStyle: TextStyle(color: Colors.red.shade800),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildValueCard(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     final valueColor = _getValueColor(point);
 
     return Card(
@@ -207,38 +253,13 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
             // Valeur actuelle ou édition
             if (_isEditing)
-              _buildEditWidget(context, point)
+              _buildEditWidget(context, point, l10n)
             else
               _buildValueDisplay(context, point, valueColor),
 
             // Indicateurs d'état
             const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                // Indicateur de forçage
-                if (point.isOverridden)
-                  Chip(
-                    avatar: Icon(Icons.lock, color: Colors.red.shade700, size: 18),
-                    label: Text('Forcé P${point.overridePriority}'),
-                    backgroundColor: Colors.red.shade100,
-                    labelStyle: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.bold),
-                  ),
-                if (point.outOfService == true)
-                  Chip(
-                    label: const Text('Hors service'),
-                    backgroundColor: Colors.orange.shade100,
-                    labelStyle: TextStyle(color: Colors.orange.shade800),
-                  ),
-                if (point.reliability != null && point.reliability != 'no-fault-detected')
-                  Chip(
-                    label: Text(point.reliability!),
-                    backgroundColor: Colors.red.shade100,
-                    labelStyle: TextStyle(color: Colors.red.shade800),
-                  ),
-              ],
-            ),
+            _buildStatusIndicators(context, point, l10n),
           ],
         ),
       ),
@@ -263,13 +284,13 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     );
   }
 
-  Widget _buildEditWidget(BuildContext context, BacnetObject point) {
+  Widget _buildEditWidget(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     return Column(
       children: [
         // Sélecteur de mode d'écriture selon le type
         if (point.type.canWriteSimple)
           // Values: peuvent régler, forcer ou auto
-          _buildWriteModeSelector(point)
+          _buildWriteModeSelector(point, l10n)
         else if (point.type.isInput)
           // Entrées: forçage via out-of-service
           Container(
@@ -285,7 +306,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
                 Icon(Icons.power_settings_new, size: 16, color: Colors.orange.shade700),
                 const SizedBox(width: 8),
                 Text(
-                  'Forçage (out-of-service)',
+                  l10n.forcingOutOfService,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.orange.shade700,
@@ -309,7 +330,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
                 Icon(Icons.lock, size: 16, color: Colors.purple.shade700),
                 const SizedBox(width: 8),
                 Text(
-                  'Forçage (priorité 1)',
+                  l10n.forcingPriority1,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.purple.shade700,
@@ -322,18 +343,18 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
         // Éditeur selon le type
         if (point.type.isBinary)
-          _buildBinaryEditor(context, point)
+          _buildBinaryEditor(context, point, l10n)
         else if (point.type.isAnalog)
-          _buildAnalogEditor(context, point)
+          _buildAnalogEditor(context, point, l10n)
         else if (point.type.isMultiState)
-          _buildMultiStateEditor(context, point)
+          _buildMultiStateEditor(context, point, l10n)
         else
-          const Text('Type non éditable'),
+          Text(l10n.typeNotEditable),
       ],
     );
   }
 
-  Widget _buildWriteModeSelector(BacnetObject point) {
+  Widget _buildWriteModeSelector(BacnetObject point, AppLocalizations l10n) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
@@ -345,7 +366,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           // Bouton Régler
           _buildModeButton(
             icon: Icons.edit,
-            label: 'Régler',
+            label: l10n.set,
             isSelected: _writeMode == WriteMode.regler,
             onTap: () => setState(() => _writeMode = WriteMode.regler),
             color: Colors.blue,
@@ -355,7 +376,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           // Bouton Forçage
           _buildModeButton(
             icon: Icons.lock,
-            label: 'Forçage',
+            label: l10n.force,
             isSelected: _writeMode == WriteMode.forcage,
             onTap: () => setState(() => _writeMode = WriteMode.forcage),
             color: Colors.purple,
@@ -365,7 +386,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           // Bouton Auto
           _buildModeButton(
             icon: Icons.autorenew,
-            label: 'Auto',
+            label: l10n.auto,
             isSelected: _writeMode == WriteMode.auto,
             onTap: () => setState(() => _writeMode = WriteMode.auto),
             color: Colors.green,
@@ -413,7 +434,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     );
   }
 
-  Widget _buildBinaryEditor(BuildContext context, BacnetObject point) {
+  Widget _buildBinaryEditor(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     // Normaliser la valeur pour détecter si actif
     // La valeur peut être: true, 1, 'active', 'true', 'TRUE', 'Active', etc.
     final isActive = BacnetTypeUtils.isBinaryActive(_editValue);
@@ -433,20 +454,20 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        _buildApplyButton(point),
+        _buildApplyButton(point, l10n),
       ],
     );
   }
 
   /// Bouton Appliquer avec état de chargement
-  Widget _buildApplyButton(BacnetObject point) {
+  Widget _buildApplyButton(BacnetObject point, AppLocalizations l10n) {
     String buttonText;
     Color buttonColor;
     IconData buttonIcon;
 
     // Les entrées ont un traitement spécial
     if (point.type.isInput) {
-      buttonText = 'Forcer';
+      buttonText = l10n.force;
       buttonColor = Colors.orange;
       buttonIcon = Icons.power_settings_new;
     } else {
@@ -455,17 +476,17 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
       switch (effectiveMode) {
         case WriteMode.regler:
-          buttonText = 'Régler';
+          buttonText = l10n.set;
           buttonColor = Colors.blue;
           buttonIcon = Icons.save;
           break;
         case WriteMode.forcage:
-          buttonText = 'Forcer';
+          buttonText = l10n.force;
           buttonColor = Colors.purple;
           buttonIcon = Icons.lock;
           break;
         case WriteMode.auto:
-          buttonText = 'Auto';
+          buttonText = l10n.auto;
           buttonColor = Colors.green;
           buttonIcon = Icons.autorenew;
           break;
@@ -473,7 +494,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     }
 
     return ElevatedButton.icon(
-      onPressed: _isWriting ? null : () => _writeValue(point, _editValue),
+      onPressed: _isWriting ? null : () => _writeValue(point, _editValue, l10n),
       style: ElevatedButton.styleFrom(
         backgroundColor: buttonColor,
         foregroundColor: Colors.white,
@@ -488,7 +509,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               ),
             )
           : Icon(buttonIcon),
-      label: Text(_isWriting ? 'En cours...' : buttonText),
+      label: Text(_isWriting ? l10n.inProgress : buttonText),
     );
   }
 
@@ -523,7 +544,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     );
   }
 
-  Widget _buildAnalogEditor(BuildContext context, BacnetObject point) {
+  Widget _buildAnalogEditor(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     return Form(
       key: _formKey,
       child: Column(
@@ -537,7 +558,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
               ],
               decoration: InputDecoration(
-                labelText: 'Valeur',
+                labelText: l10n.value,
                 suffixText: point.units,
                 border: const OutlineInputBorder(),
               ),
@@ -548,26 +569,26 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               },
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Entrez une valeur';
+                  return l10n.enterValue;
                 }
                 if (double.tryParse(value) == null) {
-                  return 'Valeur invalide';
+                  return l10n.invalidValue;
                 }
                 return null;
               },
             ),
           ),
           const SizedBox(height: 16),
-          _buildApplyButtonWithValidation(point),
+          _buildApplyButtonWithValidation(point, l10n),
         ],
       ),
     );
   }
 
-  Widget _buildMultiStateEditor(BuildContext context, BacnetObject point) {
+  Widget _buildMultiStateEditor(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     // Si on a les états possibles, afficher un dropdown
     if (point.stateText != null && point.stateText!.isNotEmpty) {
-      return _buildMultiStateDropdown(context, point);
+      return _buildMultiStateDropdown(context, point, l10n);
     }
 
     // Sinon on utilise un champ texte numérique (fallback)
@@ -581,9 +602,9 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               initialValue: point.presentValue?.toString() ?? '',
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
-                labelText: 'État',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.state,
+                border: const OutlineInputBorder(),
               ),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -592,24 +613,24 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               },
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Entrez un état';
+                  return l10n.enterState;
                 }
                 final intValue = int.tryParse(value);
                 if (intValue == null || intValue < 1) {
-                  return 'État invalide (min: 1)';
+                  return l10n.invalidStateMin1;
                 }
                 return null;
               },
             ),
           ),
           const SizedBox(height: 16),
-          _buildApplyButtonWithValidation(point),
+          _buildApplyButtonWithValidation(point, l10n),
         ],
       ),
     );
   }
 
-  Widget _buildMultiStateDropdown(BuildContext context, BacnetObject point) {
+  Widget _buildMultiStateDropdown(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     final stateText = point.stateText!;
 
     // Valeur actuelle (BACnet est indexé à partir de 1)
@@ -702,27 +723,27 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
         const SizedBox(height: 8),
         // Affichage de la sélection actuelle
         Text(
-          'État sélectionné: ${stateText[currentValue - 1]} ($currentValue)',
+          l10n.selectedState(stateText[currentValue - 1], currentValue.toString()),
           style: TextStyle(
             color: Colors.grey.shade600,
             fontSize: 14,
           ),
         ),
         const SizedBox(height: 16),
-        _buildApplyButton(point),
+        _buildApplyButton(point, l10n),
       ],
     );
   }
 
   /// Bouton Appliquer avec validation de formulaire
-  Widget _buildApplyButtonWithValidation(BacnetObject point) {
+  Widget _buildApplyButtonWithValidation(BacnetObject point, AppLocalizations l10n) {
     String buttonText;
     Color buttonColor;
     IconData buttonIcon;
 
     // Les entrées ont un traitement spécial
     if (point.type.isInput) {
-      buttonText = 'Forcer';
+      buttonText = l10n.force;
       buttonColor = Colors.orange;
       buttonIcon = Icons.power_settings_new;
     } else {
@@ -730,17 +751,17 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
       switch (effectiveMode) {
         case WriteMode.regler:
-          buttonText = 'Régler';
+          buttonText = l10n.set;
           buttonColor = Colors.blue;
           buttonIcon = Icons.save;
           break;
         case WriteMode.forcage:
-          buttonText = 'Forcer';
+          buttonText = l10n.force;
           buttonColor = Colors.purple;
           buttonIcon = Icons.lock;
           break;
         case WriteMode.auto:
-          buttonText = 'Auto';
+          buttonText = l10n.auto;
           buttonColor = Colors.green;
           buttonIcon = Icons.autorenew;
           break;
@@ -752,7 +773,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           ? null
           : () {
               if (_formKey.currentState!.validate()) {
-                _writeValue(point, _editValue);
+                _writeValue(point, _editValue, l10n);
               }
             },
       style: ElevatedButton.styleFrom(
@@ -769,11 +790,11 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               ),
             )
           : Icon(buttonIcon),
-      label: Text(_isWriting ? 'En cours...' : buttonText),
+      label: Text(_isWriting ? l10n.inProgress : buttonText),
     );
   }
 
-  Future<void> _writeValue(BacnetObject point, dynamic value) async {
+  Future<void> _writeValue(BacnetObject point, dynamic value, AppLocalizations l10n) async {
     setState(() => _isWriting = true);
 
     bool success;
@@ -782,7 +803,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     // Les entrées utilisent une méthode différente (out-of-service)
     if (point.type.isInput) {
       success = await ref.read(pointsProvider.notifier).forceInput(point, value);
-      successMessage = 'Entrée forcée (out-of-service)';
+      successMessage = l10n.inputForced;
     } else {
       // Déterminer le mode d'écriture effectif
       // Pour les Outputs, on force toujours (pas de choix)
@@ -792,13 +813,13 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
         case WriteMode.regler:
           // Écriture simple (sans priorité)
           success = await ref.read(pointsProvider.notifier).writeValue(point, value);
-          successMessage = 'Valeur réglée';
+          successMessage = l10n.valueSet;
           break;
 
         case WriteMode.forcage:
           // Forçage avec priorité 1
           success = await ref.read(pointsProvider.notifier).writeOverride(point, value, priority: 1);
-          successMessage = 'Valeur forcée (priorité 1)';
+          successMessage = l10n.valueForcedPriority1;
           break;
 
         case WriteMode.auto:
@@ -812,7 +833,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
             success = await ref.read(pointsProvider.notifier).emergencyRelease(point);
           }
 
-          successMessage = success ? 'Point remis en Auto' : 'Erreur lors de la mise en Auto';
+          successMessage = success ? l10n.pointSetToAuto : l10n.errorSettingAuto;
           break;
       }
     }
@@ -832,8 +853,8 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erreur lors de l\'écriture'),
+          SnackBar(
+            content: Text(l10n.writeError),
             backgroundColor: Colors.red,
           ),
         );
@@ -841,7 +862,76 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     }
   }
 
-  Widget _buildOverrideCard(BuildContext context, BacnetObject point) {
+  Widget _buildAlarmCard(BuildContext context, BacnetObject point, AppLocalizations l10n) {
+    return Card(
+      color: Colors.red.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber, color: Colors.red.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.pointInAlarm,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade700,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.alarmTriggeredMessage,
+              style: TextStyle(color: Colors.red.shade800),
+            ),
+            if (point.alarmTimestamp != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.access_time, size: 16, color: Colors.red.shade600),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatAlarmTimestamp(point.alarmTimestamp!),
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (point.alarmMessage != null && point.alarmMessage!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                point.alarmMessage!,
+                style: TextStyle(
+                  color: Colors.red.shade800,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatAlarmTimestamp(DateTime timestamp) {
+    final d = timestamp.day.toString().padLeft(2, '0');
+    final m = timestamp.month.toString().padLeft(2, '0');
+    final y = timestamp.year;
+    final h = timestamp.hour.toString().padLeft(2, '0');
+    final min = timestamp.minute.toString().padLeft(2, '0');
+    return '$d/$m/$y $h:$min';
+  }
+
+  Widget _buildOverrideCard(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     return Card(
       color: Colors.red.shade50,
       child: Padding(
@@ -855,7 +945,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Point Forcé',
+                    l10n.pointForced,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: Colors.red.shade700,
@@ -865,17 +955,17 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            _buildInfoRow('Priorité', 'Niveau ${point.overridePriority}'),
-            _buildInfoRow('Valeur forcée', _formatOverrideValue(point)),
+            _buildInfoRow(l10n.priority, l10n.level(point.overridePriority ?? 0)),
+            _buildInfoRow(l10n.forcedValue, _formatOverrideValue(point, l10n)),
             const SizedBox(height: 16),
             // Boutons de libération
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _isWriting ? null : () => _releaseOverride(point),
+                    onPressed: _isWriting ? null : () => _releaseOverride(point, l10n),
                     icon: const Icon(Icons.lock_open),
-                    label: const Text('Libérer'),
+                    label: Text(l10n.release),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.orange.shade700,
                       side: BorderSide(color: Colors.orange.shade400),
@@ -885,9 +975,9 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _isWriting ? null : () => _emergencyRelease(point),
+                    onPressed: _isWriting ? null : () => _emergencyRelease(point, l10n),
                     icon: const Icon(Icons.warning_amber),
-                    label: const Text('Urgence'),
+                    label: Text(l10n.emergency),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red.shade700,
                       side: BorderSide(color: Colors.red.shade400),
@@ -903,7 +993,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
   }
 
   /// Carte affichée quand une entrée est forcée via out-of-service
-  Widget _buildInputForcedCard(BuildContext context, BacnetObject point) {
+  Widget _buildInputForcedCard(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     return Card(
       color: Colors.orange.shade50,
       child: Padding(
@@ -917,7 +1007,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Entrée Forcée',
+                    l10n.inputForcedTitle,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: Colors.orange.shade700,
@@ -928,8 +1018,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Cette entrée est hors service (out-of-service = true).\n'
-              'La valeur affichée est forcée manuellement.',
+              l10n.inputForcedMessage,
               style: TextStyle(color: Colors.orange.shade800),
             ),
             const SizedBox(height: 16),
@@ -937,9 +1026,9 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: _isWriting ? null : () => _releaseInput(point),
+                onPressed: _isWriting ? null : () => _releaseInput(point, l10n),
                 icon: const Icon(Icons.lock_open),
-                label: const Text('Libérer l\'entrée'),
+                label: Text(l10n.releaseInput),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.green.shade700,
                   side: BorderSide(color: Colors.green.shade400),
@@ -952,7 +1041,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     );
   }
 
-  Future<void> _releaseInput(BacnetObject point) async {
+  Future<void> _releaseInput(BacnetObject point, AppLocalizations l10n) async {
     setState(() => _isWriting = true);
 
     final success = await ref.read(pointsProvider.notifier).releaseInput(point);
@@ -961,15 +1050,15 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       setState(() => _isWriting = false);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Entrée libérée (out-of-service = false)'),
+          SnackBar(
+            content: Text(l10n.inputReleased),
             backgroundColor: Colors.green,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erreur lors de la libération de l\'entrée'),
+          SnackBar(
+            content: Text(l10n.inputReleaseError),
             backgroundColor: Colors.red,
           ),
         );
@@ -977,7 +1066,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     }
   }
 
-  Future<void> _releaseOverride(BacnetObject point) async {
+  Future<void> _releaseOverride(BacnetObject point, AppLocalizations l10n) async {
     setState(() => _isWriting = true);
 
     final success = await ref.read(pointsProvider.notifier).releaseOverride(
@@ -989,15 +1078,15 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       setState(() => _isWriting = false);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Forçage libéré'),
+          SnackBar(
+            content: Text(l10n.overrideReleased),
             backgroundColor: Colors.green,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erreur lors de la libération'),
+          SnackBar(
+            content: Text(l10n.releaseError),
             backgroundColor: Colors.red,
           ),
         );
@@ -1005,7 +1094,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     }
   }
 
-  Future<void> _emergencyRelease(BacnetObject point) async {
+  Future<void> _emergencyRelease(BacnetObject point, AppLocalizations l10n) async {
     // Confirmation avant libération d'urgence
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1014,18 +1103,14 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           children: [
             Icon(Icons.warning_amber, color: Colors.red.shade700),
             const SizedBox(width: 8),
-            const Text('Libération d\'urgence'),
+            Text(l10n.emergencyRelease),
           ],
         ),
-        content: const Text(
-          'Cette action va libérer TOUTES les priorités (1-16) du point.\n\n'
-          'Le point retournera en mode complètement automatique.\n\n'
-          'Continuer ?',
-        ),
+        content: Text(l10n.emergencyReleaseMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -1033,7 +1118,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Libérer tout'),
+            child: Text(l10n.releaseAll),
           ),
         ],
       ),
@@ -1049,15 +1134,15 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       setState(() => _isWriting = false);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Toutes les priorités libérées'),
+          SnackBar(
+            content: Text(l10n.allPrioritiesReleased),
             backgroundColor: Colors.green,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erreur lors de la libération d\'urgence'),
+          SnackBar(
+            content: Text(l10n.emergencyReleaseError),
             backgroundColor: Colors.red,
           ),
         );
@@ -1065,16 +1150,16 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     }
   }
 
-  String _formatOverrideValue(BacnetObject point) {
+  String _formatOverrideValue(BacnetObject point, AppLocalizations l10n) {
     final value = point.overrideValue;
     if (value == null) return '-';
 
     if (point.type.isBinary) {
       final isActive = BacnetTypeUtils.isBinaryActive(value);
       if (isActive) {
-        return point.activeText ?? 'Actif';
+        return point.activeText ?? l10n.active;
       } else {
-        return point.inactiveText ?? 'Inactif';
+        return point.inactiveText ?? l10n.inactive;
       }
     }
 
@@ -1089,7 +1174,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     return value.toString();
   }
 
-  Widget _buildInfoCard(BuildContext context, BacnetObject point) {
+  Widget _buildInfoCard(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1101,7 +1186,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
                 const Icon(Icons.info_outline, color: Colors.blue),
                 const SizedBox(width: 8),
                 Text(
-                  'Informations',
+                  l10n.information,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -1109,21 +1194,21 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            _buildInfoRow('Nom', point.objectName),
+            _buildInfoRow(l10n.name, point.objectName),
             if (point.description != null && point.description!.isNotEmpty)
-              _buildInfoRow('Description', point.description!),
-            _buildInfoRow('Identifiant', point.objectId),
-            _buildInfoRow('Type', point.type.displayName),
-            _buildInfoRow('Instance', point.instance.toString()),
+              _buildInfoRow(l10n.description, point.description!),
+            _buildInfoRow(l10n.identifier, point.objectId),
+            _buildInfoRow(l10n.type, point.type.displayName),
+            _buildInfoRow(l10n.instance, point.instance.toString()),
             if (point.units != null && point.units!.isNotEmpty)
-              _buildInfoRow('Unité', point.units!),
+              _buildInfoRow(l10n.unit, point.units!),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPropertiesCard(BuildContext context, BacnetObject point) {
+  Widget _buildPropertiesCard(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     final props = point.rawProperties;
     if (props == null || props.isEmpty) {
       return const SizedBox.shrink();
@@ -1151,7 +1236,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
                 const Icon(Icons.settings, color: Colors.grey),
                 const SizedBox(width: 8),
                 Text(
-                  'Propriétés',
+                  l10n.properties,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),

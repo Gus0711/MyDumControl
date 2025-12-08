@@ -10,6 +10,62 @@ import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/favorite_button.dart';
+import '../../../l10n/app_localizations.dart';
+
+/// Helper pour obtenir le nom localisé d'une catégorie
+String getCategoryDisplayName(PointCategory category, AppLocalizations l10n) {
+  switch (category) {
+    case PointCategory.inputs:
+      return l10n.categoryInputs;
+    case PointCategory.outputs:
+      return l10n.categoryOutputs;
+    case PointCategory.variables:
+      return l10n.categoryVariables;
+    case PointCategory.others:
+      return l10n.categoryOthers;
+    case PointCategory.all:
+      return l10n.categoryAll;
+  }
+}
+
+/// Helper pour obtenir le nom localisé d'une option de tri
+String getSortOptionDisplayName(PointSortOption option, AppLocalizations l10n) {
+  switch (option) {
+    case PointSortOption.nameAsc:
+      return l10n.sortNameAsc;
+    case PointSortOption.nameDesc:
+      return l10n.sortNameDesc;
+    case PointSortOption.typeAsc:
+      return l10n.sortType;
+    case PointSortOption.valueAsc:
+      return l10n.sortValueAsc;
+    case PointSortOption.valueDesc:
+      return l10n.sortValueDesc;
+    case PointSortOption.favoritesFirst:
+      return l10n.sortFavoritesFirst;
+  }
+}
+
+/// Helper pour obtenir le nom localisé d'un filtre de sous-type
+String getSubTypeFilterLabel(SubTypeFilter filter, AppLocalizations l10n) {
+  switch (filter) {
+    case SubTypeFilter.all:
+      return l10n.subTypeAll;
+    case SubTypeFilter.analog:
+      return l10n.subTypeAnalog;
+    case SubTypeFilter.binary:
+      return l10n.subTypeBinary;
+    case SubTypeFilter.multiState:
+      return l10n.subTypeMulti;
+  }
+}
+
+/// Helper pour obtenir le label localisé de l'auto-refresh
+String getAutoRefreshLabel(int value, AppLocalizations l10n) {
+  if (value == 0) return l10n.autoRefreshOff;
+  if (value == 60) return l10n.autoRefreshMinute;
+  return l10n.autoRefreshSeconds(value);
+}
 
 /// Écran de liste des points BACnet avec navigation par catégories (TabBar)
 class PointsScreen extends ConsumerStatefulWidget {
@@ -82,7 +138,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
     }
   }
 
-  Widget _buildAutoRefreshButton() {
+  Widget _buildAutoRefreshButton(AppLocalizations l10n) {
     final currentInterval = ref.watch(autoRefreshIntervalProvider);
     final isActive = currentInterval > 0;
 
@@ -92,8 +148,8 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
         color: isActive ? Colors.green : null,
       ),
       tooltip: isActive
-          ? 'Auto-refresh: ${autoRefreshOptions.firstWhere((o) => o.value == currentInterval).label}'
-          : 'Auto-refresh désactivé',
+          ? l10n.autoRefreshLabel(getAutoRefreshLabel(currentInterval, l10n))
+          : l10n.autoRefreshDisabled,
       onSelected: (interval) {
         ref.read(autoRefreshIntervalProvider.notifier).state = interval;
         _setupAutoRefresh();
@@ -109,7 +165,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
               else
                 const SizedBox(width: 18),
               const SizedBox(width: 8),
-              Text(option.label),
+              Text(getAutoRefreshLabel(option.value, l10n)),
               if (option.value > 0) ...[
                 const Spacer(),
                 Icon(
@@ -142,6 +198,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final pointsState = ref.watch(pointsProvider);
     final counts = pointsState.pointCountByCategory;
 
@@ -150,7 +207,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: _showSearch ? _buildSearchField() : const Text('Points'),
+        title: _showSearch ? _buildSearchField(l10n) : Text(l10n.points),
         actions: [
           // Bouton recherche
           IconButton(
@@ -168,7 +225,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
           // Menu tri
           PopupMenuButton<PointSortOption>(
             icon: const Icon(Icons.sort),
-            tooltip: 'Trier',
+            tooltip: l10n.sort,
             onSelected: (option) {
               ref.read(pointsProvider.notifier).setSortOption(option);
             },
@@ -183,7 +240,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
                     else
                       const SizedBox(width: 18),
                     const SizedBox(width: 8),
-                    Text(option.displayName),
+                    Text(getSortOptionDisplayName(option, l10n)),
                   ],
                 ),
               );
@@ -191,7 +248,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
           ),
           // Auto-refresh (seulement pour BACnet)
           if (ref.watch(activeConnectionProvider).isBacnetConnection)
-            _buildAutoRefreshButton(),
+            _buildAutoRefreshButton(l10n),
           // Rafraîchir (optimisé pour BACnet)
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -213,11 +270,11 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
                   if (cat == PointCategory.all)
                     const Icon(Icons.search, size: 16)
                   else
-                    Text(cat.displayName),
+                    Text(getCategoryDisplayName(cat, l10n)),
                   if (cat == PointCategory.all)
                     const SizedBox(width: 4),
                   if (cat == PointCategory.all)
-                    const Text('Tous'),
+                    Text(l10n.allPoints),
                   if (count > 0 && cat != PointCategory.all) ...[
                     const SizedBox(width: 6),
                     Container(
@@ -272,7 +329,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Chargement des valeurs en cours...',
+                    l10n.loadingValuesProgress,
                     style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
                   ),
                 ],
@@ -293,12 +350,12 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
     );
   }
 
-  Widget _buildSearchField() {
+  Widget _buildSearchField(AppLocalizations l10n) {
     return TextField(
       controller: _searchController,
       autofocus: true,
-      decoration: const InputDecoration(
-        hintText: 'Rechercher un point...',
+      decoration: InputDecoration(
+        hintText: l10n.searchPoint,
         border: InputBorder.none,
       ),
       onChanged: (value) {
@@ -314,18 +371,25 @@ class _PointsCategoryTab extends ConsumerWidget {
 
   const _PointsCategoryTab({required this.category});
 
+  /// Vérifie si cette catégorie supporte les filtres de sous-type
+  bool get _supportsSubTypeFilter =>
+      category == PointCategory.inputs ||
+      category == PointCategory.outputs ||
+      category == PointCategory.variables;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final pointsState = ref.watch(pointsProvider);
 
     if (pointsState.isLoading && pointsState.points.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Chargement des points...'),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(l10n.loadingPoints),
           ],
         ),
       );
@@ -349,7 +413,7 @@ class _PointsCategoryTab extends ConsumerWidget {
             ElevatedButton.icon(
               onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
               icon: const Icon(Icons.refresh),
-              label: const Text('Réessayer'),
+              label: Text(l10n.retry),
             ),
           ],
         ),
@@ -358,33 +422,99 @@ class _PointsCategoryTab extends ConsumerWidget {
 
     final filteredPoints = pointsState.getFilteredAndSortedPoints(category: category);
 
-    if (filteredPoints.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              pointsState.searchQuery.isNotEmpty
-                  ? 'Aucun résultat pour "${pointsState.searchQuery}"'
-                  : 'Aucun point dans cette catégorie',
-              style: TextStyle(color: Colors.grey.shade600),
+    // Construire la barre de filtres si applicable
+    Widget? filterBar;
+    if (_supportsSubTypeFilter && pointsState.points.isNotEmpty) {
+      final availableFilters = pointsState.getAvailableSubTypes(category);
+      // N'afficher les filtres que s'il y a plus d'un type disponible
+      if (availableFilters.length > 2) {
+        final counts = pointsState.getSubTypeCountsForCategory(category);
+        filterBar = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor.withAlpha(50),
+              ),
             ),
-          ],
-        ),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: availableFilters.map((filter) {
+                final isSelected = pointsState.subTypeFilter == filter;
+                final count = counts[filter] ?? 0;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text(
+                      filter == SubTypeFilter.all
+                          ? '${l10n.allPoints} ($count)'
+                          : '${getSubTypeFilterLabel(filter, l10n)} ($count)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    selected: isSelected,
+                    onSelected: (_) {
+                      ref.read(pointsProvider.notifier).setSubTypeFilter(filter);
+                    },
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      }
+    }
+
+    if (filteredPoints.isEmpty) {
+      return Column(
+        children: [
+          if (filterBar != null) filterBar,
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(
+                    pointsState.searchQuery.isNotEmpty
+                        ? l10n.noResultsFor(pointsState.searchQuery)
+                        : pointsState.subTypeFilter != SubTypeFilter.all
+                            ? l10n.noPointSubType(getSubTypeFilterLabel(pointsState.subTypeFilter, l10n))
+                            : l10n.noPointInCategory,
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () => ref.read(pointsProvider.notifier).refresh(),
-      child: ListView.builder(
-        itemCount: filteredPoints.length,
-        itemBuilder: (context, index) {
-          final point = filteredPoints[index];
-          return _PointTile(point: point);
-        },
-      ),
+    return Column(
+      children: [
+        if (filterBar != null) filterBar,
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => ref.read(pointsProvider.notifier).refresh(),
+            child: ListView.builder(
+              itemCount: filteredPoints.length,
+              itemBuilder: (context, index) {
+                final point = filteredPoints[index];
+                return _PointTile(point: point);
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -461,6 +591,31 @@ class _PointTile extends ConsumerWidget {
           _TrendLogIndicator(
             pointKey: '${point.type.apiName}:${point.instance}',
           ),
+          // Indicateur d'alarme
+          if (point.inAlarm)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              margin: const EdgeInsets.only(left: 4),
+              decoration: BoxDecoration(
+                color: Colors.red.shade100,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning_amber, size: 12, color: Colors.red.shade700),
+                  const SizedBox(width: 2),
+                  Text(
+                    AppLocalizations.of(context)!.alarm,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Indicateur de forçage (priority-array)
           if (point.isOverridden)
             Container(
@@ -549,12 +704,13 @@ class _TrendLogIndicator extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final hasTrendLog = ref.watch(hasTrendLogProvider(pointKey));
 
     if (!hasTrendLog) return const SizedBox.shrink();
 
     return Tooltip(
-      message: 'Trend log disponible',
+      message: l10n.trendLogAvailable,
       child: Container(
         padding: const EdgeInsets.all(4),
         child: Icon(

@@ -33,7 +33,8 @@
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
       "WebSearch",
-      "WebFetch(domain:pub.dev)"
+      "WebFetch(domain:pub.dev)",
+      "Bash(del \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\A_lire_avant_reprise.md\")"
     ],
     "deny": [],
     "ask": []

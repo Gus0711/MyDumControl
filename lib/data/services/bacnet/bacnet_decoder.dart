@@ -178,26 +178,38 @@ class BacnetDecoder {
     }
     offset++;
 
-    // Decode ALL values until closing tag (0x3F)
-    // This handles properties like object-list that contain multiple values
-    final values = <dynamic>[];
-    while (offset < data.length && data[offset] != 0x3F) {
-      final valueResult = _decodeApplicationValue(data, offset);
-      if (valueResult == null) {
-        break;
-      }
-      values.add(valueResult.value);
-      offset = valueResult.nextOffset;
-    }
-
-    // Return single value or list depending on count
+    // Check if this is a weekly-schedule (property 123) which has a special structure
+    // Weekly-schedule: ARRAY[7] OF BACnetDailySchedule
+    // Each BACnetDailySchedule is wrapped in context tag [0]
     dynamic finalValue;
-    if (values.isEmpty) {
-      finalValue = null;
-    } else if (values.length == 1) {
-      finalValue = values.first;
+    if (propertyId.value == 123 && offset < data.length && data[offset] == 0x0E) {
+      // Parse weekly-schedule specially
+      finalValue = _decodeWeeklyScheduleValue(data, offset);
+      // Skip to closing tag
+      while (offset < data.length && data[offset] != 0x3F) {
+        offset++;
+      }
     } else {
-      finalValue = values;
+      // Decode ALL values until closing tag (0x3F)
+      // This handles properties like object-list that contain multiple values
+      final values = <dynamic>[];
+      while (offset < data.length && data[offset] != 0x3F) {
+        final valueResult = _decodeApplicationValue(data, offset);
+        if (valueResult == null) {
+          break;
+        }
+        values.add(valueResult.value);
+        offset = valueResult.nextOffset;
+      }
+
+      // Return single value or list depending on count
+      if (values.isEmpty) {
+        finalValue = null;
+      } else if (values.length == 1) {
+        finalValue = values.first;
+      } else {
+        finalValue = values;
+      }
     }
 
     return BacnetResponse(
@@ -251,34 +263,52 @@ class BacnetDecoder {
           // Opening tag [4]: Property Value
           offset++;
 
-          // Essayer d'abord de décoder comme valeur application simple
-          final valueResult = _decodeApplicationValue(data, offset);
-          if (valueResult != null) {
-            offset = valueResult.nextOffset;
-            objectResults.add(PropertyResult(
-              propertyId: propId.value,
-              arrayIndex: arrayIndex,
-              value: valueResult.value,
-            ));
-          } else {
-            // Si ce n'est pas une valeur simple, c'est probablement une structure construite
-            // Décoder comme structure (pour log-device-object-property, etc.)
-            final structResult = _decodeConstructedValue(data, offset, 0x4F);
-            if (structResult != null) {
-              offset = structResult.nextOffset;
-              objectResults.add(PropertyResult(
-                propertyId: propId.value,
-                arrayIndex: arrayIndex,
-                value: structResult.value,
-              ));
+          // Décoder TOUTES les valeurs jusqu'au closing tag (0x4F)
+          // Ceci gère les propriétés comme state-text qui contiennent plusieurs valeurs
+          final values = <dynamic>[];
+          bool hasStructuredValue = false;
+
+          while (offset < data.length && data[offset] != 0x4F) {
+            final valueResult = _decodeApplicationValue(data, offset);
+            if (valueResult != null) {
+              values.add(valueResult.value);
+              offset = valueResult.nextOffset;
+            } else {
+              // Si ce n'est pas une valeur simple, c'est probablement une structure construite
+              // Décoder comme structure (pour log-device-object-property, etc.)
+              final structResult = _decodeConstructedValue(data, offset, 0x4F);
+              if (structResult != null) {
+                values.add(structResult.value);
+                offset = structResult.nextOffset;
+                hasStructuredValue = true;
+              } else {
+                // Ne peut pas décoder, avancer d'un byte pour éviter boucle infinie
+                offset++;
+              }
             }
           }
 
-          // Skip to closing tag
-          while (offset < data.length && data[offset] != 0x4F) {
-            offset++;
+          // Déterminer la valeur finale
+          dynamic finalValue;
+          if (values.isEmpty) {
+            finalValue = null;
+          } else if (values.length == 1) {
+            finalValue = values.first;
+          } else {
+            finalValue = values;
           }
-          if (offset < data.length) offset++; // Skip closing tag
+
+          if (finalValue != null || hasStructuredValue) {
+            objectResults.add(PropertyResult(
+              propertyId: propId.value,
+              arrayIndex: arrayIndex,
+              value: finalValue,
+            ));
+          }
+
+          if (offset < data.length && data[offset] == 0x4F) {
+            offset++; // Skip closing tag
+          }
         } else if (offset < data.length && data[offset] == 0x5E) {
           // Opening tag [5]: Property Access Error
           offset++;
@@ -896,6 +926,31 @@ class BacnetDecoder {
         value = _decodeUnsigned(data, offset, length);
         break;
 
+      case ApplicationTag.bitString:
+        // BACnet BitString: premier octet = nombre de bits inutilisés dans le dernier octet
+        // Octets suivants = les bits (MSB first)
+        if (length > 0 && offset + length <= data.length) {
+          final unusedBits = data[offset];
+          final bitBytes = data.sublist(offset + 1, offset + length);
+
+          // Convertir en liste de booléens
+          final bits = <bool>[];
+          for (int i = 0; i < bitBytes.length; i++) {
+            final byte = bitBytes[i];
+            // Nombre de bits à lire dans cet octet
+            int bitsToRead = 8;
+            if (i == bitBytes.length - 1) {
+              bitsToRead = 8 - unusedBits;
+            }
+            // Lire les bits du MSB au LSB
+            for (int j = 7; j >= 8 - bitsToRead; j--) {
+              bits.add((byte & (1 << j)) != 0);
+            }
+          }
+          value = bits;
+        }
+        break;
+
       case ApplicationTag.objectIdentifier:
         if (length == 4 && offset + 4 <= data.length) {
           final objectId = (data[offset] << 24) |
@@ -1081,6 +1136,160 @@ class BacnetDecoder {
     }
 
     return ValueResult(value: result, nextOffset: offset);
+  }
+
+  // =========================================================================
+  // Schedule Decoding Support - Internal Methods
+  // =========================================================================
+
+  /// Décode un weekly-schedule depuis les bytes bruts BACnet
+  /// Format: ARRAY[7] OF BACnetDailySchedule
+  /// Chaque DailySchedule est encapsulé dans context tag [0]
+  static DecodedWeeklySchedule _decodeWeeklyScheduleValue(Uint8List data, int offset) {
+    final days = <DecodedDailySchedule>[];
+    final endOffset = data.length;
+
+    // Parse jusqu'à 7 jours
+    while (offset < endOffset && days.length < 7) {
+      // Chercher opening tag context 0 (0x0E)
+      if (data[offset] == 0x0E) {
+        offset++; // Skip opening tag
+
+        final timeValues = <DecodedTimeValue>[];
+
+        // Parser les TimeValues jusqu'au closing tag (0x0F)
+        while (offset < endOffset && data[offset] != 0x0F) {
+          // Vérifier si c'est un time tag (Application tag 11 = 0xB4)
+          if ((data[offset] & 0xF0) == 0xB0) {
+            final tvResult = _decodeTimeValueFromBytesInternal(data, offset);
+            if (tvResult != null) {
+              timeValues.add(tvResult.timeValue);
+              offset = tvResult.nextOffset;
+            } else {
+              offset++; // Skip byte inconnu
+            }
+          } else {
+            offset++; // Skip byte inconnu
+          }
+        }
+
+        // Skip closing tag
+        if (offset < endOffset && data[offset] == 0x0F) {
+          offset++;
+        }
+
+        days.add(DecodedDailySchedule(timeValues: timeValues));
+      } else if (data[offset] == 0x3F) {
+        // Closing tag du property value - fin
+        break;
+      } else {
+        offset++; // Skip byte inconnu
+      }
+    }
+
+    // Remplir les jours manquants
+    while (days.length < 7) {
+      days.add(DecodedDailySchedule(timeValues: []));
+    }
+
+    return DecodedWeeklySchedule(days: days);
+  }
+
+  /// Décode un TimeValue depuis des bytes bruts (méthode interne)
+  static ({DecodedTimeValue timeValue, int nextOffset})? _decodeTimeValueFromBytesInternal(
+    Uint8List data,
+    int offset,
+  ) {
+    if (offset >= data.length) return null;
+
+    // Time: Application tag 11 (0xB4 = tag 11, length 4)
+    final timeTag = data[offset];
+    if ((timeTag & 0xF0) != 0xB0) return null; // Not a time tag
+
+    offset++;
+    if (offset + 4 > data.length) return null;
+
+    final hour = data[offset];
+    final minute = data[offset + 1];
+    final second = data[offset + 2];
+    final hundredths = data[offset + 3];
+    offset += 4;
+
+    // Value: Any application tag
+    if (offset >= data.length) return null;
+
+    final valueTag = data[offset];
+    final tagNumber = (valueTag >> 4) & 0x0F;
+    dynamic value;
+
+    switch (tagNumber) {
+      case 0: // Null
+        value = null;
+        offset++;
+        break;
+
+      case 1: // Boolean
+        value = (valueTag & 0x01) == 1;
+        offset++;
+        break;
+
+      case 2: // Unsigned
+      case 9: // Enumerated
+        final length = valueTag & 0x07;
+        offset++;
+        if (offset + length <= data.length) {
+          int intVal = 0;
+          for (int i = 0; i < length; i++) {
+            intVal = (intVal << 8) | data[offset + i];
+          }
+          value = intVal;
+          offset += length;
+        }
+        break;
+
+      case 3: // Signed
+        final length = valueTag & 0x07;
+        offset++;
+        if (offset + length <= data.length) {
+          int intVal = 0;
+          bool negative = (data[offset] & 0x80) != 0;
+          for (int i = 0; i < length; i++) {
+            intVal = (intVal << 8) | data[offset + i];
+          }
+          if (negative) {
+            intVal = intVal - (1 << (length * 8));
+          }
+          value = intVal;
+          offset += length;
+        }
+        break;
+
+      case 4: // Real (float32)
+        offset++;
+        if (offset + 4 <= data.length) {
+          final bytes = ByteData.sublistView(data, offset, offset + 4);
+          value = bytes.getFloat32(0, Endian.big);
+          offset += 4;
+        }
+        break;
+
+      default:
+        // Unknown tag, skip based on length
+        final length = valueTag & 0x07;
+        offset += 1 + length;
+    }
+
+    return (
+      timeValue: DecodedTimeValue(
+        hour: hour,
+        minute: minute,
+        second: second,
+        hundredths: hundredths,
+        value: value,
+        valueTag: tagNumber,
+      ),
+      nextOffset: offset,
+    );
   }
 }
 
@@ -1308,4 +1517,344 @@ class _TimeResult {
     required this.hundredths,
     required this.nextOffset,
   });
+}
+
+// =========================================================================
+// Schedule Decoding Support - Public Classes
+// =========================================================================
+
+/// Résultat du décodage d'un BACnetTimeValue
+class DecodedTimeValue {
+  final int hour;
+  final int minute;
+  final int second;
+  final int hundredths;
+  final dynamic value;
+  final int valueTag; // Application tag utilisé pour la valeur
+
+  DecodedTimeValue({
+    required this.hour,
+    required this.minute,
+    required this.second,
+    required this.hundredths,
+    required this.value,
+    required this.valueTag,
+  });
+
+  /// Convertit en time string "HH:mm:ss.cc"
+  String get timeString =>
+      '${hour.toString().padLeft(2, '0')}:'
+      '${minute.toString().padLeft(2, '0')}:'
+      '${second.toString().padLeft(2, '0')}.'
+      '${hundredths.toString().padLeft(2, '0')}';
+}
+
+/// Résultat du décodage d'un DailySchedule
+class DecodedDailySchedule {
+  final List<DecodedTimeValue> timeValues;
+
+  DecodedDailySchedule({required this.timeValues});
+
+  factory DecodedDailySchedule.empty() => DecodedDailySchedule(timeValues: []);
+}
+
+/// Résultat du décodage d'un WeeklySchedule complet
+class DecodedWeeklySchedule {
+  /// 7 jours (index 0 = Lundi, 6 = Dimanche)
+  final List<DecodedDailySchedule> days;
+
+  DecodedWeeklySchedule({required this.days}) : assert(days.length == 7);
+
+  factory DecodedWeeklySchedule.empty() => DecodedWeeklySchedule(
+    days: List.generate(7, (_) => DecodedDailySchedule.empty()),
+  );
+}
+
+/// Extension du décodeur pour les schedules
+class BacnetScheduleDecoder {
+  /// Décode un WeeklySchedule depuis les données brutes
+  /// [data]: Les bytes de la propriété weekly-schedule (après le property value tag)
+  static DecodedWeeklySchedule decodeWeeklySchedule(dynamic rawValue) {
+    // Si c'est une liste (7 éléments pour 7 jours)
+    if (rawValue is List) {
+      final days = <DecodedDailySchedule>[];
+
+      for (int dayIndex = 0; dayIndex < 7; dayIndex++) {
+        if (dayIndex < rawValue.length) {
+          final dayData = rawValue[dayIndex];
+          days.add(_decodeDailyScheduleFromData(dayData));
+        } else {
+          days.add(DecodedDailySchedule.empty());
+        }
+      }
+
+      return DecodedWeeklySchedule(days: days);
+    }
+
+    // Si c'est un Map (format alternatif)
+    if (rawValue is Map) {
+      final days = <DecodedDailySchedule>[];
+
+      for (int dayIndex = 0; dayIndex < 7; dayIndex++) {
+        final dayKey = dayIndex.toString();
+        final dayData = rawValue[dayKey] ?? rawValue['day$dayIndex'];
+        if (dayData != null) {
+          days.add(_decodeDailyScheduleFromData(dayData));
+        } else {
+          days.add(DecodedDailySchedule.empty());
+        }
+      }
+
+      return DecodedWeeklySchedule(days: days);
+    }
+
+    // Format inconnu, retourner vide
+    return DecodedWeeklySchedule.empty();
+  }
+
+  /// Décode un DailySchedule depuis les données brutes
+  static DecodedDailySchedule _decodeDailyScheduleFromData(dynamic dayData) {
+    if (dayData == null) {
+      return DecodedDailySchedule.empty();
+    }
+
+    final timeValues = <DecodedTimeValue>[];
+
+    // Si c'est une liste de TimeValues
+    if (dayData is List) {
+      for (final tvData in dayData) {
+        final tv = _decodeTimeValueFromData(tvData);
+        if (tv != null) {
+          timeValues.add(tv);
+        }
+      }
+    }
+    // Si c'est un Map avec timeValues
+    else if (dayData is Map) {
+      final tvList = dayData['timeValues'] ?? dayData['time-values'] ?? dayData;
+      if (tvList is List) {
+        for (final tvData in tvList) {
+          final tv = _decodeTimeValueFromData(tvData);
+          if (tv != null) {
+            timeValues.add(tv);
+          }
+        }
+      }
+    }
+
+    return DecodedDailySchedule(timeValues: timeValues);
+  }
+
+  /// Décode un TimeValue depuis les données brutes
+  static DecodedTimeValue? _decodeTimeValueFromData(dynamic tvData) {
+    if (tvData == null) return null;
+
+    if (tvData is Map) {
+      // Format: {time: "HH:mm:ss.cc", value: ..., type: ...}
+      final timeStr = tvData['time']?.toString() ?? '00:00:00.00';
+      final value = tvData['value'];
+      final typeStr = tvData['type']?.toString();
+
+      // Parser le time string
+      final timeParts = timeStr.split(':');
+      final hour = int.tryParse(timeParts[0]) ?? 0;
+      final minute = timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0;
+      int second = 0;
+      int hundredths = 0;
+      if (timeParts.length > 2) {
+        final secParts = timeParts[2].split('.');
+        second = int.tryParse(secParts[0]) ?? 0;
+        if (secParts.length > 1) {
+          hundredths = int.tryParse(secParts[1].padRight(2, '0').substring(0, 2)) ?? 0;
+        }
+      }
+
+      // Déterminer le tag de valeur
+      int valueTag = 0; // null par défaut
+      if (value == null || typeStr == 'null') {
+        valueTag = 0;
+      } else if (value is bool || typeStr == 'boolean') {
+        valueTag = 1;
+      } else if (value is int) {
+        valueTag = typeStr == 'unsigned' ? 2 : 9; // enumerated par défaut
+      } else if (value is double || typeStr == 'real') {
+        valueTag = 4;
+      }
+
+      return DecodedTimeValue(
+        hour: hour,
+        minute: minute,
+        second: second,
+        hundredths: hundredths,
+        value: value,
+        valueTag: valueTag,
+      );
+    }
+
+    return null;
+  }
+
+  /// Décode un WeeklySchedule depuis des bytes bruts BACnet
+  /// Utilisé quand on lit directement via ReadProperty
+  static DecodedWeeklySchedule decodeWeeklyScheduleFromBytes(Uint8List data, int offset) {
+    final days = <DecodedDailySchedule>[];
+
+    for (int dayIndex = 0; dayIndex < 7; dayIndex++) {
+      final result = _decodeDailyScheduleFromBytes(data, offset);
+      days.add(result.dailySchedule);
+      offset = result.nextOffset;
+
+      // S'arrêter si on a atteint la fin des données
+      if (offset >= data.length) {
+        // Remplir les jours restants avec des schedules vides
+        while (days.length < 7) {
+          days.add(DecodedDailySchedule.empty());
+        }
+        break;
+      }
+    }
+
+    return DecodedWeeklySchedule(days: days);
+  }
+
+  /// Décode un DailySchedule depuis des bytes bruts
+  static ({DecodedDailySchedule dailySchedule, int nextOffset}) _decodeDailyScheduleFromBytes(
+    Uint8List data,
+    int offset,
+  ) {
+    final timeValues = <DecodedTimeValue>[];
+
+    // Chercher le tag d'ouverture (0x0E pour context 0)
+    if (offset < data.length && data[offset] == 0x0E) {
+      offset++; // Skip opening tag
+
+      // Lire les TimeValues jusqu'au tag de fermeture (0x0F)
+      while (offset < data.length && data[offset] != 0x0F) {
+        final result = _decodeTimeValueFromBytes(data, offset);
+        if (result != null) {
+          timeValues.add(result.timeValue);
+          offset = result.nextOffset;
+        } else {
+          offset++; // Skip unknown byte
+        }
+      }
+
+      // Skip closing tag
+      if (offset < data.length && data[offset] == 0x0F) {
+        offset++;
+      }
+    }
+    // Sinon, essayer de lire directement des TimeValues (format sans tags)
+    else {
+      // Lire tant qu'on trouve des Application Time tags (0xB4)
+      while (offset < data.length && (data[offset] & 0xF0) == 0xB0) {
+        final result = _decodeTimeValueFromBytes(data, offset);
+        if (result != null) {
+          timeValues.add(result.timeValue);
+          offset = result.nextOffset;
+        } else {
+          break;
+        }
+      }
+    }
+
+    return (dailySchedule: DecodedDailySchedule(timeValues: timeValues), nextOffset: offset);
+  }
+
+  /// Décode un TimeValue depuis des bytes bruts
+  static ({DecodedTimeValue timeValue, int nextOffset})? _decodeTimeValueFromBytes(
+    Uint8List data,
+    int offset,
+  ) {
+    if (offset >= data.length) return null;
+
+    // Time: Application tag 11 (0xB4 = tag 11, length 4)
+    final timeTag = data[offset];
+    if ((timeTag & 0xF0) != 0xB0) return null; // Not a time tag
+
+    offset++;
+    if (offset + 4 > data.length) return null;
+
+    final hour = data[offset];
+    final minute = data[offset + 1];
+    final second = data[offset + 2];
+    final hundredths = data[offset + 3];
+    offset += 4;
+
+    // Value: Any application tag
+    if (offset >= data.length) return null;
+
+    final valueTag = data[offset];
+    final tagNumber = (valueTag >> 4) & 0x0F;
+    dynamic value;
+
+    switch (tagNumber) {
+      case 0: // Null
+        value = null;
+        offset++;
+        break;
+
+      case 1: // Boolean
+        value = (valueTag & 0x01) == 1;
+        offset++;
+        break;
+
+      case 2: // Unsigned
+      case 9: // Enumerated
+        final length = valueTag & 0x07;
+        offset++;
+        if (offset + length <= data.length) {
+          int intVal = 0;
+          for (int i = 0; i < length; i++) {
+            intVal = (intVal << 8) | data[offset + i];
+          }
+          value = intVal;
+          offset += length;
+        }
+        break;
+
+      case 3: // Signed
+        final length = valueTag & 0x07;
+        offset++;
+        if (offset + length <= data.length) {
+          int intVal = 0;
+          bool negative = (data[offset] & 0x80) != 0;
+          for (int i = 0; i < length; i++) {
+            intVal = (intVal << 8) | data[offset + i];
+          }
+          if (negative) {
+            intVal = intVal - (1 << (length * 8));
+          }
+          value = intVal;
+          offset += length;
+        }
+        break;
+
+      case 4: // Real (float32)
+        offset++;
+        if (offset + 4 <= data.length) {
+          final bytes = ByteData.sublistView(data, offset, offset + 4);
+          value = bytes.getFloat32(0, Endian.big);
+          offset += 4;
+        }
+        break;
+
+      default:
+        // Unknown tag, skip based on length
+        final length = valueTag & 0x07;
+        offset += 1 + length;
+    }
+
+    return (
+      timeValue: DecodedTimeValue(
+        hour: hour,
+        minute: minute,
+        second: second,
+        hundredths: hundredths,
+        value: value,
+        valueTag: tagNumber,
+      ),
+      nextOffset: offset,
+    );
+  }
 }

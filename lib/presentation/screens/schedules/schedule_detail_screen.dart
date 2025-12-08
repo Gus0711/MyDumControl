@@ -5,6 +5,7 @@ import '../../../domain/models/schedule.dart';
 import 'widgets/schedule_dialogs.dart';
 import 'widgets/schedule_colors.dart';
 import 'widgets/vertical_day_schedule_view.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Écran de détail d'un schedule avec vue hebdomadaire et mode édition
 class ScheduleDetailScreen extends ConsumerStatefulWidget {
@@ -113,20 +114,21 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
     AsyncValue<Schedule?> scheduleAsync,
     ScheduleEditState editState,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     return AppBar(
       title: scheduleAsync.when(
-        loading: () => const Text('Chargement...'),
-        error: (_, __) => const Text('Erreur'),
+        loading: () => Text(l10n.loadingEllipsis),
+        error: (_, __) => Text(l10n.error),
         data: (schedule) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              schedule?.objectName ?? 'Schedule ${widget.instance}',
+              schedule?.objectName ?? l10n.scheduleInstance(widget.instance.toString()),
               style: const TextStyle(fontSize: 18),
             ),
             if (_isEditing)
               Text(
-                editState.hasChanges ? 'Modifié' : 'Mode édition',
+                editState.hasChanges ? l10n.modified : l10n.editMode,
                 style: TextStyle(
                   fontSize: 12,
                   color: editState.hasChanges
@@ -143,7 +145,7 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
           if (editState.hasChanges)
             IconButton(
               icon: const Icon(Icons.undo),
-              tooltip: 'Annuler les modifications',
+              tooltip: l10n.cancelChanges,
               onPressed: () {
                 ref.read(scheduleEditProvider.notifier).revert();
               },
@@ -157,7 +159,7 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.save),
-            tooltip: 'Sauvegarder',
+            tooltip: l10n.saveChanges,
             onPressed: editState.hasChanges && !editState.isSaving
                 ? () => _handleSave()
                 : null,
@@ -165,14 +167,14 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
           // Bouton fermer l'édition
           IconButton(
             icon: const Icon(Icons.close),
-            tooltip: 'Fermer l\'édition',
+            tooltip: l10n.closeEdit,
             onPressed: () => _handleCloseEdit(),
           ),
         ] else ...[
           // Bouton rafraîchir
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Actualiser',
+            tooltip: l10n.refresh,
             onPressed: () {
               ref.invalidate(scheduleDetailProvider(widget.instance));
               ref.read(scheduleEditProvider.notifier).loadSchedule(widget.instance);
@@ -184,6 +186,7 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
   }
 
   Widget? _buildFab(ScheduleEditState editState) {
+    final l10n = AppLocalizations.of(context)!;
     if (_isEditing) return null;
 
     return FloatingActionButton.extended(
@@ -192,11 +195,12 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
         ref.read(scheduleEditProvider.notifier).setEditing(true);
       },
       icon: const Icon(Icons.edit),
-      label: const Text('Modifier'),
+      label: Text(l10n.edit),
     );
   }
 
   Widget _buildError(BuildContext context, Object error) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -204,7 +208,7 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
           const Icon(Icons.error_outline, size: 64, color: Colors.red),
           const SizedBox(height: 16),
           Text(
-            'Erreur de chargement',
+            l10n.loadingError,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
@@ -220,7 +224,7 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
           ElevatedButton.icon(
             onPressed: () => ref.invalidate(scheduleDetailProvider(widget.instance)),
             icon: const Icon(Icons.refresh),
-            label: const Text('Réessayer'),
+            label: Text(l10n.retry),
           ),
         ],
       ),
@@ -228,6 +232,7 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
   }
 
   Widget _buildNotFound(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -239,7 +244,7 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Schedule introuvable',
+            l10n.scheduleNotFound,
             style: Theme.of(context).textTheme.titleLarge,
           ),
         ],
@@ -317,26 +322,31 @@ class _ScheduleDetailContentState extends State<_ScheduleDetailContent> {
 
         // Mode édition: indicateur
         if (widget.isEditing)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: colorScheme.primaryContainer,
-            child: Row(
-              children: [
-                Icon(Icons.edit, size: 16, color: colorScheme.onPrimaryContainer),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isCompact
-                        ? 'Mode édition - Appuyez sur un créneau'
-                        : 'Mode édition - Appuyez sur un jour pour modifier',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onPrimaryContainer,
+          Builder(
+            builder: (context) {
+              final l10n = AppLocalizations.of(context)!;
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: colorScheme.primaryContainer,
+                child: Row(
+                  children: [
+                    Icon(Icons.edit, size: 16, color: colorScheme.onPrimaryContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isCompact
+                            ? l10n.editModeTapSlot
+                            : l10n.editModeTapDay,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           ),
 
         // Vue du planning - toujours verticale (style Google Agenda)
@@ -392,21 +402,31 @@ class _ScheduleDetailContentState extends State<_ScheduleDetailContent> {
                   icon: Icons.tag,
                   label: 'Instance ${widget.schedule.instance}',
                 ),
-              _buildInfoChip(
-                context,
-                icon: widget.schedule.valueType == ScheduleValueType.boolean
-                    ? Icons.toggle_on_outlined
-                    : Icons.format_list_numbered,
-                label: widget.schedule.valueType == ScheduleValueType.boolean
-                    ? 'Booléen'
-                    : 'Multi-états',
+              Builder(
+                builder: (context) {
+                  final l10n = AppLocalizations.of(context)!;
+                  return _buildInfoChip(
+                    context,
+                    icon: widget.schedule.valueType == ScheduleValueType.boolean
+                        ? Icons.toggle_on_outlined
+                        : Icons.format_list_numbered,
+                    label: widget.schedule.valueType == ScheduleValueType.boolean
+                        ? l10n.boolean
+                        : l10n.multiState,
+                  );
+                },
               ),
               if (widget.schedule.presentValue != null)
-                _buildInfoChip(
-                  context,
-                  icon: Icons.play_arrow,
-                  label: 'Actuel: ${widget.schedule.getStateText(widget.schedule.presentValue)}',
-                  highlighted: true,
+                Builder(
+                  builder: (context) {
+                    final l10n = AppLocalizations.of(context)!;
+                    return _buildInfoChip(
+                      context,
+                      icon: Icons.play_arrow,
+                      label: l10n.currentState(widget.schedule.getStateText(widget.schedule.presentValue)),
+                      highlighted: true,
+                    );
+                  },
                 ),
             ],
           ),
@@ -456,6 +476,7 @@ class _ScheduleDetailContentState extends State<_ScheduleDetailContent> {
   }
 
   Widget _buildLegend(BuildContext context, ThemeData theme, ColorScheme colorScheme) {
+    final l10n = AppLocalizations.of(context)!;
     final possibleValues = widget.schedule.possibleValues;
 
     return Container(
@@ -468,7 +489,7 @@ class _ScheduleDetailContentState extends State<_ScheduleDetailContent> {
       child: Row(
         children: [
           Text(
-            'Légende :',
+            l10n.legend,
             style: theme.textTheme.bodySmall?.copyWith(
               color: colorScheme.outline,
             ),

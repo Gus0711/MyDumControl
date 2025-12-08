@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'application/providers/settings_provider.dart';
 
 /// Widget racine de l'application
 class MyDumControlApp extends ConsumerWidget {
@@ -11,16 +12,19 @@ class MyDumControlApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Observer les paramètres pour le thème et la langue
+    final settings = ref.watch(settingsProvider);
+
     return MaterialApp.router(
       title: 'MyDumControl',
       debugShowCheckedModeBanner: false,
 
-      // Thèmes
+      // Thèmes - utilise le paramètre sauvegardé
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: settings.themeMode,
 
-      // Internationalisation
+      // Internationalisation - utilise le paramètre sauvegardé
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -31,7 +35,7 @@ class MyDumControlApp extends ConsumerWidget {
         Locale('fr'), // Français (par défaut)
         Locale('en'), // Anglais
       ],
-      locale: const Locale('fr'),
+      locale: Locale(settings.locale),
 
       // Router
       routerConfig: AppRouter.router,

@@ -573,6 +573,197 @@ class BacnetEncoder {
     builder.addByte(dt.second & 0xFF);
     builder.addByte((dt.millisecond ~/ 10) & 0xFF);
   }
+
+  // =========================================================================
+  // Schedule Encoding Methods
+  // =========================================================================
+
+  /// Encode une heure BACnet (Application tag 11, 4 bytes)
+  static void _encodeApplicationTime(BytesBuilder builder, int hour, int minute, int second, int hundredths) {
+    builder.addByte(0xB4); // Application tag 11 (time), length 4
+    builder.addByte(hour & 0xFF);
+    builder.addByte(minute & 0xFF);
+    builder.addByte(second & 0xFF);
+    builder.addByte(hundredths & 0xFF);
+  }
+
+  /// Encode une valeur de schedule avec le bon application tag
+  /// Supporte: null, boolean, unsigned, signed, real, enumerated
+  static void _encodeScheduleValue(BytesBuilder builder, dynamic value, ScheduleValueTag? forceTag) {
+    if (value == null) {
+      // Null value - Application tag 0
+      builder.addByte(0x00);
+      return;
+    }
+
+    // Déterminer le tag à utiliser
+    ScheduleValueTag tag;
+    if (forceTag != null) {
+      tag = forceTag;
+    } else if (value is bool) {
+      tag = ScheduleValueTag.boolean;
+    } else if (value is double) {
+      tag = ScheduleValueTag.real;
+    } else if (value is int) {
+      // Par défaut, utiliser enumerated pour les entiers (plus courant dans les schedules)
+      tag = ScheduleValueTag.enumerated;
+    } else {
+      // Fallback: null
+      builder.addByte(0x00);
+      return;
+    }
+
+    switch (tag) {
+      case ScheduleValueTag.nullValue:
+        builder.addByte(0x00);
+        break;
+
+      case ScheduleValueTag.boolean:
+        // Boolean: tag 1, valeur dans le tag byte lui-même
+        final boolVal = value is bool ? value : (value == 1 || value == 'true');
+        builder.addByte(boolVal ? 0x11 : 0x10);
+        break;
+
+      case ScheduleValueTag.unsigned:
+        _encodeApplicationUnsigned(builder, value is int ? value : 0);
+        break;
+
+      case ScheduleValueTag.signed:
+        _encodeApplicationSigned(builder, value is int ? value : 0);
+        break;
+
+      case ScheduleValueTag.real:
+        final doubleVal = value is double ? value : (value is int ? value.toDouble() : 0.0);
+        _encodeApplicationReal(builder, doubleVal);
+        break;
+
+      case ScheduleValueTag.enumerated:
+        final intVal = value is int ? value : (value is bool ? (value ? 1 : 0) : 0);
+        _encodeApplicationEnumerated(builder, intVal);
+        break;
+    }
+  }
+
+  /// Encode un BACnetTimeValue (paire time + value)
+  static void _encodeTimeValue(BytesBuilder builder, BacnetTimeValue tv) {
+    // Time (Application tag 11)
+    _encodeApplicationTime(builder, tv.hour, tv.minute, tv.second, tv.hundredths);
+    // Value (Any primitive type)
+    _encodeScheduleValue(builder, tv.value, tv.valueTag);
+  }
+
+  /// Encode un BACnetDailySchedule (SEQUENCE OF BACnetTimeValue)
+  static Uint8List encodeDailySchedule(BacnetDailySchedule dailySchedule) {
+    final builder = BytesBuilder();
+    for (final tv in dailySchedule.timeValues) {
+      _encodeTimeValue(builder, tv);
+    }
+    return builder.toBytes();
+  }
+
+  /// Encode un BACnetWeeklySchedule complet (ARRAY[7] OF BACnetDailySchedule)
+  /// Retourne les bytes à mettre dans le property value
+  static Uint8List encodeWeeklySchedule(BacnetWeeklySchedule weeklySchedule) {
+    final builder = BytesBuilder();
+
+    // Weekly_Schedule est un ARRAY de 7 éléments
+    // Chaque élément est un SEQUENCE OF BACnetTimeValue (DailySchedule)
+    // En BACnet, on encode chaque jour comme une séquence ouverte/fermée
+
+    for (int dayIndex = 0; dayIndex < 7; dayIndex++) {
+      final dailySchedule = weeklySchedule.days[dayIndex];
+
+      // Chaque DailySchedule est encodé comme une séquence (pas de tags de contexte ici)
+      // Les TimeValues sont juste concaténés
+      for (final tv in dailySchedule.timeValues) {
+        _encodeTimeValue(builder, tv);
+      }
+    }
+
+    return builder.toBytes();
+  }
+
+  /// Encode un WriteProperty pour le weekly-schedule d'un objet Schedule
+  /// [dayIndex]: 1-7 pour un jour spécifique (1=Lundi), null pour tous les jours
+  static Uint8List encodeWriteWeeklyScheduleRequest({
+    required int invokeId,
+    required int scheduleInstance,
+    required BacnetWeeklySchedule weeklySchedule,
+    int? dayIndex,
+  }) {
+    final builder = BytesBuilder();
+
+    // PDU Type: Confirmed Request
+    builder.addByte(ApduType.confirmedRequest);
+    builder.addByte(0x05); // Max segments + Max APDU
+    builder.addByte(invokeId & 0xFF);
+    builder.addByte(ConfirmedService.writeProperty);
+
+    // Context tag [0]: Object Identifier (Schedule object)
+    _encodeContextObjectId(builder, 0, BacnetObjectTypeCode.schedule, scheduleInstance);
+
+    // Context tag [1]: Property Identifier (weekly-schedule = 123)
+    _encodeContextUnsigned(builder, 1, BacnetPropertyId.weeklySchedule);
+
+    // Context tag [2]: Array Index (optionnel - pour écrire un jour spécifique)
+    if (dayIndex != null && dayIndex >= 1 && dayIndex <= 7) {
+      _encodeContextUnsigned(builder, 2, dayIndex);
+    }
+
+    // Context tag [3]: Property Value (opening tag)
+    builder.addByte(0x3E);
+
+    if (dayIndex != null && dayIndex >= 1 && dayIndex <= 7) {
+      // Écrire un seul jour
+      final dailySchedule = weeklySchedule.days[dayIndex - 1];
+      // Encoder le DailySchedule directement (pas d'encapsulation supplémentaire pour un index)
+      for (final tv in dailySchedule.timeValues) {
+        _encodeTimeValue(builder, tv);
+      }
+    } else {
+      // Écrire tous les 7 jours
+      // Chaque jour est encapsulé dans un opening/closing tag
+      for (int i = 0; i < 7; i++) {
+        final dailySchedule = weeklySchedule.days[i];
+
+        // Opening tag pour le jour (constructed, no context - juste une séquence)
+        // En BACnet, BACnetDailySchedule est SEQUENCE OF, donc on utilise des tags d'ouverture/fermeture
+        // Le tag 0 avec opening/closing pour chaque élément de l'array
+        builder.addByte(0x0E); // Opening tag context 0
+
+        for (final tv in dailySchedule.timeValues) {
+          _encodeTimeValue(builder, tv);
+        }
+
+        builder.addByte(0x0F); // Closing tag context 0
+      }
+    }
+
+    // Context tag [3]: Closing tag
+    builder.addByte(0x3F);
+
+    return _assemblePacket(apdu: builder.toBytes(), expectingReply: true);
+  }
+
+  /// Encode un WriteProperty pour un jour spécifique du weekly-schedule
+  static Uint8List encodeWriteDailyScheduleRequest({
+    required int invokeId,
+    required int scheduleInstance,
+    required int dayIndex, // 1-7 (1=Lundi)
+    required BacnetDailySchedule dailySchedule,
+  }) {
+    final weeklySchedule = BacnetWeeklySchedule.empty();
+    // Remplacer le jour concerné
+    final days = List<BacnetDailySchedule>.from(weeklySchedule.days);
+    days[dayIndex - 1] = dailySchedule;
+
+    return encodeWriteWeeklyScheduleRequest(
+      invokeId: invokeId,
+      scheduleInstance: scheduleInstance,
+      weeklySchedule: BacnetWeeklySchedule(days: days),
+      dayIndex: dayIndex,
+    );
+  }
 }
 
 /// Types de plage pour ReadRange
@@ -594,4 +785,98 @@ class ReadPropertyMultipleItem {
     required this.objectInstance,
     required this.propertyIds,
   });
+}
+
+// =========================================================================
+// Schedule Encoding Support
+// =========================================================================
+
+/// Représente une paire Time-Value BACnet pour les schedules
+class BacnetTimeValue {
+  /// Heure (heures 0-23)
+  final int hour;
+  /// Minutes (0-59)
+  final int minute;
+  /// Secondes (0-59)
+  final int second;
+  /// Centièmes de seconde (0-99)
+  final int hundredths;
+  /// Valeur à appliquer (bool, int pour enumerated, double pour real, ou null)
+  final dynamic value;
+  /// Type de valeur pour forcer l'encodage (optionnel)
+  final ScheduleValueTag? valueTag;
+
+  BacnetTimeValue({
+    required this.hour,
+    required this.minute,
+    this.second = 0,
+    this.hundredths = 0,
+    required this.value,
+    this.valueTag,
+  });
+
+  /// Crée depuis un time string "HH:mm:ss.cc" ou "HH:mm"
+  factory BacnetTimeValue.fromTimeString(String time, dynamic value, {ScheduleValueTag? valueTag}) {
+    final parts = time.split(':');
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    int second = 0;
+    int hundredths = 0;
+    if (parts.length > 2) {
+      final secParts = parts[2].split('.');
+      second = int.tryParse(secParts[0]) ?? 0;
+      if (secParts.length > 1) {
+        hundredths = int.tryParse(secParts[1].padRight(2, '0').substring(0, 2)) ?? 0;
+      }
+    }
+    return BacnetTimeValue(
+      hour: hour,
+      minute: minute,
+      second: second,
+      hundredths: hundredths,
+      value: value,
+      valueTag: valueTag,
+    );
+  }
+
+  /// Convertit en time string "HH:mm:ss.cc"
+  String toTimeString() {
+    return '${hour.toString().padLeft(2, '0')}:'
+           '${minute.toString().padLeft(2, '0')}:'
+           '${second.toString().padLeft(2, '0')}.'
+           '${hundredths.toString().padLeft(2, '0')}';
+  }
+}
+
+/// Tags pour les valeurs de schedule
+enum ScheduleValueTag {
+  nullValue,    // Tag 0
+  boolean,      // Tag 1
+  unsigned,     // Tag 2
+  signed,       // Tag 3
+  real,         // Tag 4
+  enumerated,   // Tag 9
+}
+
+/// Planning journalier BACnet (liste de TimeValue)
+class BacnetDailySchedule {
+  final List<BacnetTimeValue> timeValues;
+
+  BacnetDailySchedule({required this.timeValues});
+
+  /// Crée un planning vide
+  factory BacnetDailySchedule.empty() => BacnetDailySchedule(timeValues: []);
+}
+
+/// Planning hebdomadaire BACnet (7 jours: Lundi à Dimanche)
+class BacnetWeeklySchedule {
+  /// Liste de 7 DailySchedule (index 0 = Lundi, 6 = Dimanche)
+  final List<BacnetDailySchedule> days;
+
+  BacnetWeeklySchedule({required this.days}) : assert(days.length == 7);
+
+  /// Crée un planning vide (7 jours vides)
+  factory BacnetWeeklySchedule.empty() => BacnetWeeklySchedule(
+    days: List.generate(7, (_) => BacnetDailySchedule.empty()),
+  );
 }

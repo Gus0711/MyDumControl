@@ -4,6 +4,8 @@ import 'routes.dart';
 import '../../presentation/screens/splash/splash_screen.dart';
 import '../../presentation/screens/connections/connections_list_screen.dart';
 import '../../presentation/screens/connections/add_connection_screen.dart';
+import '../../presentation/screens/connections/discover_eclypse_screen.dart';
+import '../../presentation/screens/connections/discover_bacnet_screen.dart';
 import '../../presentation/screens/home/home_screen.dart';
 import '../../presentation/screens/device_info/device_info_screen.dart';
 import '../../presentation/screens/points/points_screen.dart';
@@ -16,6 +18,7 @@ import '../../presentation/screens/alarms/alarms_screen.dart';
 import '../../presentation/screens/synoptics/synoptics_list_screen.dart';
 import '../../presentation/screens/synoptics/synoptic_viewer_screen.dart';
 import '../../presentation/screens/synoptics/synoptic_editor_screen.dart';
+import '../../presentation/screens/settings/settings_screen.dart';
 
 /// Configuration du router de l'application
 class AppRouter {
@@ -55,6 +58,18 @@ class AppRouter {
               final id = state.pathParameters['id']!;
               return AddConnectionScreen(connectionId: id);
             },
+          ),
+          // Decouverte ECLYPSE (mDNS)
+          GoRoute(
+            path: 'discover-eclypse',
+            name: 'discoverEclypse',
+            builder: (context, state) => const DiscoverEclypseScreen(),
+          ),
+          // Decouverte BACnet
+          GoRoute(
+            path: 'discover-bacnet',
+            name: 'discoverBacnet',
+            builder: (context, state) => const DiscoverBacnetScreen(),
           ),
         ],
       ),
@@ -166,13 +181,11 @@ class AppRouter {
         ],
       ),
 
-      // Paramètres - À implémenter
+      // Paramètres
       GoRoute(
         path: Routes.settings,
         name: 'settings',
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('Paramètres - À implémenter')),
-        ),
+        builder: (context, state) => const SettingsScreen(),
       ),
 
       // Info sur l'appareil

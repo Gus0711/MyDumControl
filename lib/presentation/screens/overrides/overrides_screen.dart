@@ -5,6 +5,7 @@ import '../../../application/providers/points_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Écran listant les points forcés (overrides)
 class OverridesScreen extends ConsumerStatefulWidget {
@@ -29,6 +30,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final state = ref.watch(pointsProvider);
     final overriddenPoints = state.overriddenPoints;
 
@@ -36,7 +38,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('Forçages'),
+            Text(l10n.overrides),
             if (overriddenPoints.isNotEmpty) ...[
               const SizedBox(width: 8),
               Container(
@@ -66,19 +68,19 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
           ),
         ],
       ),
-      body: _buildBody(context, state, overriddenPoints),
+      body: _buildBody(context, l10n, state, overriddenPoints),
     );
   }
 
-  Widget _buildBody(BuildContext context, PointsState state, List<BacnetObject> overriddenPoints) {
+  Widget _buildBody(BuildContext context, AppLocalizations l10n, PointsState state, List<BacnetObject> overriddenPoints) {
     if (state.isLoading && state.points.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Chargement des points...'),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(l10n.loadingPoints),
           ],
         ),
       );
@@ -96,7 +98,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
             ElevatedButton.icon(
               onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
               icon: const Icon(Icons.refresh),
-              label: const Text('Réessayer'),
+              label: Text(l10n.retry),
             ),
           ],
         ),
@@ -111,14 +113,14 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
             Icon(Icons.check_circle_outline, size: 64, color: Colors.green.shade400),
             const SizedBox(height: 16),
             Text(
-              'Aucun point forcé',
+              l10n.noOverride,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: Colors.green.shade700,
                   ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Tous les points fonctionnent normalement',
+              l10n.allPointsNormal,
               style: TextStyle(color: Colors.grey.shade600),
             ),
             if (state.isLoading) ...[
@@ -206,12 +208,12 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
           ),
         ),
         // Liste des points forcés
-        ...points.map((point) => _buildOverrideTile(context, point)),
+        ...points.map((point) => _buildOverrideTile(context, AppLocalizations.of(context)!, point)),
       ],
     );
   }
 
-  Widget _buildOverrideTile(BuildContext context, BacnetObject point) {
+  Widget _buildOverrideTile(BuildContext context, AppLocalizations l10n, BacnetObject point) {
     // Déterminer si c'est une entrée forcée (out-of-service) ou un forçage classique (priority-array)
     final isInputForced = point.type.isInput && point.outOfService == true;
     final tileColor = isInputForced ? Colors.orange : Colors.red;
@@ -240,8 +242,8 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
       ),
       subtitle: Text(
         isInputForced
-            ? 'Out-of-service • ${point.type.shortName}:${point.instance}'
-            : 'Priorité ${point.overridePriority} • ${point.type.shortName}:${point.instance}',
+            ? '${l10n.outOfServiceLabel} • ${point.type.shortName}:${point.instance}'
+            : '${l10n.priorityLabel(point.overridePriority ?? 0)} • ${point.type.shortName}:${point.instance}',
         style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
       ),
       trailing: Row(
@@ -269,7 +271,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                isInputForced ? 'Hors service' : 'Forcé',
+                isInputForced ? l10n.outOfServiceLabel : l10n.forcedLabel,
                 style: TextStyle(
                   fontSize: 10,
                   color: tileColor.shade400,

@@ -7,6 +7,8 @@ class Routes {
   static const String connections = '/connections';
   static const String addConnection = '/connections/add';
   static const String editConnection = '/connections/edit/:id';
+  static const String discoverEclypse = '/connections/discover-eclypse';
+  static const String discoverBacnet = '/connections/discover-bacnet';
   static const String home = '/home';
 
   // Routes des fonctionnalités

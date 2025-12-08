@@ -6,6 +6,7 @@ import '../../../application/providers/points_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Écran de liste des alarmes actives
 class AlarmsScreen extends ConsumerStatefulWidget {
@@ -27,6 +28,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final alarmsState = ref.watch(alarmsStateProvider);
     final filteredAlarms = ref.watch(filteredAlarmsProvider);
     final totalAlarms = ref.watch(alarmsCountProvider);
@@ -34,7 +36,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: _showSearch ? _buildSearchField() : const Text('Alarmes'),
+        title: _showSearch ? _buildSearchField(l10n) : Text(l10n.alarms),
         actions: [
           // Bouton recherche
           IconButton(
@@ -52,7 +54,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
           // Menu tri
           PopupMenuButton<AlarmSortOption>(
             icon: const Icon(Icons.sort),
-            tooltip: 'Trier',
+            tooltip: l10n.sort,
             onSelected: (option) {
               ref.read(alarmsStateProvider.notifier).setSortOption(option);
             },
@@ -99,7 +101,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
                   Icon(Icons.warning_amber, color: Colors.red.shade700, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    '$totalAlarms alarme${totalAlarms > 1 ? 's' : ''} active${totalAlarms > 1 ? 's' : ''}',
+                    l10n.alarmsCount(totalAlarms),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.red.shade700,
@@ -111,19 +113,19 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
 
           // Liste des alarmes
           Expanded(
-            child: _buildAlarmsList(filteredAlarms, pointsState, alarmsState),
+            child: _buildAlarmsList(l10n, filteredAlarms, pointsState, alarmsState),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSearchField() {
+  Widget _buildSearchField(AppLocalizations l10n) {
     return TextField(
       controller: _searchController,
       autofocus: true,
-      decoration: const InputDecoration(
-        hintText: 'Rechercher une alarme...',
+      decoration: InputDecoration(
+        hintText: l10n.searchAlarm,
         border: InputBorder.none,
       ),
       onChanged: (value) {
@@ -133,18 +135,19 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
   }
 
   Widget _buildAlarmsList(
+    AppLocalizations l10n,
     List<BacnetObject> alarms,
     PointsState pointsState,
     AlarmsState alarmsState,
   ) {
     if (pointsState.isLoading && pointsState.points.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Chargement des points...'),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(l10n.loadingPoints),
           ],
         ),
       );
@@ -168,7 +171,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
             ElevatedButton.icon(
               onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
               icon: const Icon(Icons.refresh),
-              label: const Text('Réessayer'),
+              label: Text(l10n.retry),
             ),
           ],
         ),
@@ -192,8 +195,8 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
             const SizedBox(height: 16),
             Text(
               alarmsState.searchQuery.isNotEmpty
-                  ? 'Aucun résultat pour "${alarmsState.searchQuery}"'
-                  : 'Aucune alarme active',
+                  ? l10n.noResultsFor(alarmsState.searchQuery)
+                  : l10n.noAlarms,
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey.shade600,
@@ -202,7 +205,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
             if (alarmsState.searchQuery.isEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                'Tous les équipements fonctionnent normalement',
+                l10n.allEquipmentNormal,
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade500,

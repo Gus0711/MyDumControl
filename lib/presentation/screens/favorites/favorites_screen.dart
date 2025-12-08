@@ -13,6 +13,7 @@ import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/favorite_button.dart';
 import '../../widgets/favorite_folder_dialog.dart';
 import '../../widgets/assign_folders_dialog.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Écran des favoris - affiche les points favoris organisés par dossiers
 class FavoritesScreen extends ConsumerStatefulWidget {
@@ -67,6 +68,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final connectionState = ref.watch(activeConnectionProvider);
     final foldersAsync = ref.watch(favoriteFoldersProvider);
     final unassignedAsync = ref.watch(unassignedFavoritesProvider);
@@ -75,8 +77,8 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: _selectionMode
-            ? Text('${_selectedFavoriteIds.length} sélectionné${_selectedFavoriteIds.length > 1 ? 's' : ''}')
-            : const Text('Favoris'),
+            ? Text(l10n.selectedCount(_selectedFavoriteIds.length))
+            : Text(l10n.favorites),
         leading: _selectionMode
             ? IconButton(
                 icon: const Icon(Icons.close),
@@ -94,8 +96,8 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                       : Icons.select_all,
                 ),
                 tooltip: _selectedFavoriteIds.length == allFavorites.length
-                    ? 'Tout désélectionner'
-                    : 'Tout sélectionner',
+                    ? l10n.deselectAll
+                    : l10n.selectAll,
                 onPressed: () {
                   if (_selectedFavoriteIds.length == allFavorites.length) {
                     _deselectAll();
@@ -110,17 +112,17 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
             // Mode normal
             IconButton(
               icon: const Icon(Icons.checklist),
-              tooltip: 'Mode sélection',
+              tooltip: l10n.selectionMode,
               onPressed: _toggleSelectionMode,
             ),
             IconButton(
               icon: const Icon(Icons.create_new_folder_outlined),
-              tooltip: 'Nouveau dossier',
+              tooltip: l10n.newFolder,
               onPressed: () => _createFolder(context),
             ),
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: 'Rafraîchir',
+              tooltip: l10n.refresh,
               onPressed: () => ref.read(pointsProvider.notifier).refresh(),
             ),
           ],
@@ -132,10 +134,10 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               data: (folders) => unassignedAsync.when(
                 data: (unassigned) => _buildContent(context, folders, unassigned),
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('Erreur: $e')),
+                error: (e, _) => Center(child: Text('${l10n.error}: $e')),
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Erreur: $e')),
+              error: (e, _) => Center(child: Text('${l10n.error}: $e')),
             ),
       // Barre d'actions en bas quand sélection active
       bottomNavigationBar: _selectionMode && _selectedFavoriteIds.isNotEmpty
@@ -145,6 +147,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   }
 
   Widget _buildSelectionActions(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -164,14 +167,14 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               child: ElevatedButton.icon(
                 onPressed: () => _assignSelectedToFolders(context),
                 icon: const Icon(Icons.folder),
-                label: const Text('Assigner aux dossiers'),
+                label: Text(l10n.assignToFolders),
               ),
             ),
             const SizedBox(width: 12),
             ElevatedButton.icon(
               onPressed: () => _deleteSelected(context),
               icon: const Icon(Icons.delete),
-              label: const Text('Supprimer'),
+              label: Text(l10n.delete),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
@@ -184,12 +187,13 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   }
 
   Future<void> _assignSelectedToFolders(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
     final foldersAsync = ref.read(favoriteFoldersProvider);
     final folders = foldersAsync.valueOrNull ?? [];
 
     if (folders.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Créez d\'abord un dossier')),
+        SnackBar(content: Text(l10n.createFolderFirst)),
       );
       return;
     }
@@ -213,9 +217,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${_selectedFavoriteIds.length} favori${_selectedFavoriteIds.length > 1 ? 's' : ''} '
-              'assigné${_selectedFavoriteIds.length > 1 ? 's' : ''} à '
-              '${selectedFolderIds.length} dossier${selectedFolderIds.length > 1 ? 's' : ''}',
+              l10n.favoritesAssigned(_selectedFavoriteIds.length, selectedFolderIds.length),
             ),
           ),
         );
@@ -225,17 +227,18 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   }
 
   Future<void> _deleteSelected(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer les favoris ?'),
+        title: Text(l10n.deleteFavoritesConfirm),
         content: Text(
-          'Voulez-vous supprimer ${_selectedFavoriteIds.length} favori${_selectedFavoriteIds.length > 1 ? 's' : ''} ?',
+          l10n.deleteFavoritesMessage(_selectedFavoriteIds.length),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -243,7 +246,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Supprimer'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -258,7 +261,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_selectedFavoriteIds.length} favori${_selectedFavoriteIds.length > 1 ? 's' : ''} supprimé${_selectedFavoriteIds.length > 1 ? 's' : ''}'),
+            content: Text(l10n.favoritesDeleted(_selectedFavoriteIds.length)),
           ),
         );
         _toggleSelectionMode();
@@ -267,6 +270,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   }
 
   Widget _buildNotConnected(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -274,12 +278,12 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
           Icon(Icons.cloud_off, size: 64, color: Colors.grey.shade400),
           const SizedBox(height: 16),
           Text(
-            'Non connecté',
+            l10n.notConnected,
             style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 8),
           Text(
-            'Connectez-vous à un automate pour voir vos favoris',
+            l10n.connectToViewFavorites,
             style: TextStyle(color: Colors.grey.shade500),
           ),
         ],
@@ -352,6 +356,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -359,14 +364,14 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
           Icon(Icons.star_border, size: 80, color: Colors.grey.shade400),
           const SizedBox(height: 24),
           Text(
-            'Aucun favori',
+            l10n.noFavorite,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: Colors.grey.shade600,
                 ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Ajoutez des points aux favoris en cliquant\nsur l\'étoile dans la liste des points',
+            l10n.addFavoritesHint,
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey.shade500),
           ),
@@ -374,7 +379,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
           OutlinedButton.icon(
             onPressed: () => GoRouter.of(context).push(Routes.points),
             icon: const Icon(Icons.list_alt),
-            label: const Text('Voir les points'),
+            label: Text(l10n.viewPoints),
           ),
         ],
       ),
@@ -410,31 +415,31 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   }
 
   Future<void> _assignFavoriteToFolder(BuildContext context, int favoriteId, int folderId) async {
+    final l10n = AppLocalizations.of(context)!;
     final success = await ref.read(favoriteFoldersNotifierProvider.notifier).assignToFolder(favoriteId, folderId);
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Favori ajouté au dossier'),
-          duration: Duration(seconds: 1),
+        SnackBar(
+          content: Text(l10n.favoriteAddedToFolder),
+          duration: const Duration(seconds: 1),
         ),
       );
     }
   }
 
   Future<void> _deleteFolder(BuildContext context, FavoriteFolder folder) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer le dossier ?'),
+        title: Text(l10n.deleteFolderConfirm),
         content: Text(
-          'Le dossier "${folder.name}" sera supprimé.\n\n'
-          'Les favoris qu\'il contient ne seront pas supprimés, '
-          'ils seront déplacés dans "Sans dossier".',
+          l10n.deleteFolderMessage(folder.name),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -442,7 +447,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Supprimer'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -550,26 +555,31 @@ class _FolderSection extends ConsumerWidget {
                           const SizedBox(width: 12),
                           // Nom et compteur
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  folder.name,
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
+                            child: Builder(
+                              builder: (context) {
+                                final l10n = AppLocalizations.of(context)!;
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      folder.name,
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                    Text(
+                                      isHovering
+                                          ? l10n.dropHereToAdd
+                                          : l10n.favoritesCount(favorites.length),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isHovering ? color : Colors.grey.shade600,
+                                        fontWeight: isHovering ? FontWeight.w500 : FontWeight.normal,
                                       ),
-                                ),
-                                Text(
-                                  isHovering
-                                      ? 'Déposez ici pour ajouter'
-                                      : '${favorites.length} favori${favorites.length > 1 ? 's' : ''}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isHovering ? color : Colors.grey.shade600,
-                                    fontWeight: isHovering ? FontWeight.w500 : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                           ),
                           // Menu actions
@@ -584,28 +594,31 @@ class _FolderSection extends ConsumerWidget {
                                   break;
                               }
                             },
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit, size: 20),
-                                    SizedBox(width: 8),
-                                    Text('Modifier'),
-                                  ],
+                            itemBuilder: (context) {
+                              final l10n = AppLocalizations.of(context)!;
+                              return [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.edit, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(l10n.editFolder),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete, size: 20, color: Colors.red),
-                                    const SizedBox(width: 8),
-                                    Text('Supprimer', style: TextStyle(color: Colors.red.shade400)),
-                                  ],
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.delete, size: 20, color: Colors.red),
+                                      const SizedBox(width: 8),
+                                      Text(l10n.deleteFolder, style: TextStyle(color: Colors.red.shade400)),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ];
+                            },
                           ),
                           // Chevron expand/collapse
                           Icon(
@@ -623,16 +636,21 @@ class _FolderSection extends ConsumerWidget {
           // Favoris dans le dossier
           if (isExpanded) ...[
             if (favorites.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(left: 72, bottom: 8),
-                child: Text(
-                  'Dossier vide - glissez des favoris ici',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
+              Builder(
+                builder: (context) {
+                  final l10n = AppLocalizations.of(context)!;
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 72, bottom: 8),
+                    child: Text(
+                      l10n.emptyFolderHint,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  );
+                },
               )
             else
               ...favorites.map((favorite) => _FavoriteTileInFolder(
@@ -689,21 +707,26 @@ class _UnassignedSection extends ConsumerWidget {
                   Icon(Icons.folder_off_outlined, color: Colors.grey.shade500, size: 28),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Sans dossier',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey.shade700,
-                              ),
-                        ),
-                        Text(
-                          '${favorites.length} favori${favorites.length > 1 ? 's' : ''}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                        ),
-                      ],
+                    child: Builder(
+                      builder: (context) {
+                        final l10n = AppLocalizations.of(context)!;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              l10n.noFolder,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade700,
+                                  ),
+                            ),
+                            Text(
+                              l10n.favoritesCount(favorites.length),
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                   Icon(
@@ -853,7 +876,7 @@ class _FavoriteTileInFolder extends ConsumerWidget {
             ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            tooltip: 'Assigner aux dossiers',
+            tooltip: AppLocalizations.of(context)!.assignToFoldersDialog,
             onPressed: () => _showAssignDialog(context, ref, favorite, folderIdsAsync),
           ),
           // Bouton favori
@@ -956,7 +979,7 @@ class _FavoriteTileInFolder extends ConsumerWidget {
           await ref.read(favoritesNotifierProvider.notifier).removeFavoriteById(favorite.id);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${favorite.pointName} retiré des favoris')),
+              SnackBar(content: Text(AppLocalizations.of(context)!.removedFromFavorites(favorite.pointName))),
             );
           }
         },
@@ -1041,8 +1064,9 @@ class _SelectFoldersForBatchDialogState extends State<_SelectFoldersForBatchDial
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('Assigner aux dossiers'),
+      title: Text(l10n.assignToFoldersDialog),
       content: SizedBox(
         width: 300,
         child: Column(
@@ -1050,7 +1074,7 @@ class _SelectFoldersForBatchDialogState extends State<_SelectFoldersForBatchDial
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Sélectionnez les dossiers auxquels ajouter les favoris',
+              l10n.selectFoldersToAdd,
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey.shade600,
@@ -1093,13 +1117,13 @@ class _SelectFoldersForBatchDialogState extends State<_SelectFoldersForBatchDial
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         ElevatedButton(
           onPressed: _selectedFolderIds.isEmpty
               ? null
               : () => Navigator.pop(context, _selectedFolderIds.toList()),
-          child: const Text('Assigner'),
+          child: Text(l10n.assign),
         ),
       ],
     );

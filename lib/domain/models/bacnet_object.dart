@@ -1,3 +1,5 @@
+import '../../../data/services/bacnet/bacnet_constants.dart';
+
 /// Types d'objets BACnet
 enum BacnetObjectType {
   analogInput('analog-input', 'AI', 'Entrée Analogique'),
@@ -303,15 +305,26 @@ class BacnetObject {
 
   static String? _parseUnits(dynamic units) {
     if (units == null) return null;
-    String unitStr;
-    if (units is String) {
-      unitStr = units;
-    } else if (units is Map) {
-      unitStr = units['value']?.toString() ?? '';
-    } else {
-      unitStr = units.toString();
+
+    // Utiliser la classe BacnetUnits pour la conversion
+    // Elle gère à la fois les codes numériques (62 -> °C) et les textes (DegreesCelsius -> °C)
+    final result = BacnetUnits.getUnitText(units);
+    if (result.isEmpty) return null;
+
+    // Fallback sur notre table locale si BacnetUnits n'a pas trouvé
+    if (result == units.toString()) {
+      String unitStr;
+      if (units is String) {
+        unitStr = units;
+      } else if (units is Map) {
+        unitStr = units['value']?.toString() ?? '';
+      } else {
+        unitStr = units.toString();
+      }
+      return convertUnitSymbol(unitStr);
     }
-    return convertUnitSymbol(unitStr);
+
+    return result;
   }
 
   /// Convertit un nom d'unité BACnet en symbole court
@@ -713,6 +726,34 @@ enum PointSortOption {
   final String displayName;
 
   const PointSortOption(this.displayName);
+}
+
+/// Filtre par sous-type pour les catégories (Entrées, Sorties, Valeurs)
+enum SubTypeFilter {
+  all('Tous', null),
+  analog('Analog', 'analog'),
+  binary('Binary', 'binary'),
+  multiState('Multi', 'multiState');
+
+  final String label;
+  final String? typePrefix;
+
+  const SubTypeFilter(this.label, this.typePrefix);
+
+  /// Vérifie si un type BACnet correspond à ce filtre
+  bool matches(BacnetObjectType type) {
+    if (this == SubTypeFilter.all) return true;
+    switch (this) {
+      case SubTypeFilter.analog:
+        return type.isAnalog;
+      case SubTypeFilter.binary:
+        return type.isBinary;
+      case SubTypeFilter.multiState:
+        return type.isMultiState;
+      default:
+        return true;
+    }
+  }
 }
 
 /// Résumé des objets disponibles sur l'automate

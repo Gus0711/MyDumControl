@@ -248,8 +248,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final alarmsCount = ref.watch(alarmsCountProvider);
     final hasAlarms = alarmsCount > 0;
 
-    // Menu items inspirés de MyDC Control
+    // Menu items - ordre: Favoris, Points, Horaires, Alarmes, Forçages, Synoptique, Paramètres, Informations
     final menuItems = [
+      _MenuItem(
+        icon: Icons.star,
+        title: 'Favoris',
+        // Jaune/ambre si favoris présents, bleu sinon
+        color: favoritesCount > 0 ? Colors.amber.shade600 : Colors.blue.shade600,
+        route: Routes.favorites,
+        badge: favoritesCount > 0 ? favoritesCount.toString() : null,
+      ),
       _MenuItem(
         icon: Icons.list_alt,
         title: l10n.points,
@@ -278,14 +286,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         color: hasOverrides ? Colors.purple.shade600 : Colors.blue.shade600,
         route: Routes.overrides,
         badge: hasOverrides ? overrideCount.toString() : null,
-      ),
-      _MenuItem(
-        icon: Icons.star,
-        title: 'Favoris',
-        // Jaune/ambre si favoris présents, bleu sinon
-        color: favoritesCount > 0 ? Colors.amber.shade600 : Colors.blue.shade600,
-        route: Routes.favorites,
-        badge: favoritesCount > 0 ? favoritesCount.toString() : null,
       ),
       _MenuItem(
         icon: Icons.dashboard,
@@ -417,15 +417,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           _buildDrawerItem(context, icon: Icons.home, title: l10n.home, route: Routes.home, isSelected: true),
+          _buildDrawerItem(context, icon: Icons.star, title: 'Favoris', route: Routes.favorites),
           _buildDrawerItem(context, icon: Icons.list_alt, title: l10n.points, route: Routes.points),
           _buildDrawerItem(context, icon: Icons.calendar_month, title: l10n.schedules, route: Routes.schedules),
           _buildDrawerItem(context, icon: Icons.notifications_active, title: l10n.alarms, route: Routes.alarms),
-          _buildDrawerItem(context, icon: Icons.settings_backup_restore, title: l10n.overrides, route: Routes.overrides),
-          _buildDrawerItem(context, icon: Icons.star, title: 'Favoris', route: Routes.favorites),
+          _buildDrawerItem(context, icon: Icons.lock, title: l10n.overrides, route: Routes.overrides),
           _buildDrawerItem(context, icon: Icons.dashboard, title: 'Synoptique', route: Routes.synoptics),
           const Divider(),
-          _buildDrawerItem(context, icon: Icons.info_outline, title: l10n.deviceInfo, route: Routes.deviceInfo),
           _buildDrawerItem(context, icon: Icons.settings, title: l10n.settings, route: Routes.settings),
+          _buildDrawerItem(context, icon: Icons.info_outline, title: l10n.deviceInfo, route: Routes.deviceInfo),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),

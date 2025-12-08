@@ -238,12 +238,32 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
   String? _cachedBuffer;
   TrendLogData? _cachedFullData;
 
+  // Type de connexion utilisé lors du dernier chargement (pour détecter les changements)
+  bool? _lastConnectionWasBacnet;
+  int? _lastConnectionId;
+
   TrendLogViewerNotifier(this._ref, this.trendLogInstance)
       : super(const TrendLogViewerState());
 
   /// Charge les données du trend log
   Future<void> loadData({TrendPeriod? period, bool forceRefresh = false}) async {
     final selectedPeriod = period ?? state.selectedPeriod;
+    final connectionState = _ref.read(activeConnectionProvider);
+
+    // Vérifier si le type de connexion ou la connexion a changé -> invalider le cache
+    final currentIsBacnet = connectionState.isBacnetConnection;
+    final currentConnectionId = connectionState.connection?.id;
+
+    if (_lastConnectionWasBacnet != null &&
+        (_lastConnectionWasBacnet != currentIsBacnet || _lastConnectionId != currentConnectionId)) {
+      _logger.i('loadData: connection changed (wasBacnet=$_lastConnectionWasBacnet, isBacnet=$currentIsBacnet, lastId=$_lastConnectionId, currentId=$currentConnectionId), invalidating cache');
+      _cachedBuffer = null;
+      _cachedFullData = null;
+    }
+
+    // Mettre à jour le type de connexion
+    _lastConnectionWasBacnet = currentIsBacnet;
+    _lastConnectionId = currentConnectionId;
 
     // Si on a déjà les données en cache et qu'on change juste la période
     if (!forceRefresh && _cachedFullData != null) {
@@ -259,10 +279,8 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     );
 
     try {
-      final connectionState = _ref.read(activeConnectionProvider);
-
-      // Vérifier si c'est une connexion BACnet
-      if (connectionState.isBacnetConnection) {
+      // Vérifier si c'est une connexion BACnet (connectionState déjà lu au début)
+      if (currentIsBacnet) {
         await _loadDataFromBacnet(selectedPeriod);
       } else {
         await _loadDataFromApi(connectionState, selectedPeriod);

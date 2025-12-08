@@ -1,11 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import '../../domain/models/schedule.dart';
+import '../../data/services/bacnet_service.dart';
 import 'active_connection_provider.dart';
+import 'bacnet_provider.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Provider pour récupérer la liste des schedules
+/// Supporte les connexions API (V1/V2) et BACnet natives
 final schedulesListProvider = FutureProvider<List<ScheduleSummary>>((ref) async {
   final state = ref.watch(activeConnectionProvider);
   if (!state.isConnected) {
@@ -13,13 +16,108 @@ final schedulesListProvider = FutureProvider<List<ScheduleSummary>>((ref) async 
     return [];
   }
 
-  _logger.i('schedulesListProvider: loading schedules');
+  _logger.i('schedulesListProvider: loading schedules (isBacnet=${state.isBacnetConnection}, hasClient=${state.client != null})');
+
+  // ========================================
+  // CONNEXION BACNET NATIVE
+  // ========================================
+  if (state.isBacnetConnection) {
+    _logger.i('schedulesListProvider: using BACnet native mode');
+    final bacnetConnection = ref.read(activeBacnetConnectionProvider);
+    if (bacnetConnection == null) {
+      _logger.e('schedulesListProvider: no active BACnet connection');
+      return [];
+    }
+
+    final bacnetService = ref.read(bacnetServiceProvider);
+
+    try {
+      final scheduleInfos = await bacnetService.discoverSchedules(
+        host: bacnetConnection.host,
+        port: bacnetConnection.port,
+        deviceId: bacnetConnection.deviceId ?? 0,
+      );
+
+      // Convertir BacnetScheduleInfo en ScheduleSummary
+      final summaries = scheduleInfos.map((info) => ScheduleSummary(
+        instance: info.instance,
+        objectName: info.objectName,
+        description: info.description,
+        presentValue: info.presentValue,
+        valueType: _detectValueType(info.presentValue),
+      )).toList();
+
+      _logger.i('schedulesListProvider: loaded ${summaries.length} schedules via BACnet');
+      return summaries;
+    } catch (e) {
+      _logger.e('schedulesListProvider: BACnet error: $e');
+      return [];
+    }
+  }
+
+  // ========================================
+  // CONNEXION API DISTECH
+  // ========================================
   final schedules = await state.client!.getSchedules();
-  _logger.i('schedulesListProvider: loaded ${schedules.length} schedules');
+  _logger.i('schedulesListProvider: loaded ${schedules.length} schedules via API');
   return schedules;
 });
 
+/// Détecte le type de valeur depuis la presentValue
+ScheduleValueType _detectValueType(dynamic value) {
+  if (value == null) return ScheduleValueType.enumerated;
+  if (value is bool) return ScheduleValueType.boolean;
+  // Les valeurs double/real sont traitées comme enumerated pour l'instant
+  return ScheduleValueType.enumerated;
+}
+
+/// Détecte le type de valeur depuis les transitions décodées (plus précis)
+/// Analyse toutes les valeurs pour déterminer si c'est boolean ou enum
+ScheduleValueType _detectValueTypeFromWeeklySchedule(DecodedWeeklySchedule? weeklySchedule) {
+  if (weeklySchedule == null) return ScheduleValueType.enumerated;
+
+  // Collecter toutes les valeurs uniques
+  final uniqueValues = <int>{};
+  int? firstTag;
+
+  for (final day in weeklySchedule.days) {
+    for (final tv in day.timeValues) {
+      firstTag ??= tv.valueTag;
+
+      // valueTag: 1 = boolean, 2 = unsigned, 9 = enumerated
+      if (tv.valueTag == 1) {
+        // Tag boolean explicite
+        return ScheduleValueType.boolean;
+      } else if (tv.valueTag == 9) {
+        // Tag enumerated explicite
+        return ScheduleValueType.enumerated;
+      } else if (tv.valueTag == 2 && tv.value is int) {
+        // Unsigned - collecter les valeurs pour analyse
+        uniqueValues.add(tv.value as int);
+      }
+    }
+  }
+
+  // Analyser les valeurs unsigned collectées
+  if (uniqueValues.isNotEmpty) {
+    // Si toutes les valeurs sont 0 ou 1 uniquement -> boolean
+    // Si une valeur > 1 existe -> enumerated
+    final maxValue = uniqueValues.reduce((a, b) => a > b ? a : b);
+    _logger.d('_detectValueTypeFromWeeklySchedule: uniqueValues=$uniqueValues');
+    if (maxValue > 1) {
+      _logger.d('_detectValueTypeFromWeeklySchedule: maxValue=$maxValue -> enumerated');
+      return ScheduleValueType.enumerated;
+    } else {
+      _logger.d('_detectValueTypeFromWeeklySchedule: values=$uniqueValues -> boolean');
+      return ScheduleValueType.boolean;
+    }
+  }
+
+  return ScheduleValueType.enumerated;
+}
+
 /// Provider pour récupérer un schedule détaillé avec son planning
+/// Supporte les connexions API (V1/V2) et BACnet natives
 final scheduleDetailProvider = FutureProvider.family<Schedule?, int>((ref, instance) async {
   final state = ref.watch(activeConnectionProvider);
   if (!state.isConnected) {
@@ -27,24 +125,156 @@ final scheduleDetailProvider = FutureProvider.family<Schedule?, int>((ref, insta
     return null;
   }
 
-  _logger.i('scheduleDetailProvider: loading schedule $instance');
+  _logger.i('scheduleDetailProvider: loading schedule $instance (isBacnet=${state.isBacnetConnection})');
+
+  // ========================================
+  // CONNEXION BACNET NATIVE
+  // ========================================
+  if (state.isBacnetConnection) {
+    final bacnetConnection = ref.read(activeBacnetConnectionProvider);
+    if (bacnetConnection == null) {
+      _logger.e('scheduleDetailProvider: no active BACnet connection');
+      return null;
+    }
+
+    final bacnetService = ref.read(bacnetServiceProvider);
+
+    try {
+      final scheduleInfo = await bacnetService.readScheduleFull(
+        host: bacnetConnection.host,
+        port: bacnetConnection.port,
+        scheduleInstance: instance,
+        deviceId: bacnetConnection.deviceId,
+      );
+
+      if (scheduleInfo == null) {
+        _logger.e('scheduleDetailProvider: failed to read schedule $instance via BACnet');
+        return null;
+      }
+
+      // Convertir BacnetScheduleInfo en Schedule
+      final schedule = _convertBacnetScheduleInfoToSchedule(scheduleInfo);
+
+      _logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via BACnet');
+      _logScheduleDetails(schedule);
+
+      return schedule;
+    } catch (e) {
+      _logger.e('scheduleDetailProvider: BACnet error: $e');
+      return null;
+    }
+  }
+
+  // ========================================
+  // CONNEXION API DISTECH
+  // ========================================
   final schedule = await state.client!.getScheduleDetail(instance);
 
   if (schedule != null) {
-    _logger.i('scheduleDetailProvider: loaded ${schedule.objectName}');
-    _logger.d('scheduleDetailProvider: valueType=${schedule.valueType}, stateTexts=${schedule.stateTexts.length}');
-
-    // Log des transitions pour debug
-    for (final day in WeekDay.values) {
-      final daySchedule = schedule.weeklySchedule.getDay(day);
-      if (daySchedule.hasTransitions) {
-        _logger.d('scheduleDetailProvider: ${day.shortName}: ${daySchedule.transitionCount} transitions');
-      }
-    }
+    _logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via API');
+    _logScheduleDetails(schedule);
   }
 
   return schedule;
 });
+
+/// Convertit un BacnetScheduleInfo en Schedule
+Schedule _convertBacnetScheduleInfoToSchedule(BacnetScheduleInfo info) {
+  // Déterminer le type de valeur - priorité au weekly-schedule car plus précis
+  ScheduleValueType valueType;
+  if (info.weeklySchedule != null) {
+    valueType = _detectValueTypeFromWeeklySchedule(info.weeklySchedule);
+  } else {
+    valueType = _detectValueType(info.presentValue);
+  }
+  _logger.d('_convertBacnetScheduleInfoToSchedule: detected valueType=$valueType');
+
+  // Convertir le weekly schedule
+  WeeklySchedule weeklySchedule;
+  if (info.weeklySchedule != null) {
+    weeklySchedule = _convertDecodedWeeklySchedule(info.weeklySchedule!);
+  } else {
+    weeklySchedule = WeeklySchedule.empty();
+  }
+
+  // Convertir les state texts
+  // BACnet state-text: index 0 = premier état, index 1 = deuxième état, etc.
+  // Pour les booléens: 0 = inactif/false, 1 = actif/true
+  // Pour les enum: 0 = premier état, 1 = deuxième, etc.
+  final stateTexts = <ScheduleStateText>[];
+  if (info.stateTexts != null) {
+    for (int i = 0; i < info.stateTexts!.length; i++) {
+      stateTexts.add(ScheduleStateText(index: i, text: info.stateTexts![i]));
+    }
+  }
+
+  return Schedule(
+    instance: info.instance,
+    objectName: info.objectName,
+    description: info.description,
+    weeklySchedule: weeklySchedule,
+    stateTexts: stateTexts,
+    valueType: valueType,
+    presentValue: info.presentValue,
+    scheduleDefault: info.scheduleDefault,
+  );
+}
+
+/// Convertit un DecodedWeeklySchedule en WeeklySchedule
+WeeklySchedule _convertDecodedWeeklySchedule(DecodedWeeklySchedule decoded) {
+  final days = <WeekDay, DaySchedule>{};
+
+  for (int i = 0; i < 7 && i < decoded.days.length; i++) {
+    final weekDay = WeekDay.values[i];
+    final decodedDay = decoded.days[i];
+
+    final transitions = <ScheduleTransition>[];
+    for (final tv in decodedDay.timeValues) {
+      // Formater le time string: "HH:mm" (sans les secondes pour l'affichage)
+      final timeStr = '${tv.hour.toString().padLeft(2, '0')}:${tv.minute.toString().padLeft(2, '0')}';
+
+      transitions.add(ScheduleTransition(
+        time: timeStr,
+        value: tv.value,
+        type: _valueTagToTypeString(tv.valueTag),
+      ));
+    }
+
+    days[weekDay] = DaySchedule(day: weekDay, transitions: transitions);
+  }
+
+  // Remplir les jours manquants
+  for (final day in WeekDay.values) {
+    days.putIfAbsent(day, () => DaySchedule.empty(day));
+  }
+
+  return WeeklySchedule(days: days);
+}
+
+/// Convertit le type de tag BACnet en string
+String _valueTagToTypeString(int valueTag) {
+  switch (valueTag) {
+    case 0: return 'null';
+    case 1: return 'boolean';
+    case 2: return 'unsigned';
+    case 3: return 'signed';
+    case 4: return 'real';
+    case 9: return 'enumerated';
+    default: return 'unknown';
+  }
+}
+
+/// Log les détails d'un schedule pour debug
+void _logScheduleDetails(Schedule schedule) {
+  _logger.d('scheduleDetailProvider: valueType=${schedule.valueType}, stateTexts=${schedule.stateTexts.length}');
+
+  for (final day in WeekDay.values) {
+    final daySchedule = schedule.weeklySchedule.getDay(day);
+    if (daySchedule.hasTransitions) {
+      _logger.d('scheduleDetailProvider: ${day.shortName}: ${daySchedule.transitionCount} transitions');
+    }
+  }
+}
 
 /// État pour l'édition d'un schedule
 class ScheduleEditState {
@@ -115,11 +345,48 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   ScheduleEditNotifier(this._ref) : super(const ScheduleEditState());
 
   /// Charge un schedule pour édition
+  /// Supporte les connexions API (V1/V2) et BACnet natives
   Future<void> loadSchedule(int instance) async {
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) return;
 
-    final schedule = await connectionState.client!.getScheduleDetail(instance);
+    Schedule? schedule;
+
+    // ========================================
+    // CONNEXION BACNET NATIVE
+    // ========================================
+    if (connectionState.isBacnetConnection) {
+      final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
+      if (bacnetConnection == null) {
+        _logger.e('ScheduleEditNotifier.loadSchedule: no active BACnet connection');
+        return;
+      }
+
+      final bacnetService = _ref.read(bacnetServiceProvider);
+
+      try {
+        final scheduleInfo = await bacnetService.readScheduleFull(
+          host: bacnetConnection.host,
+          port: bacnetConnection.port,
+          scheduleInstance: instance,
+          deviceId: bacnetConnection.deviceId,
+        );
+
+        if (scheduleInfo != null) {
+          schedule = _convertBacnetScheduleInfoToSchedule(scheduleInfo);
+        }
+      } catch (e) {
+        _logger.e('ScheduleEditNotifier.loadSchedule: BACnet error: $e');
+        return;
+      }
+    }
+    // ========================================
+    // CONNEXION API DISTECH
+    // ========================================
+    else {
+      schedule = await connectionState.client!.getScheduleDetail(instance);
+    }
+
     if (schedule != null) {
       state = ScheduleEditState(
         originalSchedule: schedule,
@@ -449,6 +716,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   }
 
   /// Sauvegarde les modifications sur l'automate
+  /// Supporte les connexions API (V1/V2) et BACnet natives
   Future<bool> save() async {
     if (state.editedSchedule == null || !state.hasChanges) return false;
 
@@ -461,10 +729,42 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
     state = state.copyWith(isSaving: true, clearError: true, clearSuccess: true);
 
     try {
-      final success = await connectionState.client!.writeWeeklySchedule(
-        state.editedSchedule!.instance,
-        state.editedSchedule!.weeklySchedule,
-      );
+      bool success;
+
+      // ========================================
+      // CONNEXION BACNET NATIVE
+      // ========================================
+      if (connectionState.isBacnetConnection) {
+        final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
+        if (bacnetConnection == null) {
+          state = state.copyWith(isSaving: false, error: 'Connexion BACnet non active');
+          return false;
+        }
+
+        final bacnetService = _ref.read(bacnetServiceProvider);
+
+        // Convertir le WeeklySchedule en BacnetWeeklySchedule
+        final bacnetWeeklySchedule = _convertToBacnetWeeklySchedule(
+          state.editedSchedule!.weeklySchedule,
+          state.editedSchedule!.valueType,
+        );
+
+        success = await bacnetService.writeWeeklySchedule(
+          host: bacnetConnection.host,
+          port: bacnetConnection.port,
+          scheduleInstance: state.editedSchedule!.instance,
+          weeklySchedule: bacnetWeeklySchedule,
+        );
+      }
+      // ========================================
+      // CONNEXION API DISTECH
+      // ========================================
+      else {
+        success = await connectionState.client!.writeWeeklySchedule(
+          state.editedSchedule!.instance,
+          state.editedSchedule!.weeklySchedule,
+        );
+      }
 
       if (success) {
         // Mettre à jour l'original avec les nouvelles valeurs
@@ -496,6 +796,39 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       _logger.e('ScheduleEditNotifier: save error: $e');
       return false;
     }
+  }
+
+  /// Convertit un WeeklySchedule en BacnetWeeklySchedule pour l'écriture BACnet
+  BacnetWeeklySchedule _convertToBacnetWeeklySchedule(
+    WeeklySchedule weeklySchedule,
+    ScheduleValueType valueType,
+  ) {
+    final days = <BacnetDailySchedule>[];
+
+    for (final weekDay in WeekDay.values) {
+      final daySchedule = weeklySchedule.getDay(weekDay);
+      final timeValues = <BacnetTimeValue>[];
+
+      for (final transition in daySchedule.sortedTransitions) {
+        // Déterminer le tag selon le type de valeur du schedule
+        ScheduleValueTag? tag;
+        if (valueType == ScheduleValueType.boolean) {
+          tag = ScheduleValueTag.boolean;
+        } else {
+          tag = ScheduleValueTag.enumerated;
+        }
+
+        timeValues.add(BacnetTimeValue.fromTimeString(
+          transition.time,
+          transition.value,
+          valueTag: tag,
+        ));
+      }
+
+      days.add(BacnetDailySchedule(timeValues: timeValues));
+    }
+
+    return BacnetWeeklySchedule(days: days);
   }
 
   /// Reset complet

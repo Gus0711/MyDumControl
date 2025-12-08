@@ -28,6 +28,9 @@ class PointsState {
   /// IDs des points favoris (pour le tri "Favoris d'abord")
   final Set<String> favoritePointIds;
 
+  /// Filtre par sous-type (Analog/Binary/Multi) pour la catégorie courante
+  final SubTypeFilter subTypeFilter;
+
   PointsState({
     this.points = const [],
     this.isLoading = false,
@@ -38,6 +41,7 @@ class PointsState {
     this.selectedCategory = PointCategory.inputs,
     this.sortOption = PointSortOption.nameAsc,
     this.favoritePointIds = const {},
+    this.subTypeFilter = SubTypeFilter.all,
   });
 
   PointsState copyWith({
@@ -52,6 +56,7 @@ class PointsState {
     PointCategory? selectedCategory,
     PointSortOption? sortOption,
     Set<String>? favoritePointIds,
+    SubTypeFilter? subTypeFilter,
   }) {
     return PointsState(
       points: points ?? this.points,
@@ -63,6 +68,7 @@ class PointsState {
       selectedCategory: selectedCategory ?? this.selectedCategory,
       sortOption: sortOption ?? this.sortOption,
       favoritePointIds: favoritePointIds ?? this.favoritePointIds,
+      subTypeFilter: subTypeFilter ?? this.subTypeFilter,
     );
   }
 
@@ -70,6 +76,11 @@ class PointsState {
   List<BacnetObject> getFilteredAndSortedPoints({PointCategory? category}) {
     final cat = category ?? selectedCategory;
     var result = cat.filterPoints(points);
+
+    // Filtrer par sous-type (Analog/Binary/Multi) si pas "Tous"
+    if (subTypeFilter != SubTypeFilter.all) {
+      result = result.where((p) => subTypeFilter.matches(p.type)).toList();
+    }
 
     // Filtrer par type spécifique (si défini)
     if (filterType != null) {
@@ -154,6 +165,30 @@ class PointsState {
       ).length,
       PointCategory.all: points.length,
     };
+  }
+
+  /// Compte les points par sous-type pour la catégorie donnée
+  Map<SubTypeFilter, int> getSubTypeCountsForCategory(PointCategory category) {
+    final categoryPoints = category.filterPoints(points);
+    return {
+      SubTypeFilter.all: categoryPoints.length,
+      SubTypeFilter.analog: categoryPoints.where((p) => p.type.isAnalog).length,
+      SubTypeFilter.binary: categoryPoints.where((p) => p.type.isBinary).length,
+      SubTypeFilter.multiState: categoryPoints.where((p) => p.type.isMultiState).length,
+    };
+  }
+
+  /// Retourne les sous-types disponibles (count > 0) pour une catégorie
+  List<SubTypeFilter> getAvailableSubTypes(PointCategory category) {
+    final counts = getSubTypeCountsForCategory(category);
+    // Toujours inclure "all", puis les types qui ont des points
+    final available = <SubTypeFilter>[SubTypeFilter.all];
+    for (final filter in [SubTypeFilter.analog, SubTypeFilter.binary, SubTypeFilter.multiState]) {
+      if ((counts[filter] ?? 0) > 0) {
+        available.add(filter);
+      }
+    }
+    return available;
   }
 
   /// Points forcés (overridden via priority-array OU entrées forcées via out-of-service)
@@ -409,7 +444,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       _logger.i('_refreshAllValuesBacnet: got ${refreshedData.length} points');
 
-      // Mettre à jour les points avec les nouvelles valeurs et infos de forçage
+      // Mettre à jour les points avec les nouvelles valeurs, infos de forçage et alarmes
       final updatedPoints = state.points.map((point) {
         final key = '${_bacnetObjectTypeToCode(point.type)}:${point.instance}';
         final data = refreshedData[key];
@@ -420,6 +455,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
             overridePriority: data.isOverridden ? data.overridePriority : null,
             overrideValue: data.isOverridden ? data.overrideValue : null,
             outOfService: data.outOfService ?? point.outOfService,
+            inAlarm: data.inAlarm,
           );
         }
         return point;
@@ -488,8 +524,17 @@ class PointsNotifier extends StateNotifier<PointsState> {
   }
 
   /// Change la catégorie sélectionnée
+  /// Réinitialise le filtre de sous-type quand on change de catégorie
   void setCategory(PointCategory category) {
-    state = state.copyWith(selectedCategory: category);
+    state = state.copyWith(
+      selectedCategory: category,
+      subTypeFilter: SubTypeFilter.all, // Reset le filtre
+    );
+  }
+
+  /// Change le filtre de sous-type (Analog/Binary/Multi)
+  void setSubTypeFilter(SubTypeFilter filter) {
+    state = state.copyWith(subTypeFilter: filter);
   }
 
   /// Change l'option de tri

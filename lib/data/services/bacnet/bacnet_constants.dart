@@ -388,6 +388,8 @@ class BacnetPropertyId {
   static const int lifeSafetyAlarmValues = 166;
   static const int maxSegmentsAccepted = 167;
   static const int profileName = 168;
+  static const int scheduleDefault = 174;
+  static const int propertyList = 371;
 }
 
 /// Application Tags (ASN.1/BER encoding)
@@ -417,6 +419,605 @@ class BacnetErrorClass {
   static const int services = 5;
   static const int vt = 6;
   static const int communication = 7;
+}
+
+/// BACnet Engineering Units (ASHRAE 135-2020)
+class BacnetUnits {
+  // Acceleration
+  static const int metersPerSecondPerSecond = 166;
+
+  // Area
+  static const int squareMeters = 0;
+  static const int squareCentimeters = 116;
+  static const int squareFeet = 1;
+  static const int squareInches = 115;
+
+  // Currency
+  static const int currency1 = 105;
+  static const int currency2 = 106;
+  static const int currency3 = 107;
+  static const int currency4 = 108;
+  static const int currency5 = 109;
+  static const int currency6 = 110;
+  static const int currency7 = 111;
+  static const int currency8 = 112;
+  static const int currency9 = 113;
+  static const int currency10 = 114;
+
+  // Electrical
+  static const int milliamperes = 2;
+  static const int amperes = 3;
+  static const int amperesPerMeter = 167;
+  static const int amperesPerSquareMeter = 168;
+  static const int ampereSquareMeters = 169;
+  static const int decibels = 199;
+  static const int decibelsMillivolt = 200;
+  static const int decibelsVolt = 201;
+  static const int farads = 170;
+  static const int henrys = 171;
+  static const int ohms = 4;
+  static const int ohmMeters = 172;
+  static const int milliohms = 145;
+  static const int kilohms = 122;
+  static const int megohms = 123;
+  static const int microsiemens = 190;
+  static const int millisiemens = 202;
+  static const int siemens = 173;
+  static const int siemensPerMeter = 174;
+  static const int teslas = 175;
+  static const int volts = 5;
+  static const int millivolts = 124;
+  static const int kilovolts = 6;
+  static const int megavolts = 7;
+  static const int voltAmperes = 8;
+  static const int kilovoltAmperes = 9;
+  static const int megavoltAmperes = 10;
+  static const int voltAmperesReactive = 11;
+  static const int kilovoltAmperesReactive = 12;
+  static const int megavoltAmperesReactive = 13;
+  static const int voltsPerDegreeKelvin = 176;
+  static const int voltsPerMeter = 177;
+  static const int degreesPhase = 14;
+  static const int powerFactor = 15;
+  static const int webers = 178;
+
+  // Energy
+  static const int joules = 16;
+  static const int kilojoules = 17;
+  static const int kilojoulesPerKilogram = 125;
+  static const int megajoules = 126;
+  static const int wattHours = 18;
+  static const int kilowattHours = 19;
+  static const int megawattHours = 146;
+  static const int wattHoursReactive = 203;
+  static const int kilowattHoursReactive = 204;
+  static const int megawattHoursReactive = 205;
+  static const int btus = 20;
+  static const int kiloBtus = 147;
+  static const int megaBtus = 148;
+  static const int therms = 21;
+  static const int tonHours = 22;
+
+  // Enthalpy
+  static const int joulesPerKilogramDryAir = 23;
+  static const int kilojoulesPerKilogramDryAir = 149;
+  static const int megajoulesPerKilogramDryAir = 150;
+  static const int btusPerPoundDryAir = 24;
+  static const int btusPerPound = 117;
+
+  // Entropy
+  static const int joulesPerDegreeKelvin = 127;
+  static const int kilojoulesPerDegreeKelvin = 151;
+  static const int megajoulesPerDegreeKelvin = 152;
+  static const int joulesPerKilogramDegreeKelvin = 128;
+
+  // Force
+  static const int newtons = 153;
+
+  // Frequency
+  static const int cyclesPerHour = 25;
+  static const int cyclesPerMinute = 26;
+  static const int hertz = 27;
+  static const int kilohertz = 129;
+  static const int megahertz = 130;
+  static const int perHour = 131;
+
+  // Humidity
+  static const int gramsOfWaterPerKilogramDryAir = 28;
+  static const int percentRelativeHumidity = 29;
+
+  // Length
+  static const int micrometers = 194;
+  static const int millimeters = 30;
+  static const int centimeters = 118;
+  static const int kilometers = 193;
+  static const int meters = 31;
+  static const int inches = 32;
+  static const int feet = 33;
+
+  // Light
+  static const int candelas = 179;
+  static const int candelasPerSquareMeter = 180;
+  static const int wattsPerSquareFoot = 34;
+  static const int wattsPerSquareMeter = 35;
+  static const int lumens = 36;
+  static const int luxes = 37;
+  static const int footCandles = 38;
+
+  // Mass
+  static const int milligrams = 196;
+  static const int grams = 195;
+  static const int kilograms = 39;
+  static const int poundsMass = 40;
+  static const int tons = 41;
+
+  // Mass Flow
+  static const int gramsPerSecond = 154;
+  static const int gramsPerMinute = 155;
+  static const int kilogramsPerSecond = 42;
+  static const int kilogramsPerMinute = 43;
+  static const int kilogramsPerHour = 44;
+  static const int poundsMassPerSecond = 119;
+  static const int poundsMassPerMinute = 45;
+  static const int poundsMassPerHour = 46;
+  static const int tonsPerHour = 156;
+
+  // Power
+  static const int milliwatts = 132;
+  static const int watts = 47;
+  static const int kilowatts = 48;
+  static const int megawatts = 49;
+  static const int btusPerHour = 50;
+  static const int kiloBtusPerHour = 157;
+  static const int horsepower = 51;
+  static const int tonsRefrigeration = 52;
+
+  // Pressure
+  static const int pascals = 53;
+  static const int hectopascals = 133;
+  static const int kilopascals = 54;
+  static const int millibars = 134;
+  static const int bars = 55;
+  static const int poundsForcePerSquareInch = 56;
+  static const int millimetersOfWater = 206;
+  static const int centimetersOfWater = 57;
+  static const int inchesOfWater = 58;
+  static const int millimetersOfMercury = 59;
+  static const int centimetersOfMercury = 60;
+  static const int inchesOfMercury = 61;
+
+  // Temperature
+  static const int degreesCelsius = 62;
+  static const int degreesKelvin = 63;
+  static const int degreesKelvinPerHour = 181;
+  static const int degreesKelvinPerMinute = 182;
+  static const int degreesFahrenheit = 64;
+  static const int degreeDaysCelsius = 65;
+  static const int degreeDaysFahrenheit = 66;
+  static const int deltaDegreesFahrenheit = 120;
+  static const int deltaDegreesCelsius = 121;
+
+  // Time
+  static const int years = 67;
+  static const int months = 68;
+  static const int weeks = 69;
+  static const int days = 70;
+  static const int hours = 71;
+  static const int minutes = 72;
+  static const int seconds = 73;
+  static const int hundredthsSeconds = 158;
+  static const int milliseconds = 159;
+
+  // Torque
+  static const int newtonMeters = 160;
+
+  // Velocity
+  static const int millimetersPerSecond = 161;
+  static const int millimetersPerMinute = 162;
+  static const int metersPerSecond = 74;
+  static const int metersPerMinute = 163;
+  static const int metersPerHour = 164;
+  static const int kilometersPerHour = 75;
+  static const int feetPerSecond = 76;
+  static const int feetPerMinute = 77;
+  static const int milesPerHour = 78;
+
+  // Volume
+  static const int cubicFeet = 79;
+  static const int cubicMeters = 80;
+  static const int imperialGallons = 81;
+  static const int milliliters = 197;
+  static const int liters = 82;
+  static const int usGallons = 83;
+
+  // Volumetric Flow
+  static const int cubicFeetPerSecond = 142;
+  static const int cubicFeetPerMinute = 84;
+  static const int cubicFeetPerHour = 191;
+  static const int cubicFeetPerDay = 248;
+  static const int cubicMetersPerSecond = 85;
+  static const int cubicMetersPerMinute = 165;
+  static const int cubicMetersPerHour = 135;
+  static const int cubicMetersPerDay = 249;
+  static const int imperialGallonsPerMinute = 86;
+  static const int millilitersPerSecond = 198;
+  static const int litersPerSecond = 87;
+  static const int litersPerMinute = 88;
+  static const int litersPerHour = 136;
+  static const int usGallonsPerMinute = 89;
+  static const int usGallonsPerHour = 192;
+
+  // Other
+  static const int degreesAngular = 90;
+  static const int degreesCelsiusPerHour = 91;
+  static const int degreesCelsiusPerMinute = 92;
+  static const int degreesFahrenheitPerHour = 93;
+  static const int degreesFahrenheitPerMinute = 94;
+  static const int percent = 95;
+  static const int percentPerSecond = 96;
+  static const int perMinute = 97;
+  static const int perSecond = 98;
+  static const int psiPerDegreeFahrenheit = 102;
+  static const int radians = 103;
+  static const int radiansPerSecond = 184;
+  static const int revolutionsPerMinute = 104;
+  static const int squareMetersPerNewton = 185;
+  static const int wattsPerMeterPerDegreeKelvin = 189;
+  static const int wattsPerSquareMeterDegreeKelvin = 141;
+  static const int perMille = 207;
+  static const int gramsPerGram = 208;
+  static const int kilogramsPerKilogram = 209;
+  static const int gramsPerKilogram = 210;
+  static const int milligramsPerGram = 211;
+  static const int milligramsPerKilogram = 212;
+  static const int gramsPerMilliliter = 213;
+  static const int gramsPerLiter = 214;
+  static const int milligramsPerLiter = 215;
+  static const int microgramsPerLiter = 216;
+  static const int gramsPerCubicMeter = 217;
+  static const int milligramsPerCubicMeter = 218;
+  static const int microgramsPerCubicMeter = 219;
+  static const int nanogramsPerCubicMeter = 220;
+  static const int gramsPerCubicCentimeter = 221;
+  static const int becquerels = 222;
+  static const int kilobecquerels = 223;
+  static const int megabecquerels = 224;
+  static const int gray = 225;
+  static const int milligray = 226;
+  static const int microgray = 227;
+  static const int sieverts = 228;
+  static const int millisieverts = 229;
+  static const int microsieverts = 230;
+  static const int microsievertsPerHour = 231;
+  static const int decibelsA = 232;
+  static const int neppiersPerSecond = 233;
+  static const int partsPerMillion = 99;
+  static const int partsPerBillion = 100;
+  static const int noUnits = 95;  // Note: same as percent in some implementations
+
+  // pH and special
+  static const int ph = 234;
+  static const int cubicMetersPerUnit = 244;
+  static const int litersPerUnit = 245;
+
+  /// Convertit un code d'unité en texte lisible
+  static String getUnitText(dynamic unit) {
+    if (unit == null) return '';
+
+    // Si c'est déjà du texte, le retourner tel quel
+    if (unit is String) {
+      // Si c'est un nombre sous forme de chaîne, le convertir
+      final code = int.tryParse(unit);
+      if (code != null) {
+        return _unitNames[code] ?? unit;
+      }
+      // Sinon retourner la chaîne telle quelle (ex: "DegreesCelsius")
+      return _formatUnitText(unit);
+    }
+
+    // Si c'est un nombre, chercher le texte correspondant
+    if (unit is int) {
+      return _unitNames[unit] ?? 'code-$unit';
+    }
+
+    return unit.toString();
+  }
+
+  /// Formate un texte d'unité camelCase ou PascalCase en texte lisible
+  static String _formatUnitText(String text) {
+    if (text.isEmpty) return '';
+
+    // Cas spéciaux déjà bien formatés
+    final knownUnits = {
+      'NoUnits': '',
+      'Percent': '%',
+      'DegreesCelsius': '°C',
+      'DegreesFahrenheit': '°F',
+      'DegreesKelvin': 'K',
+      'Seconds': 's',
+      'Minutes': 'min',
+      'Hours': 'h',
+      'Days': 'j',
+      'Meters': 'm',
+      'Centimeters': 'cm',
+      'Millimeters': 'mm',
+      'Feet': 'ft',
+      'Inches': 'in',
+      'Kilograms': 'kg',
+      'Grams': 'g',
+      'Milligrams': 'mg',
+      'Pounds': 'lb',
+      'Pascals': 'Pa',
+      'Kilopascals': 'kPa',
+      'Bars': 'bar',
+      'Millibars': 'mbar',
+      'Watts': 'W',
+      'Kilowatts': 'kW',
+      'Megawatts': 'MW',
+      'WattsPerSquareMeter': 'W/m²',
+      'WattsPerSquareFoot': 'W/ft²',
+      'Volts': 'V',
+      'Millivolts': 'mV',
+      'Kilovolts': 'kV',
+      'Amperes': 'A',
+      'Milliamperes': 'mA',
+      'Ohms': 'Ω',
+      'Hertz': 'Hz',
+      'Kilohertz': 'kHz',
+      'Megahertz': 'MHz',
+      'Liters': 'L',
+      'Milliliters': 'mL',
+      'CubicMeters': 'm³',
+      'CubicFeet': 'ft³',
+      'LitersPerSecond': 'L/s',
+      'LitersPerMinute': 'L/min',
+      'LitersPerHour': 'L/h',
+      'CubicMetersPerHour': 'm³/h',
+      'CubicFeetPerMinute': 'CFM',
+      'KilowattHours': 'kWh',
+      'WattHours': 'Wh',
+      'Joules': 'J',
+      'Kilojoules': 'kJ',
+      'Megajoules': 'MJ',
+      'Btus': 'BTU',
+      'PercentRelativeHumidity': '%RH',
+      'PartsPerMillion': 'ppm',
+      'PartsPerBillion': 'ppb',
+      'Radians': 'rad',
+      'DegreesAngular': '°',
+      'MetersPerSecond': 'm/s',
+      'KilometersPerHour': 'km/h',
+      'MilesPerHour': 'mph',
+      'FeetPerMinute': 'ft/min',
+      'RevolutionsPerMinute': 'RPM',
+      'Lumens': 'lm',
+      'Luxes': 'lx',
+      'FootCandles': 'fc',
+    };
+
+    return knownUnits[text] ?? text;
+  }
+
+  static const Map<int, String> _unitNames = {
+    0: 'm²',
+    1: 'ft²',
+    2: 'mA',
+    3: 'A',
+    4: 'Ω',
+    5: 'V',
+    6: 'kV',
+    7: 'MV',
+    8: 'VA',
+    9: 'kVA',
+    10: 'MVA',
+    11: 'VAR',
+    12: 'kVAR',
+    13: 'MVAR',
+    14: '°',
+    15: 'PF',
+    16: 'J',
+    17: 'kJ',
+    18: 'Wh',
+    19: 'kWh',
+    20: 'BTU',
+    21: 'therm',
+    22: 'ton-h',
+    23: 'J/kg air sec',
+    24: 'BTU/lb air sec',
+    25: 'cycles/h',
+    26: 'cycles/min',
+    27: 'Hz',
+    28: 'g eau/kg air sec',
+    29: '%RH',
+    30: 'mm',
+    31: 'm',
+    32: 'in',
+    33: 'ft',
+    34: 'W/ft²',
+    35: 'W/m²',
+    36: 'lm',
+    37: 'lx',
+    38: 'fc',
+    39: 'kg',
+    40: 'lb',
+    41: 'ton',
+    42: 'kg/s',
+    43: 'kg/min',
+    44: 'kg/h',
+    45: 'lb/min',
+    46: 'lb/h',
+    47: 'W',
+    48: 'kW',
+    49: 'MW',
+    50: 'BTU/h',
+    51: 'HP',
+    52: 'TR',
+    53: 'Pa',
+    54: 'kPa',
+    55: 'bar',
+    56: 'psi',
+    57: 'cmH₂O',
+    58: 'inH₂O',
+    59: 'mmHg',
+    60: 'cmHg',
+    61: 'inHg',
+    62: '°C',
+    63: 'K',
+    64: '°F',
+    65: '°C·j',
+    66: '°F·j',
+    67: 'années',
+    68: 'mois',
+    69: 'semaines',
+    70: 'jours',
+    71: 'h',
+    72: 'min',
+    73: 's',
+    74: 'm/s',
+    75: 'km/h',
+    76: 'ft/s',
+    77: 'ft/min',
+    78: 'mph',
+    79: 'ft³',
+    80: 'm³',
+    81: 'gal UK',
+    82: 'L',
+    83: 'gal US',
+    84: 'CFM',
+    85: 'm³/s',
+    86: 'gal UK/min',
+    87: 'L/s',
+    88: 'L/min',
+    89: 'gal US/min',
+    90: '°',
+    91: '°C/h',
+    92: '°C/min',
+    93: '°F/h',
+    94: '°F/min',
+    95: '%',
+    96: '%/s',
+    97: '/min',
+    98: '/s',
+    99: 'ppm',
+    100: 'ppb',
+    102: 'psi/°F',
+    103: 'rad',
+    104: 'RPM',
+    115: 'in²',
+    116: 'cm²',
+    117: 'BTU/lb',
+    118: 'cm',
+    119: 'lb/s',
+    120: 'Δ°F',
+    121: 'Δ°C',
+    122: 'kΩ',
+    123: 'MΩ',
+    124: 'mV',
+    125: 'kJ/kg',
+    126: 'MJ',
+    127: 'J/K',
+    128: 'J/(kg·K)',
+    129: 'kHz',
+    130: 'MHz',
+    131: '/h',
+    132: 'mW',
+    133: 'hPa',
+    134: 'mbar',
+    135: 'm³/h',
+    136: 'L/h',
+    141: 'W/(m²·K)',
+    142: 'ft³/s',
+    145: 'mΩ',
+    146: 'MWh',
+    147: 'kBTU',
+    148: 'MBTU',
+    149: 'kJ/kg air sec',
+    150: 'MJ/kg air sec',
+    151: 'kJ/K',
+    152: 'MJ/K',
+    153: 'N',
+    154: 'g/s',
+    155: 'g/min',
+    156: 'ton/h',
+    157: 'kBTU/h',
+    158: 'cs',
+    159: 'ms',
+    160: 'N·m',
+    161: 'mm/s',
+    162: 'mm/min',
+    163: 'm/min',
+    164: 'm/h',
+    165: 'm³/min',
+    166: 'm/s²',
+    167: 'A/m',
+    168: 'A/m²',
+    169: 'A·m²',
+    170: 'F',
+    171: 'H',
+    172: 'Ω·m',
+    173: 'S',
+    174: 'S/m',
+    175: 'T',
+    176: 'V/K',
+    177: 'V/m',
+    178: 'Wb',
+    179: 'cd',
+    180: 'cd/m²',
+    181: 'K/h',
+    182: 'K/min',
+    184: 'rad/s',
+    185: 'm²/N',
+    189: 'W/(m·K)',
+    190: 'µS',
+    191: 'ft³/h',
+    192: 'gal US/h',
+    193: 'km',
+    194: 'µm',
+    195: 'g',
+    196: 'mg',
+    197: 'mL',
+    198: 'mL/s',
+    199: 'dB',
+    200: 'dBmV',
+    201: 'dBV',
+    202: 'mS',
+    203: 'VARh',
+    204: 'kVARh',
+    205: 'MVARh',
+    206: 'mmH₂O',
+    207: '‰',
+    208: 'g/g',
+    209: 'kg/kg',
+    210: 'g/kg',
+    211: 'mg/g',
+    212: 'mg/kg',
+    213: 'g/mL',
+    214: 'g/L',
+    215: 'mg/L',
+    216: 'µg/L',
+    217: 'g/m³',
+    218: 'mg/m³',
+    219: 'µg/m³',
+    220: 'ng/m³',
+    221: 'g/cm³',
+    222: 'Bq',
+    223: 'kBq',
+    224: 'MBq',
+    225: 'Gy',
+    226: 'mGy',
+    227: 'µGy',
+    228: 'Sv',
+    229: 'mSv',
+    230: 'µSv',
+    231: 'µSv/h',
+    232: 'dBA',
+    233: 'Np/s',
+    234: 'pH',
+    244: 'm³/unité',
+    245: 'L/unité',
+    248: 'ft³/j',
+    249: 'm³/j',
+  };
 }
 
 /// Error Codes
