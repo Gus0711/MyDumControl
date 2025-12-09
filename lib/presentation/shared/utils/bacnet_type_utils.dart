@@ -40,23 +40,39 @@ class BacnetTypeUtils {
   }
 
   /// Retourne la couleur associée à un type BACnet
-  /// - Bleu pour les Inputs
-  /// - Orange pour les Outputs
-  /// - Vert pour les Values
+  /// Chaque type a une couleur unique pour une meilleure différenciation visuelle :
+  /// - AI (Analog Input)    : Vert - mesures/capteurs analogiques
+  /// - BI (Binary Input)    : Bleu - états binaires en lecture
+  /// - AO (Analog Output)   : Orange - commandes analogiques
+  /// - BO (Binary Output)   : Rouge/Rose - commandes binaires
+  /// - AV (Analog Value)    : Cyan - variables analogiques internes
+  /// - BV (Binary Value)    : Violet - variables binaires internes
+  /// - MSI (MultiState In)  : Indigo - états multiples en lecture
+  /// - MSO (MultiState Out) : Ambre - commandes multi-états
+  /// - MSV (MultiState Val) : Teal - variables multi-états
   static Color getTypeColor(BacnetObjectType type) {
     switch (type) {
+      // Inputs - teintes froides (lecture seule)
       case BacnetObjectType.analogInput:
+        return Colors.green;           // AI - Vert
       case BacnetObjectType.binaryInput:
+        return Colors.blue;            // BI - Bleu
       case BacnetObjectType.multiStateInput:
-        return Colors.blue;
+        return Colors.indigo;          // MSI - Indigo
+      // Outputs - teintes chaudes (commandes)
       case BacnetObjectType.analogOutput:
+        return Colors.orange;          // AO - Orange
       case BacnetObjectType.binaryOutput:
+        return Colors.pink;            // BO - Rose
       case BacnetObjectType.multiStateOutput:
-        return Colors.orange;
+        return Colors.amber;           // MSO - Ambre
+      // Values - teintes intermédiaires (variables internes)
       case BacnetObjectType.analogValue:
+        return Colors.cyan;            // AV - Cyan
       case BacnetObjectType.binaryValue:
+        return Colors.purple;          // BV - Violet
       case BacnetObjectType.multiStateValue:
-        return Colors.green;
+        return Colors.teal;            // MSV - Teal
       default:
         return Colors.grey;
     }

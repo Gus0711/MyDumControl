@@ -552,11 +552,15 @@ class _PointTile extends ConsumerWidget {
           ),
         ),
       ),
-      title: Text(
-        point.objectName,
-        style: const TextStyle(fontWeight: FontWeight.w500),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      title: Tooltip(
+        message: point.objectName,
+        waitDuration: const Duration(milliseconds: 500),
+        child: Text(
+          point.objectName,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
       subtitle: Row(
         children: [

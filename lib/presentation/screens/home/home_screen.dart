@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mydumcontrol/l10n/app_localizations.dart';
@@ -9,7 +10,7 @@ import '../../../application/providers/alarms_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/models/bacnet_object.dart';
-import '../../widgets/connection_loading_overlay.dart';
+import '../../widgets/skeleton_loading.dart';
 
 /// Écran principal - Menu de navigation vers les fonctionnalités
 class HomeScreen extends ConsumerStatefulWidget {
@@ -180,28 +181,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final showLoadingOverlay = !_initialLoadComplete && (state.isConnecting || state.isLoading || isLoadingPoints);
 
     if (showLoadingOverlay) {
-      int step = 0;
-      String message = 'Connexion en cours';
-
+      // Déterminer le message de statut
+      String statusMessage = 'Connexion en cours...';
       if (state.isConnecting) {
-        step = 0;
-        message = 'Connexion en cours';
+        statusMessage = 'Connexion en cours...';
       } else if (state.isLoadingDeviceInfo) {
-        step = 1;
-        message = 'Authentification';
+        statusMessage = 'Authentification...';
       } else if (state.isLoadingSummary) {
-        step = 2;
-        message = 'Récupération des données';
+        statusMessage = 'Récupération des données...';
       } else if (isLoadingPoints) {
-        step = 3;
-        message = 'Chargement des points';
+        statusMessage = 'Chargement des points...';
       }
 
-      return ConnectionLoadingOverlay(
-        message: message,
-        subMessage: state.connection?.name ?? 'Automate',
-        currentStep: step,
-        totalSteps: 4,
+      // Skeleton loading avec message de statut
+      return DashboardSkeletonGrid(
+        itemCount: 8,
+        statusMessage: statusMessage,
+        deviceName: state.connection?.name,
       );
     }
 
@@ -227,7 +223,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
 
-    // Grille de menu style MyDC Control
+    // Grille de menu style MyDC Control avec fond dégradé
     return _buildMenuGrid(context, l10n, state);
   }
 
@@ -307,82 +303,93 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Adapter le nombre de colonnes selon la largeur
-        int crossAxisCount = 2;
-        if (constraints.maxWidth > 600) crossAxisCount = 3;
-        if (constraints.maxWidth > 900) crossAxisCount = 4;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        return GridView.builder(
-          padding: const EdgeInsets.all(24),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 24,
-            mainAxisSpacing: 24,
-            childAspectRatio: 1.0,
-          ),
-          itemCount: menuItems.length,
-          itemBuilder: (context, index) {
-            final item = menuItems[index];
-            return _buildMenuTile(context, item);
-          },
-        );
-      },
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  const Color(0xFF111318),
+                  const Color(0xFF151922),
+                  const Color(0xFF111318),
+                ]
+              : [
+                  const Color(0xFFF5F7FA),
+                  const Color(0xFFE8ECF2),
+                  const Color(0xFFF0F4F8),
+                ],
+          stops: const [0.0, 0.5, 1.0],
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Adapter le nombre de colonnes selon la largeur
+          int crossAxisCount = 2;
+          if (constraints.maxWidth > 600) crossAxisCount = 3;
+          if (constraints.maxWidth > 900) crossAxisCount = 4;
+
+          // Calculer si on a besoin de scroll ou pas
+          final padding = 24.0;
+          final spacing = 24.0;
+          final availableWidth = constraints.maxWidth - (padding * 2);
+          final availableHeight = constraints.maxHeight - (padding * 2);
+          final rows = (menuItems.length / crossAxisCount).ceil();
+
+          // Taille de carte pour tenir sans scroll
+          final maxCardWidth = (availableWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
+          final maxCardHeight = (availableHeight - (spacing * (rows - 1))) / rows;
+          final cardSize = maxCardWidth < maxCardHeight ? maxCardWidth : maxCardHeight;
+
+          // Si tout tient, utiliser une grille non-scrollable
+          final totalHeight = (cardSize * rows) + (spacing * (rows - 1)) + (padding * 2);
+          final needsScroll = totalHeight > constraints.maxHeight;
+
+          if (!needsScroll && constraints.maxHeight > 400) {
+            // Grille centrée sans scroll
+            return Padding(
+              padding: EdgeInsets.all(padding),
+              child: Center(
+                child: Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  alignment: WrapAlignment.center,
+                  children: menuItems.asMap().entries.map((entry) {
+                    return SizedBox(
+                      width: cardSize.clamp(120.0, 180.0),
+                      height: cardSize.clamp(120.0, 180.0),
+                      child: _buildMenuTile(context, entry.value, entry.key),
+                    );
+                  }).toList(),
+                ),
+              ),
+            );
+          }
+
+          // Sinon, grille scrollable (mobile)
+          return GridView.builder(
+            padding: EdgeInsets.all(padding),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: spacing,
+              mainAxisSpacing: spacing,
+              childAspectRatio: 1.0,
+            ),
+            itemCount: menuItems.length,
+            itemBuilder: (context, index) {
+              final item = menuItems[index];
+              return _buildMenuTile(context, item, index);
+            },
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildMenuTile(BuildContext context, _MenuItem item) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => context.push(item.route),
-        borderRadius: BorderRadius.circular(8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  item.icon,
-                  size: 56,
-                  color: item.color,
-                ),
-                if (item.badge != null && item.badge != '0')
-                  Positioned(
-                    top: -4,
-                    right: -8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        item.badge!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              item.title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
+  Widget _buildMenuTile(BuildContext context, _MenuItem item, int index) {
+    return _AnimatedMenuTile(item: item, index: index);
   }
 
   Widget _buildDrawer(BuildContext context, AppLocalizations l10n, ActiveConnectionState state) {
@@ -482,6 +489,210 @@ class _MenuItem {
     required this.route,
     this.badge,
   });
+}
+
+/// Widget de tuile de menu style MyDumControl avec animation pop-in
+class _AnimatedMenuTile extends StatefulWidget {
+  final _MenuItem item;
+  final int index;
+
+  const _AnimatedMenuTile({required this.item, required this.index});
+
+  @override
+  State<_AnimatedMenuTile> createState() => _AnimatedMenuTileState();
+}
+
+class _AnimatedMenuTileState extends State<_AnimatedMenuTile>
+    with TickerProviderStateMixin {
+  late AnimationController _entryController;
+  late Animation<double> _entryScaleAnimation;
+  late Animation<double> _opacityAnimation;
+
+  late AnimationController _tapController;
+  late Animation<double> _tapAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Animation d'entrée (pop-in)
+    _entryController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    _entryScaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entryController,
+        curve: const ElasticOutCurve(0.8),
+      ),
+    );
+
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entryController,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+      ),
+    );
+
+    // Animation de tap (bounce)
+    _tapController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _tapAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.85), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 0.85, end: 1.05), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.05, end: 0.95), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 0.95, end: 1.0), weight: 30),
+    ]).animate(CurvedAnimation(
+      parent: _tapController,
+      curve: Curves.easeOut,
+    ));
+
+    // Délai décalé selon l'index pour effet cascade
+    Future.delayed(Duration(milliseconds: 50 * widget.index), () {
+      if (mounted) {
+        _entryController.forward();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _entryController.dispose();
+    _tapController.dispose();
+    super.dispose();
+  }
+
+  void _onTap() {
+    // Haptic feedback léger
+    HapticFeedback.lightImpact();
+
+    _tapController.forward(from: 0).then((_) {
+      if (mounted) {
+        context.push(widget.item.route);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+
+    // Couleur plus foncée pour le dégradé
+    final darkerColor = HSLColor.fromColor(item.color)
+        .withLightness((HSLColor.fromColor(item.color).lightness * 0.4).clamp(0.05, 0.3))
+        .withSaturation((HSLColor.fromColor(item.color).saturation * 0.8).clamp(0.0, 1.0))
+        .toColor();
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([_entryController, _tapController]),
+      builder: (context, child) {
+        return Opacity(
+          opacity: _opacityAnimation.value,
+          child: Transform.scale(
+            scale: _entryScaleAnimation.value * _tapAnimation.value,
+            child: child,
+          ),
+        );
+      },
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  item.color.withValues(alpha: 0.85),
+                  darkerColor,
+                ],
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Icône centrée avec cercle
+                Center(
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // Cercle de l'icône
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: item.color,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          item.icon,
+                          size: 24,
+                          color: Colors.white,
+                        ),
+                      ),
+                      // Badge rouge
+                      if (item.badge != null && item.badge != '0')
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFFE53935),
+                            ),
+                            child: Center(
+                              child: Text(
+                                item.badge!,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // Titre en bas à gauche
+                Positioned(
+                  bottom: 14,
+                  left: 14,
+                  right: 14,
+                  child: Text(
+                    item.title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Widget d'affichage de l'heure de l'automate avec indicateur de décalage

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'routes.dart';
+import 'page_transitions.dart';
 import '../../presentation/screens/splash/splash_screen.dart';
 import '../../presentation/screens/connections/connections_list_screen.dart';
 import '../../presentation/screens/connections/add_connection_screen.dart';
@@ -78,11 +79,15 @@ class AppRouter {
       GoRoute(
         path: Routes.home,
         name: 'home',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           // Récupérer le connectionId depuis les query params
           final connectionIdStr = state.uri.queryParameters['connectionId'];
           final connectionId = connectionIdStr != null ? int.tryParse(connectionIdStr) : null;
-          return HomeScreen(connectionId: connectionId);
+          return PageTransitions.sharedAxisTransition(
+            context: context,
+            state: state,
+            child: HomeScreen(connectionId: connectionId),
+          );
         },
       ),
 
@@ -90,15 +95,23 @@ class AppRouter {
       GoRoute(
         path: Routes.points,
         name: 'points',
-        builder: (context, state) => const PointsScreen(),
+        pageBuilder: (context, state) => PageTransitions.slideTransition(
+          context: context,
+          state: state,
+          child: const PointsScreen(),
+        ),
         routes: [
           // Détail d'un point
           GoRoute(
             path: ':id',
             name: 'pointDetail',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final id = state.pathParameters['id']!;
-              return PointDetailScreen(pointId: id);
+              return PageTransitions.scaleTransition(
+                context: context,
+                state: state,
+                child: PointDetailScreen(pointId: id),
+              );
             },
           ),
         ],
@@ -108,23 +121,35 @@ class AppRouter {
       GoRoute(
         path: Routes.alarms,
         name: 'alarms',
-        builder: (context, state) => const AlarmsScreen(),
+        pageBuilder: (context, state) => PageTransitions.slideTransition(
+          context: context,
+          state: state,
+          child: const AlarmsScreen(),
+        ),
       ),
 
       // Schedules (Plannings)
       GoRoute(
         path: Routes.schedules,
         name: 'schedules',
-        builder: (context, state) => const SchedulesListScreen(),
+        pageBuilder: (context, state) => PageTransitions.slideTransition(
+          context: context,
+          state: state,
+          child: const SchedulesListScreen(),
+        ),
         routes: [
           // Détail d'un schedule
           GoRoute(
             path: ':instance',
             name: 'scheduleDetail',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final instanceStr = state.pathParameters['instance']!;
               final instance = int.tryParse(instanceStr) ?? 0;
-              return ScheduleDetailScreen(instance: instance);
+              return PageTransitions.scaleTransition(
+                context: context,
+                state: state,
+                child: ScheduleDetailScreen(instance: instance),
+              );
             },
           ),
         ],
@@ -134,46 +159,70 @@ class AppRouter {
       GoRoute(
         path: Routes.overrides,
         name: 'overrides',
-        builder: (context, state) => const OverridesScreen(),
+        pageBuilder: (context, state) => PageTransitions.slideTransition(
+          context: context,
+          state: state,
+          child: const OverridesScreen(),
+        ),
       ),
 
       // Favoris
       GoRoute(
         path: Routes.favorites,
         name: 'favorites',
-        builder: (context, state) => const FavoritesScreen(),
+        pageBuilder: (context, state) => PageTransitions.slideTransition(
+          context: context,
+          state: state,
+          child: const FavoritesScreen(),
+        ),
       ),
 
       // Synoptiques
       GoRoute(
         path: Routes.synoptics,
         name: 'synoptics',
-        builder: (context, state) => const SynopticsListScreen(),
+        pageBuilder: (context, state) => PageTransitions.slideTransition(
+          context: context,
+          state: state,
+          child: const SynopticsListScreen(),
+        ),
         routes: [
           // Créer un synoptique
           GoRoute(
             path: 'create',
             name: 'synopticCreate',
-            builder: (context, state) => const SynopticsListScreen(), // Redirige vers la liste avec dialog
+            pageBuilder: (context, state) => PageTransitions.fadeTransition(
+              context: context,
+              state: state,
+              child: const SynopticsListScreen(),
+            ),
           ),
           // Visualiser un synoptique
           GoRoute(
             path: ':id',
             name: 'synopticView',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final idStr = state.pathParameters['id']!;
               final id = int.tryParse(idStr) ?? 0;
-              return SynopticViewerScreen(synopticId: id);
+              return PageTransitions.scaleTransition(
+                context: context,
+                state: state,
+                child: SynopticViewerScreen(synopticId: id),
+              );
             },
             routes: [
               // Éditer les liaisons d'un synoptique
               GoRoute(
                 path: 'edit',
                 name: 'synopticEdit',
-                builder: (context, state) {
+                pageBuilder: (context, state) {
                   final idStr = state.pathParameters['id']!;
                   final id = int.tryParse(idStr) ?? 0;
-                  return SynopticEditorScreen(synopticId: id);
+                  return PageTransitions.fadeTransition(
+                    context: context,
+                    state: state,
+                    child: SynopticEditorScreen(synopticId: id),
+                  );
                 },
               ),
             ],
@@ -185,14 +234,22 @@ class AppRouter {
       GoRoute(
         path: Routes.settings,
         name: 'settings',
-        builder: (context, state) => const SettingsScreen(),
+        pageBuilder: (context, state) => PageTransitions.slideTransition(
+          context: context,
+          state: state,
+          child: const SettingsScreen(),
+        ),
       ),
 
       // Info sur l'appareil
       GoRoute(
         path: Routes.deviceInfo,
         name: 'deviceInfo',
-        builder: (context, state) => const DeviceInfoScreen(),
+        pageBuilder: (context, state) => PageTransitions.slideTransition(
+          context: context,
+          state: state,
+          child: const DeviceInfoScreen(),
+        ),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

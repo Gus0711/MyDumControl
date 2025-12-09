@@ -28,10 +28,12 @@ class AppColors {
   static const Color surfaceLight = Color(0xFFFFFFFF);
   static const Color cardLight = Color(0xFFFFFFFF);
 
-  // Couleurs de fond - Mode sombre
-  static const Color backgroundDark = Color(0xFF121212);
-  static const Color surfaceDark = Color(0xFF1E1E1E);
-  static const Color cardDark = Color(0xFF2C2C2C);
+  // Couleurs de fond - Mode sombre (Material You - teinte bleue)
+  static const Color backgroundDark = Color(0xFF111318); // Gris très foncé teinté bleu
+  static const Color surfaceDark = Color(0xFF1A1C22); // Surface légèrement plus claire
+  static const Color cardDark = Color(0xFF23262E); // Cartes avec teinte bleue subtile
+  static const Color surfaceContainerDark = Color(0xFF1E2128); // Container intermédiaire
+  static const Color surfaceContainerHighDark = Color(0xFF282C34); // Container élevé
 
   // Couleurs de texte - Mode clair
   static const Color textPrimaryLight = Color(0xFF212121);
@@ -39,13 +41,13 @@ class AppColors {
   static const Color textDisabledLight = Color(0xFFBDBDBD);
 
   // Couleurs de texte - Mode sombre
-  static const Color textPrimaryDark = Color(0xFFFFFFFF);
-  static const Color textSecondaryDark = Color(0xFFB0B0B0);
-  static const Color textDisabledDark = Color(0xFF6D6D6D);
+  static const Color textPrimaryDark = Color(0xFFE4E6EB); // Blanc cassé plus doux
+  static const Color textSecondaryDark = Color(0xFF9AA0AB); // Gris bleuté
+  static const Color textDisabledDark = Color(0xFF5C6370); // Gris moyen
 
   // Couleurs de bordure
   static const Color borderLight = Color(0xFFE0E0E0);
-  static const Color borderDark = Color(0xFF424242);
+  static const Color borderDark = Color(0xFF2E3440); // Bordure teintée bleue
 
   // Couleurs spécifiques aux points BACnet
   static const Color analogInput = Color(0xFF42A5F5); // Bleu
