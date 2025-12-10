@@ -121,7 +121,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             // Affichage de l'heure de l'automate
             if (connectionState.controllerTime != null)
-              _ControllerTimeDisplay(controllerTime: connectionState.controllerTime!),
+              _ControllerTimeDisplay(
+                controllerTime: connectionState.controllerTime!,
+                canSync: connectionState.client?.canSetControllerTime ?? false,
+                onSyncTime: () async {
+                  final client = connectionState.client;
+                  if (client == null || !client.canSetControllerTime) return false;
+                  try {
+                    final success = await client.setControllerTime(DateTime.now());
+                    if (success) {
+                      // Rafraîchir pour récupérer la nouvelle heure
+                      ref.read(activeConnectionProvider.notifier).refresh();
+                    }
+                    return success;
+                  } catch (e) {
+                    return false;
+                  }
+                },
+              ),
           ],
         ),
         actions: [
@@ -696,31 +713,168 @@ class _AnimatedMenuTileState extends State<_AnimatedMenuTile>
 }
 
 /// Widget d'affichage de l'heure de l'automate avec indicateur de décalage
-class _ControllerTimeDisplay extends StatelessWidget {
+class _ControllerTimeDisplay extends StatefulWidget {
   final ControllerTime controllerTime;
+  final bool canSync;
+  final Future<bool> Function()? onSyncTime;
 
-  const _ControllerTimeDisplay({required this.controllerTime});
+  const _ControllerTimeDisplay({
+    required this.controllerTime,
+    this.canSync = false,
+    this.onSyncTime,
+  });
+
+  @override
+  State<_ControllerTimeDisplay> createState() => _ControllerTimeDisplayState();
+}
+
+class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
+    with SingleTickerProviderStateMixin {
+  AnimationController? _pulseController;
+  Animation<double>? _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupAnimation();
+  }
+
+  @override
+  void didUpdateWidget(_ControllerTimeDisplay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reconfigurer l'animation si le statut de décalage change
+    final hadOffset = oldWidget.controllerTime.hasSignificantOffset;
+    final hasOffset = widget.controllerTime.hasSignificantOffset;
+    if (hadOffset != hasOffset) {
+      _setupAnimation();
+    }
+  }
+
+  void _setupAnimation() {
+    if (widget.controllerTime.hasSignificantOffset) {
+      _pulseController?.dispose();
+      _pulseController = AnimationController(
+        duration: const Duration(milliseconds: 1500),
+        vsync: this,
+      );
+      _pulseAnimation = Tween<double>(begin: 1.0, end: 0.4).animate(
+        CurvedAnimation(parent: _pulseController!, curve: Curves.easeInOut),
+      );
+      _pulseController!.repeat(reverse: true);
+    } else {
+      _pulseController?.dispose();
+      _pulseController = null;
+      _pulseAnimation = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseController?.dispose();
+    super.dispose();
+  }
+
+  ControllerTime get controllerTime => widget.controllerTime;
 
   @override
   Widget build(BuildContext context) {
-    // Couleur selon le décalage
-    Color timeColor;
-    Color? iconColor;
-    IconData? warningIcon;
+    // Couleurs et styles selon le décalage
+    Color textColor;
+    Color backgroundColor;
+    Color borderColor;
+    Color iconColor;
+    IconData icon;
 
     if (controllerTime.hasCriticalOffset) {
-      // Décalage critique (> 10 min) : rouge
-      timeColor = Colors.red.shade300;
-      iconColor = Colors.red.shade300;
-      warningIcon = Icons.error;
+      // Décalage critique (> 10 min) : rouge vif
+      textColor = Colors.white;
+      backgroundColor = Colors.red.shade700;
+      borderColor = Colors.red.shade300;
+      iconColor = Colors.white;
+      icon = Icons.error;
     } else if (controllerTime.hasSignificantOffset) {
       // Décalage significatif (> 2 min) : orange
-      timeColor = Colors.orange.shade300;
-      iconColor = Colors.orange.shade300;
-      warningIcon = Icons.warning_amber;
+      textColor = Colors.white;
+      backgroundColor = Colors.orange.shade700;
+      borderColor = Colors.orange.shade300;
+      iconColor = Colors.white;
+      icon = Icons.warning_amber;
     } else {
       // OK : couleur normale
-      timeColor = Colors.white70;
+      textColor = Colors.white70;
+      backgroundColor = Colors.black12;
+      borderColor = Colors.transparent;
+      iconColor = Colors.white54;
+      icon = Icons.access_time;
+    }
+
+    final hasOffset = controllerTime.hasSignificantOffset;
+
+    Widget content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      margin: const EdgeInsets.only(left: 8),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        border: hasOffset
+            ? Border.all(color: borderColor, width: 2)
+            : null,
+        boxShadow: hasOffset
+            ? [
+                BoxShadow(
+                  color: backgroundColor.withValues(alpha: 0.6),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: hasOffset ? 18 : 14,
+            color: iconColor,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '${controllerTime.formattedDateShort} ${controllerTime.formattedTime}',
+            style: TextStyle(
+              fontSize: hasOffset ? 14 : 13,
+              fontWeight: hasOffset ? FontWeight.bold : FontWeight.w500,
+              color: textColor,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // Ajouter l'animation de pulsation si décalage
+    if (hasOffset && _pulseAnimation != null) {
+      content = AnimatedBuilder(
+        animation: _pulseAnimation!,
+        builder: (context, child) {
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: (controllerTime.hasCriticalOffset
+                          ? Colors.red
+                          : Colors.orange)
+                      .withValues(alpha: _pulseAnimation!.value * 0.8),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: child,
+          );
+        },
+        child: content,
+      );
     }
 
     return Tooltip(
@@ -728,34 +882,7 @@ class _ControllerTimeDisplay extends StatelessWidget {
       child: InkWell(
         onTap: () => _showTimeDialog(context),
         borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          margin: const EdgeInsets.only(left: 8),
-          decoration: BoxDecoration(
-            color: Colors.black12,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                warningIcon ?? Icons.access_time,
-                size: 14,
-                color: iconColor ?? Colors.white54,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                controllerTime.formattedTime,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: timeColor,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ],
-          ),
-        ),
+        child: content,
       ),
     );
   }
@@ -768,92 +895,201 @@ class _ControllerTimeDisplay extends StatelessWidget {
   }
 
   void _showTimeDialog(BuildContext context) {
+    bool isSyncing = false;
+    String? syncResult;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              controllerTime.hasCriticalOffset
-                  ? Icons.error
-                  : controllerTime.hasSignificantOffset
-                      ? Icons.warning_amber
-                      : Icons.access_time,
-              color: controllerTime.hasCriticalOffset
-                  ? Colors.red
-                  : controllerTime.hasSignificantOffset
-                      ? Colors.orange
-                      : Colors.blue,
-            ),
-            const SizedBox(width: 8),
-            const Text('Heure de l\'automate'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildInfoRow('Date/Heure automate', controllerTime.formattedDateTime),
-            _buildInfoRow('Heure locale', _formatLocalTime()),
-            const Divider(),
-            _buildInfoRow(
-              'Décalage',
-              controllerTime.offsetDescription,
-              valueColor: controllerTime.hasCriticalOffset
-                  ? Colors.red
-                  : controllerTime.hasSignificantOffset
-                      ? Colors.orange
-                      : Colors.green,
-            ),
-            if (controllerTime.hasSignificantOffset) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: controllerTime.hasCriticalOffset
-                      ? Colors.red.shade50
-                      : Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                controllerTime.hasCriticalOffset
+                    ? Icons.error
+                    : controllerTime.hasSignificantOffset
+                        ? Icons.warning_amber
+                        : Icons.access_time,
+                color: controllerTime.hasCriticalOffset
+                    ? Colors.red
+                    : controllerTime.hasSignificantOffset
+                        ? Colors.orange
+                        : Colors.blue,
+              ),
+              const SizedBox(width: 8),
+              const Text('Heure de l\'automate'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildInfoRow('Date/Heure automate', controllerTime.formattedDateTime),
+              _buildInfoRow('Heure locale', _formatLocalTime()),
+              const Divider(),
+              _buildInfoRow(
+                'Décalage',
+                controllerTime.offsetDescription,
+                valueColor: controllerTime.hasCriticalOffset
+                    ? Colors.red
+                    : controllerTime.hasSignificantOffset
+                        ? Colors.orange
+                        : Colors.green,
+              ),
+              if (controllerTime.hasSignificantOffset) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
                     color: controllerTime.hasCriticalOffset
-                        ? Colors.red.shade200
-                        : Colors.orange.shade200,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 20,
+                        ? Colors.red.shade50
+                        : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
                       color: controllerTime.hasCriticalOffset
-                          ? Colors.red.shade700
-                          : Colors.orange.shade700,
+                          ? Colors.red.shade200
+                          : Colors.orange.shade200,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'L\'heure de l\'automate est décalée. '
-                        'Les plannings peuvent ne pas s\'exécuter aux moments attendus.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: controllerTime.hasCriticalOffset
-                              ? Colors.red.shade800
-                              : Colors.orange.shade800,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 20,
+                        color: controllerTime.hasCriticalOffset
+                            ? Colors.red.shade700
+                            : Colors.orange.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'L\'heure de l\'automate est décalée. '
+                          'Les plannings peuvent ne pas s\'exécuter aux moments attendus.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: controllerTime.hasCriticalOffset
+                                ? Colors.red.shade800
+                                : Colors.orange.shade800,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
+              // Message de résultat de synchronisation
+              if (syncResult != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: syncResult!.contains('succès')
+                        ? Colors.green.shade50
+                        : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        syncResult!.contains('succès')
+                            ? Icons.check_circle
+                            : Icons.error,
+                        size: 18,
+                        color: syncResult!.contains('succès')
+                            ? Colors.green.shade700
+                            : Colors.red.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          syncResult!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: syncResult!.contains('succès')
+                                ? Colors.green.shade800
+                                : Colors.red.shade800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              // Info si V2 (pas de sync disponible)
+              if (!widget.canSync && controllerTime.hasSignificantOffset) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info, size: 18, color: Colors.blue.shade700),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'API V2 : utilisez l\'interface web EC-NetAX ou configurez le NTP pour synchroniser l\'heure.',
+                          style: TextStyle(fontSize: 12, color: Colors.blue.shade800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
+          ),
+          actions: [
+            // Bouton Synchroniser (uniquement si API V1 et décalage)
+            if (widget.canSync && controllerTime.hasSignificantOffset)
+              TextButton.icon(
+                onPressed: isSyncing
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          isSyncing = true;
+                          syncResult = null;
+                        });
+
+                        try {
+                          final success = await widget.onSyncTime?.call() ?? false;
+                          setDialogState(() {
+                            isSyncing = false;
+                            syncResult = success
+                                ? 'Synchronisation réussie avec succès !'
+                                : 'Échec de la synchronisation.';
+                          });
+
+                          // Fermer la popup après succès
+                          if (success && dialogContext.mounted) {
+                            await Future.delayed(const Duration(milliseconds: 1500));
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                            }
+                          }
+                        } catch (e) {
+                          setDialogState(() {
+                            isSyncing = false;
+                            syncResult = 'Erreur: $e';
+                          });
+                        }
+                      },
+                icon: isSyncing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync),
+                label: Text(isSyncing ? 'Synchronisation...' : 'Synchroniser'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Fermer'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fermer'),
-          ),
-        ],
       ),
     );
   }

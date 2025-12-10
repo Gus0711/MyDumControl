@@ -30,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -76,6 +76,10 @@ class AppDatabase extends _$AppDatabase {
             // Migration de v8 à v9 : ajout du support BACnet natif
             await m.addColumn(connections, connections.connectionType);
             await m.addColumn(connections, connections.bacnetDeviceId);
+          }
+          if (from < 10) {
+            // Migration de v9 à v10 : ajout du modèle de l'automate
+            await m.addColumn(connections, connections.modelName);
           }
         },
       );
@@ -128,6 +132,16 @@ class AppDatabase extends _$AppDatabase {
     return (update(connections)..where((c) => c.id.equals(id))).write(
       ConnectionsCompanion(
         apiVersion: Value(version),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Met à jour le modèle de l'automate
+  Future<void> updateModelName(int id, String modelName) {
+    return (update(connections)..where((c) => c.id.equals(id))).write(
+      ConnectionsCompanion(
+        modelName: Value(modelName),
         updatedAt: Value(DateTime.now()),
       ),
     );

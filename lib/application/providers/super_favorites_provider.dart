@@ -54,6 +54,36 @@ class SuperFavoriteWithValue {
 /// Durée minimale entre deux refresh (anti-spam)
 const superFavoriteRefreshCooldown = Duration(seconds: 30);
 
+/// Infos de l'automate récupérées lors du refresh des super favoris
+class ConnectionQuickInfo {
+  /// Modèle de l'automate (ex: "ECY-S1000")
+  final String? modelName;
+
+  /// Heure de l'automate
+  final ControllerTime? controllerTime;
+
+  /// Dernière mise à jour
+  final DateTime? lastUpdated;
+
+  const ConnectionQuickInfo({
+    this.modelName,
+    this.controllerTime,
+    this.lastUpdated,
+  });
+
+  ConnectionQuickInfo copyWith({
+    String? modelName,
+    ControllerTime? controllerTime,
+    DateTime? lastUpdated,
+  }) {
+    return ConnectionQuickInfo(
+      modelName: modelName ?? this.modelName,
+      controllerTime: controllerTime ?? this.controllerTime,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+    );
+  }
+}
+
 /// État global des super favoris par connexion
 class SuperFavoritesState {
   /// Map connectionId -> List<SuperFavoriteWithValue>
@@ -62,18 +92,24 @@ class SuperFavoritesState {
   /// Connexions en cours de refresh
   final Set<int> refreshingConnections;
 
+  /// Infos rapides sur les connexions (modèle, heure)
+  final Map<int, ConnectionQuickInfo> connectionInfos;
+
   const SuperFavoritesState({
     this.byConnection = const {},
     this.refreshingConnections = const {},
+    this.connectionInfos = const {},
   });
 
   SuperFavoritesState copyWith({
     Map<int, List<SuperFavoriteWithValue>>? byConnection,
     Set<int>? refreshingConnections,
+    Map<int, ConnectionQuickInfo>? connectionInfos,
   }) {
     return SuperFavoritesState(
       byConnection: byConnection ?? this.byConnection,
       refreshingConnections: refreshingConnections ?? this.refreshingConnections,
+      connectionInfos: connectionInfos ?? this.connectionInfos,
     );
   }
 
@@ -110,6 +146,11 @@ class SuperFavoritesState {
   bool canRefresh(int connectionId) {
     if (isRefreshing(connectionId)) return false;
     return secondsUntilRefresh(connectionId) == 0;
+  }
+
+  /// Retourne les infos rapides d'une connexion
+  ConnectionQuickInfo? getConnectionInfo(int connectionId) {
+    return connectionInfos[connectionId];
   }
 }
 
@@ -214,6 +255,26 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     }
   }
 
+  /// Récupère les infos de l'appareil de manière sécurisée (retourne null en cas d'erreur)
+  Future<DeviceInfo?> _safeGetDeviceInfo(ConnectedApiClient apiClient) async {
+    try {
+      return await apiClient.getDeviceInfo();
+    } catch (e) {
+      _logger.w('_safeGetDeviceInfo error: $e');
+      return null;
+    }
+  }
+
+  /// Récupère l'heure de l'automate de manière sécurisée (retourne null en cas d'erreur)
+  Future<ControllerTime?> _safeGetControllerTime(ConnectedApiClient apiClient) async {
+    try {
+      return await apiClient.getControllerTime();
+    } catch (e) {
+      _logger.w('_safeGetControllerTime error: $e');
+      return null;
+    }
+  }
+
   /// Refresh les super favoris via API REST (Distech V1/V2)
   Future<void> _refreshApiConnection(
     int connectionId,
@@ -231,14 +292,30 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     // Collecter les pointRefs
     final pointRefs = superFavs.map((sf) => sf.favorite.pointRef).toList();
 
-    // Faire la requête batch
-    final results = await apiClient.readMultiplePoints(pointRefs);
-    _logger.i('_refreshApiConnection: got ${results.length} results');
+    // Faire les requêtes en parallèle : points + deviceInfo + controllerTime
+    final pointsFuture = apiClient.readMultiplePoints(pointRefs);
+    final deviceInfoFuture = _safeGetDeviceInfo(apiClient);
+    final controllerTimeFuture = _safeGetControllerTime(apiClient);
 
-    // Mettre à jour les valeurs
+    final results = await Future.wait([pointsFuture, deviceInfoFuture, controllerTimeFuture]);
+
+    final pointsResults = results[0] as Map<String, BacnetObject>;
+    final deviceInfo = results[1] as DeviceInfo?;
+    final controllerTime = results[2] as ControllerTime?;
+
+    _logger.i('_refreshApiConnection: got ${pointsResults.length} points, deviceInfo=${deviceInfo?.modelName}, time=${controllerTime?.formattedTime}');
+
+    // Mettre à jour le modelName en DB si disponible
+    if (deviceInfo?.modelName != null) {
+      final database = _ref.read(databaseProvider);
+      await database.updateModelName(connectionId, deviceInfo!.modelName!);
+      _logger.i('_refreshApiConnection: modelName saved to DB: ${deviceInfo.modelName}');
+    }
+
+    // Mettre à jour les valeurs des points
     final now = DateTime.now();
     final updatedList = superFavs.map((sf) {
-      final liveData = results[sf.favorite.pointRef];
+      final liveData = pointsResults[sf.favorite.pointRef];
       return sf.copyWith(
         liveData: liveData,
         lastRefreshed: now,
@@ -250,8 +327,17 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     final newByConnection = Map<int, List<SuperFavoriteWithValue>>.from(state.byConnection);
     newByConnection[connectionId] = updatedList;
 
+    // Mettre à jour les infos de la connexion
+    final newConnectionInfos = Map<int, ConnectionQuickInfo>.from(state.connectionInfos);
+    newConnectionInfos[connectionId] = ConnectionQuickInfo(
+      modelName: deviceInfo?.modelName,
+      controllerTime: controllerTime,
+      lastUpdated: now,
+    );
+
     state = state.copyWith(
       byConnection: newByConnection,
+      connectionInfos: newConnectionInfos,
       refreshingConnections: state.refreshingConnections.difference({connectionId}),
     );
   }

@@ -448,6 +448,150 @@ class ConnectedApiClient {
     throw Exception('Impossible de récupérer l\'heure de l\'automate V1');
   }
 
+  /// Met à jour la date et l'heure de l'automate (synchronise avec l'heure locale)
+  /// Disponible uniquement pour API V1
+  /// Retourne true si la mise à jour a réussi
+  Future<bool> setControllerTime(DateTime dateTime) async {
+    if (apiVersion == 'V1') {
+      return await _setControllerTimeV1(dateTime);
+    }
+    // API V2 ne supporte pas la modification de l'heure via REST
+    throw UnsupportedError('La modification de l\'heure n\'est pas disponible via l\'API V2. '
+        'Utilisez l\'interface web EC-NetAX ou configurez le NTP.');
+  }
+
+  /// Met à jour l'heure de l'automate via API V1
+  /// POST /api/rest/v1/system/date-time
+  Future<bool> _setControllerTimeV1(DateTime dateTime) async {
+    final url = '$baseUrl/api/rest/v1/system/date-time';
+    _logger.i('_setControllerTimeV1: POST $url');
+
+    // Format attendu par l'API V1:
+    // - date: "MM-dd-yyyy" (ex: "12-10-2025")
+    // - time: "HH:mm:ss" (ex: "14:30:00")
+    final dateStr = '${dateTime.month.toString().padLeft(2, '0')}-'
+        '${dateTime.day.toString().padLeft(2, '0')}-'
+        '${dateTime.year}';
+    final timeStr = '${dateTime.hour.toString().padLeft(2, '0')}:'
+        '${dateTime.minute.toString().padLeft(2, '0')}:'
+        '${dateTime.second.toString().padLeft(2, '0')}';
+
+    final body = {
+      'date': dateStr,
+      'time': timeStr,
+    };
+
+    _logger.d('_setControllerTimeV1: body=$body');
+
+    try {
+      final response = await _dio.post(
+        url,
+        data: body,
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        ),
+      );
+
+      _logger.i('_setControllerTimeV1: response status=${response.statusCode}');
+
+      // Succès si status 200 ou 204
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        _logger.i('_setControllerTimeV1: Heure mise à jour avec succès');
+        return true;
+      }
+
+      _logger.w('_setControllerTimeV1: Échec, status=${response.statusCode}');
+      return false;
+    } catch (e) {
+      _logger.e('_setControllerTimeV1: Erreur: $e');
+      rethrow;
+    }
+  }
+
+  /// Vérifie si la modification de l'heure est supportée
+  bool get canSetControllerTime => apiVersion == 'V1';
+
+  /// Récupère les informations réseau de l'automate
+  /// API V1: GET /api/rest/v1/info/network/adapters/ethernet
+  /// API V2: GET /api/rest/v2/services/platform/network/interfaces
+  Future<NetworkInfo?> getNetworkInfo() async {
+    if (apiVersion == 'V1') {
+      return await _getNetworkInfoV1();
+    }
+    return await _getNetworkInfoV2();
+  }
+
+  /// Récupère les infos réseau pour API V1
+  Future<NetworkInfo?> _getNetworkInfoV1() async {
+    final url = '$baseUrl/api/rest/v1/info/network/adapters/ethernet';
+    _logger.i('_getNetworkInfoV1: GET $url');
+
+    try {
+      final response = await _dio.get(
+        url,
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Accept': 'application/json',
+          },
+        ),
+      );
+
+      _logger.i('_getNetworkInfoV1: status=${response.statusCode}');
+      _logger.d('_getNetworkInfoV1: data=${response.data}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+        if (data is Map<String, dynamic>) {
+          return NetworkInfo.fromJsonV1(data);
+        }
+      }
+
+      return null;
+    } catch (e) {
+      _logger.w('_getNetworkInfoV1: Erreur: $e');
+      return null;
+    }
+  }
+
+  /// Récupère les infos réseau pour API V2
+  /// Récupère toutes les interfaces : bridge, primary, secondary, wireless
+  Future<NetworkInfo?> _getNetworkInfoV2() async {
+    final url = '$baseUrl/api/rest/v2/services/platform/network/interfaces';
+    _logger.i('_getNetworkInfoV2: GET $url');
+
+    try {
+      final response = await _dio.get(
+        url,
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Accept': 'application/json',
+          },
+        ),
+      );
+
+      _logger.i('_getNetworkInfoV2: status=${response.statusCode}');
+      _logger.d('_getNetworkInfoV2: data=${response.data}');
+
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+        if (data is Map<String, dynamic>) {
+          return NetworkInfo.fromJsonV2(data);
+        }
+      }
+
+      return null;
+    } catch (e) {
+      _logger.w('_getNetworkInfoV2: Erreur: $e');
+      return null;
+    }
+  }
+
   /// Parse une date et heure BACnet en DateTime
   DateTime? _parseBacnetDateTime(String dateStr, String timeStr) {
     try {
@@ -2301,53 +2445,195 @@ class ConnectedApiClient {
   }
 
   /// Récupère le log buffer d'un trend-log spécifique (V1)
-  Future<String?> getTrendLogBuffer(int trendLogInstance) async {
+  /// Si allData=true, récupère tout l'historique sans limite de temps
+  Future<String?> getTrendLogBuffer(int trendLogInstance, {bool allData = false}) async {
     if (apiVersion == 'V2') {
-      return _getTrendLogBufferV2(trendLogInstance);
+      return _getTrendLogBufferV2(trendLogInstance, allData: allData);
     }
-    return _getTrendLogBufferV1(trendLogInstance);
+    return _getTrendLogBufferV1(trendLogInstance, allData: allData);
   }
 
-  /// Récupère le log buffer V1
-  /// Note: Le buffer peut être très volumineux, on utilise un timeout plus long
-  Future<String?> _getTrendLogBufferV1(int trendLogInstance) async {
-    _logger.i('_getTrendLogBufferV1: fetching log-buffer for trend-log $trendLogInstance');
+  /// Récupère le log buffer V1 via l'endpoint /trend
+  /// Utilise les paramètres start/stop pour la plage de temps et limit pour le nombre de records
+  /// Si allData=true, ne met pas de limite de temps (récupère tout)
+  /// Doc: https://wiki.distech-controls.com/RestAPI/Protocols/BACnet/Local/Objects/ObjectType/ObjectInstance/Trend/GET-trend
+  Future<String?> _getTrendLogBufferV1(int trendLogInstance, {int? maxRecords, bool allData = false}) async {
+    _logger.i('_getTrendLogBufferV1: fetching trend data for trend-log $trendLogInstance, allData=$allData');
 
-    final url = '$baseUrl$_bacnetBasePath/objects/trendLog/$trendLogInstance/properties/logBuffer';
+    // D'abord, récupérer les infos du trend-log pour trouver l'objet source
+    String? sourceObjectType;
+    String? sourceObjectInstance;
+
+    // Méthode 1: Essayer de récupérer les infos du trend-log directement
+    try {
+      final infoUrl = '$baseUrl$_bacnetBasePath/objects/trendLog/$trendLogInstance';
+      _logger.d('_getTrendLogBufferV1: fetching trend-log info from $infoUrl');
+      final infoResponse = await _dio.get(infoUrl, options: Options(headers: {'Authorization': basicAuth}));
+
+      if (infoResponse.statusCode == 200 && infoResponse.data is Map<String, dynamic>) {
+        final data = infoResponse.data as Map<String, dynamic>;
+        _logger.d('_getTrendLogBufferV1: trend-log response keys: ${data.keys.toList()}');
+
+        final recordCount = data['record-count'] ?? data['recordCount'];
+        final bufferSize = data['buffer-size'] ?? data['bufferSize'];
+        final logInterval = data['log-interval'] ?? data['logInterval'];
+        final logProp = data['log-device-object-property']?.toString() ?? data['logDeviceObjectProperty']?.toString();
+        _logger.i('_getTrendLogBufferV1: trend-log info: recordCount=$recordCount, bufferSize=$bufferSize, logInterval=$logInterval, logProp=$logProp');
+
+        // Parser l'objet source depuis log-device-object-property
+        // Format: "[Analog Input 101,Present Value,,]"
+        if (logProp != null && logProp != 'null') {
+          final match = RegExp(r'\[([^,]+)\s+(\d+),').firstMatch(logProp);
+          if (match != null) {
+            sourceObjectType = match.group(1)?.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-');
+            sourceObjectInstance = match.group(2);
+            _logger.i('_getTrendLogBufferV1: source object from logProp: $sourceObjectType/$sourceObjectInstance');
+          }
+        }
+      }
+    } catch (e) {
+      _logger.w('_getTrendLogBufferV1: failed to get trend-log info: $e');
+    }
+
+    // Méthode 2: Si pas trouvé, essayer de déduire l'objet source depuis l'instance du trend-log
+    // Convention Distech: trendLog 100101 -> analog-input 101, 200050 -> analog-value 50, etc.
+    if (sourceObjectType == null || sourceObjectInstance == null) {
+      final instanceStr = trendLogInstance.toString();
+      if (instanceStr.length >= 4) {
+        // Les 2-3 premiers chiffres indiquent le type, le reste l'instance
+        // 10xxxx = Analog Input, 20xxxx = Analog Output, 30xxxx = Analog Value
+        // 40xxxx = Binary Input, 50xxxx = Binary Output, 60xxxx = Binary Value
+        final prefix = instanceStr.substring(0, instanceStr.length > 5 ? 2 : 1);
+        final suffix = instanceStr.substring(instanceStr.length > 5 ? 2 : 1);
+
+        final typeMap = {
+          '10': 'analog-input',
+          '20': 'analog-output',
+          '30': 'analog-value',
+          '40': 'binary-input',
+          '50': 'binary-output',
+          '60': 'binary-value',
+          '1': 'analog-input',
+          '2': 'analog-output',
+          '3': 'analog-value',
+          '4': 'binary-input',
+          '5': 'binary-output',
+          '6': 'binary-value',
+        };
+
+        sourceObjectType = typeMap[prefix];
+        sourceObjectInstance = suffix.replaceFirst(RegExp(r'^0+'), ''); // Enlever les zéros en tête
+        if (sourceObjectInstance.isEmpty) sourceObjectInstance = '0';
+
+        _logger.i('_getTrendLogBufferV1: deduced source object from instance: $sourceObjectType/$sourceObjectInstance (prefix=$prefix)');
+      }
+    }
+
+    // Si on a trouvé l'objet source, utiliser l'endpoint /trend avec les bons paramètres
+    if (sourceObjectType != null && sourceObjectInstance != null) {
+      final now = DateTime.now();
+      final limit = maxRecords ?? 50000; // Limite haute pour "tout"
+
+      String trendUrl;
+      if (allData) {
+        // Pas de limite de temps - récupérer tout l'historique
+        trendUrl = '$baseUrl$_bacnetBasePath/objects/$sourceObjectType/$sourceObjectInstance/trend'
+            '?dataOnly=true&iso8601=true&limit=$limit';
+        _logger.i('_getTrendLogBufferV1: fetching ALL data from /trend endpoint');
+      } else {
+        // Limiter aux 30 derniers jours
+        final start = now.subtract(const Duration(days: 30));
+        final startMs = start.millisecondsSinceEpoch;
+        final stopMs = now.millisecondsSinceEpoch;
+        trendUrl = '$baseUrl$_bacnetBasePath/objects/$sourceObjectType/$sourceObjectInstance/trend'
+            '?dataOnly=true&iso8601=true&start=$startMs&stop=$stopMs&limit=$limit';
+        _logger.i('_getTrendLogBufferV1: fetching 30 days from /trend endpoint');
+        _logger.d('_getTrendLogBufferV1: time range: ${start.toIso8601String()} -> ${now.toIso8601String()}');
+      }
+
+      _logger.i('_getTrendLogBufferV1: URL=$trendUrl');
+
+      try {
+        final response = await _dio.get(
+          trendUrl,
+          options: Options(
+            headers: {'Authorization': basicAuth},
+            receiveTimeout: const Duration(minutes: 5),
+            sendTimeout: const Duration(minutes: 1),
+          ),
+        );
+
+        _logger.i('_getTrendLogBufferV1: /trend response status=${response.statusCode}, dataType=${response.data?.runtimeType}');
+
+        if (response.statusCode == 200 && response.data != null) {
+          // La réponse est une liste JSON de records
+          if (response.data is List) {
+            final records = response.data as List;
+            _logger.i('_getTrendLogBufferV1: got ${records.length} records from /trend endpoint');
+
+            // Log le premier record pour debug
+            if (records.isNotEmpty) {
+              _logger.d('_getTrendLogBufferV1: first record: ${records.first}');
+            }
+
+            // Encoder en JSON pour le parser
+            return jsonEncode(response.data);
+          } else if (response.data is Map) {
+            // Parfois la réponse est dans un wrapper
+            _logger.d('_getTrendLogBufferV1: response is Map with keys: ${(response.data as Map).keys}');
+            return jsonEncode(response.data);
+          } else {
+            _logger.w('_getTrendLogBufferV1: unexpected response type: ${response.data.runtimeType}');
+          }
+        } else {
+          _logger.w('_getTrendLogBufferV1: /trend returned status=${response.statusCode}');
+        }
+      } catch (e, st) {
+        _logger.e('_getTrendLogBufferV1: /trend endpoint failed: $e');
+        _logger.d('_getTrendLogBufferV1: stacktrace: $st');
+      }
+    } else {
+      _logger.w('_getTrendLogBufferV1: source object not found (type=$sourceObjectType, instance=$sourceObjectInstance)');
+    }
+
+    // Fallback: essayer le logBuffer directement (moins fiable)
+    _logger.w('_getTrendLogBufferV1: falling back to logBuffer property');
+    final logBufferUrl = '$baseUrl$_bacnetBasePath/objects/trendLog/$trendLogInstance/properties/logBuffer';
 
     try {
-      // Timeout plus long pour les gros buffers (5 minutes)
       final response = await _dio.get(
-        url,
+        logBufferUrl,
         options: Options(
           headers: {'Authorization': basicAuth},
           receiveTimeout: const Duration(minutes: 5),
-          sendTimeout: const Duration(minutes: 1),
         ),
       );
-      _logger.d('_getTrendLogBufferV1: status=${response.statusCode}');
 
       if (response.statusCode == 200 && response.data != null) {
-        // Le buffer peut être dans 'value' ou directement la donnée
+        String? value;
         if (response.data is Map<String, dynamic>) {
-          final value = response.data['value']?.toString();
-          _logger.d('_getTrendLogBufferV1: got ${value?.length ?? 0} chars');
+          value = response.data['value']?.toString();
+        } else {
+          value = response.data.toString();
+        }
+
+        if (value != null && value.isNotEmpty) {
+          _logger.i('_getTrendLogBufferV1: got ${value.length} chars from logBuffer');
           return value;
         }
-        final value = response.data.toString();
-        _logger.d('_getTrendLogBufferV1: got ${value.length} chars');
-        return value;
       }
     } catch (e) {
-      _logger.e('_getTrendLogBufferV1 error: $e');
+      _logger.e('_getTrendLogBufferV1: logBuffer fallback failed: $e');
     }
 
+    _logger.e('_getTrendLogBufferV1: all attempts failed for trend-log $trendLogInstance');
     return null;
   }
 
   /// Récupère le log buffer V2 via l'API history
-  Future<String?> _getTrendLogBufferV2(int trendLogInstance) async {
-    _logger.i('_getTrendLogBufferV2: fetching history for trend-log $trendLogInstance');
+  /// Si allData=true, récupère tout l'historique (depuis 10 ans)
+  Future<String?> _getTrendLogBufferV2(int trendLogInstance, {bool allData = false}) async {
+    _logger.i('_getTrendLogBufferV2: fetching history for trend-log $trendLogInstance, allData=$allData');
 
     // D'abord récupérer le nom de l'historique depuis le trend-log
     String? historyName;
@@ -2367,22 +2653,33 @@ class ConnectedApiClient {
       return null;
     }
 
-    // En V2, utiliser l'API history avec get-history
-    final url = '$baseUrl/api/rest/v2/services/history/groups/bacnet/histories/get-history';
+    // En V2, utiliser l'API history avec get-table (données brutes, pas d'agrégation)
+    // get-history fait de l'agrégation automatique, get-table retourne les données brutes
+    final url = '$baseUrl/api/rest/v2/services/history/groups/bacnet/histories/get-table';
 
-    // Calculer la plage de temps (30 derniers jours pour couvrir toutes les périodes UI)
-    // Format requis: "2022-01-01T00:00:00/2024-09-25T00:00:00" (sans millisecondes ni timezone)
+    // Calculer la plage de temps
     final now = DateTime.now();
-    final startDate = now.subtract(const Duration(days: 30));
-    String formatDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}T${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}:${d.second.toString().padLeft(2, '0')}';
+    final startDate = allData
+        ? now.subtract(const Duration(days: 3650)) // ~10 ans pour "tout"
+        : now.subtract(const Duration(days: 30));  // 30 jours par défaut
+
+    // Formater avec timezone
+    String formatDate(DateTime d) {
+      final offset = d.timeZoneOffset;
+      final sign = offset.isNegative ? '-' : '+';
+      final hours = offset.inHours.abs().toString().padLeft(2, '0');
+      final minutes = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
+      return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}T'
+             '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}:${d.second.toString().padLeft(2, '0')}.000$sign$hours:$minutes';
+    }
     final timeRange = '${formatDate(startDate)}/${formatDate(now)}';
+
+    _logger.i('_getTrendLogBufferV2: ${allData ? "fetching ALL data" : "fetching 30 days"}');
 
     final requestData = {
       'history': historyName,
-      'delta': false,
       'time-range': timeRange,
-      'interval': null,
-      'delta-timestamps': 'Leading',
+      'limit': 0, // 0 = pas de limite, retourne toutes les données
     };
     _logger.d('_getTrendLogBufferV2: POST $url');
     _logger.d('_getTrendLogBufferV2: body=$requestData');

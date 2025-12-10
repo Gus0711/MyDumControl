@@ -20,6 +20,7 @@ class ActiveConnectionState {
   final DeviceInfo? deviceInfo;
   final ObjectsSummary? objectsSummary;
   final ControllerTime? controllerTime;
+  final NetworkInfo? networkInfo;
   final bool isConnecting;
   final bool isLoadingDeviceInfo;
   final bool isLoadingSummary;
@@ -39,6 +40,7 @@ class ActiveConnectionState {
     this.deviceInfo,
     this.objectsSummary,
     this.controllerTime,
+    this.networkInfo,
     this.isConnecting = false,
     this.isLoadingDeviceInfo = false,
     this.isLoadingSummary = false,
@@ -59,6 +61,7 @@ class ActiveConnectionState {
     DeviceInfo? deviceInfo,
     ObjectsSummary? objectsSummary,
     ControllerTime? controllerTime,
+    NetworkInfo? networkInfo,
     bool? isConnecting,
     bool? isLoadingDeviceInfo,
     bool? isLoadingSummary,
@@ -74,6 +77,7 @@ class ActiveConnectionState {
       deviceInfo: deviceInfo ?? this.deviceInfo,
       objectsSummary: objectsSummary ?? this.objectsSummary,
       controllerTime: controllerTime ?? this.controllerTime,
+      networkInfo: networkInfo ?? this.networkInfo,
       isConnecting: isConnecting ?? this.isConnecting,
       isLoadingDeviceInfo: isLoadingDeviceInfo ?? this.isLoadingDeviceInfo,
       isLoadingSummary: isLoadingSummary ?? this.isLoadingSummary,
@@ -374,6 +378,13 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       // Mettre à jour le cache
       cacheService.cacheDeviceInfo(connectionId, deviceInfo);
 
+      // Mettre à jour le modelName en DB si disponible
+      if (deviceInfo.modelName != null) {
+        final database = _ref.read(databaseProvider);
+        database.updateModelName(connectionId, deviceInfo.modelName!);
+        _logger.i('Background: modelName saved to DB: ${deviceInfo.modelName}');
+      }
+
       if (mounted) {
         state = state.copyWith(
           deviceInfo: deviceInfo,
@@ -435,6 +446,19 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     }).catchError((e) {
       _logger.w('Background: getControllerTime failed: $e');
       // Pas critique, on continue sans l'heure
+    });
+
+    // Charger les infos réseau (API V1 uniquement, en arrière-plan)
+    client.getNetworkInfo().then((networkInfo) {
+      if (networkInfo != null) {
+        _logger.i('Background: networkInfo loaded: $networkInfo');
+        if (mounted) {
+          state = state.copyWith(networkInfo: networkInfo);
+        }
+      }
+    }).catchError((e) {
+      _logger.w('Background: getNetworkInfo failed: $e');
+      // Pas critique, on continue sans les infos réseau
     });
   }
 

@@ -32,6 +32,10 @@ class Connections extends Table {
   /// Pour BACnet, contiendra la version du protocole si disponible
   TextColumn get apiVersion => text().nullable()();
 
+  /// Modèle de l'automate (ex: "ECY-S1000", "ECY-PS100")
+  /// Détecté lors de la première connexion
+  TextColumn get modelName => text().nullable()();
+
   /// Empreinte du certificat (pour TOFU) - API Distech uniquement
   TextColumn get certificateFingerprint => text().nullable()();
 

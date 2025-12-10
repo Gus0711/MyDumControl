@@ -212,10 +212,19 @@ class TrendLogData {
   }
 
   /// Filtre les enregistrements par plage de temps
+  /// Utilise les timestamps en UTC pour une comparaison cohérente
+  /// et inclut les bornes (>=start et <=end)
   TrendLogData filterByTimeRange(DateTime start, DateTime end) {
-    final filtered = records.where((r) =>
-      r.timestamp.isAfter(start) && r.timestamp.isBefore(end)
-    ).toList();
+    // Convertir en UTC pour comparaison cohérente (évite les problèmes de timezone)
+    final startUtc = start.toUtc();
+    final endUtc = end.toUtc();
+
+    final filtered = records.where((r) {
+      final timestampUtc = r.timestamp.toUtc();
+      // Utiliser >= et <= pour inclure les bornes
+      return !timestampUtc.isBefore(startUtc) && !timestampUtc.isAfter(endUtc);
+    }).toList();
+
     return TrendLogData.fromRecords(filtered);
   }
 }
@@ -322,19 +331,22 @@ class TrendLogBufferParser {
     return TrendLogData.fromRecords(records);
   }
 
-  /// Parse le log buffer V2 (format JSON avec columns/rows)
-  /// Format: {columns: [{name: "timestamp"}, {name: "flags"}, {name: "value"}], rows: [{timestamp: ..., value: ...}, ...]}
+  /// Parse le log buffer V2 ou le format /trend de l'API V1
+  /// Formats supportés:
+  /// - V2 columns/rows: {columns: [...], rows: [{timestamp: ..., value: ...}, ...]}
+  /// - V1 /trend: [{value: ..., timeStamp: "ISO8601", type: 2, statusFlags: "...", sequenceNumber: ...}, ...]
+  /// - Liste simple: [{timestamp: ..., value: ...}, ...]
   static TrendLogData parseV2(dynamic data) {
     final records = <TrendLogRecord>[];
 
     List<dynamic> samples;
 
-    // Gérer les deux formats possibles
+    // Gérer les différents formats possibles
     if (data is Map<String, dynamic>) {
       // Format columns/rows (standard V2)
       samples = data['rows'] as List<dynamic>? ?? [];
     } else if (data is List) {
-      // Format liste simple (fallback)
+      // Format liste (V1 /trend ou liste simple)
       samples = data;
     } else {
       return TrendLogData.fromRecords([]);
@@ -343,8 +355,34 @@ class TrendLogBufferParser {
     for (final sample in samples) {
       if (sample is! Map<String, dynamic>) continue;
 
-      final timestampStr = sample['timestamp']?.toString() ?? sample['t']?.toString();
+      // Essayer différentes clés pour le timestamp (V1 /trend utilise "timeStamp" avec S majuscule)
+      final timestampStr = sample['timeStamp']?.toString() ??
+                           sample['timestamp']?.toString() ??
+                           sample['t']?.toString();
       final value = sample['value'] ?? sample['v'];
+
+      // Déterminer le type de record (V1 /trend a un champ "type")
+      // Type 0=LogStatus, 1=boolean, 2=real, 3=enum, 4=unsigned, 5=signed, 6=bitstring, 7=null, 8=failure, 9=timeChange
+      final recordTypeInt = sample['type'] as int?;
+      TrendRecordType recordType = TrendRecordType.value;
+      if (recordTypeInt != null) {
+        switch (recordTypeInt) {
+          case 0:
+            recordType = TrendRecordType.status;
+            break;
+          case 8:
+            recordType = TrendRecordType.error;
+            break;
+          case 9:
+            recordType = TrendRecordType.timeChange;
+            break;
+          default:
+            recordType = TrendRecordType.value;
+        }
+      }
+
+      // Parser le statusFlags si présent
+      final statusFlags = sample['statusFlags']?.toString();
 
       if (timestampStr != null) {
         final timestamp = _parseTimestamp(timestampStr);
@@ -352,7 +390,8 @@ class TrendLogBufferParser {
           records.add(TrendLogRecord(
             timestamp: timestamp,
             value: value,
-            type: TrendRecordType.value,
+            type: recordType,
+            status: statusFlags,
           ));
         }
       }
@@ -364,7 +403,9 @@ class TrendLogBufferParser {
   static DateTime? _parseTimestamp(String? value) {
     if (value == null || value.isEmpty) return null;
     try {
-      return DateTime.parse(value.trim());
+      final parsed = DateTime.parse(value.trim());
+      // Convertir en heure locale pour cohérence avec DateTime.now()
+      return parsed.toLocal();
     } catch (_) {
       return null;
     }

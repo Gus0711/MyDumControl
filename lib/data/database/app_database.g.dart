@@ -527,6 +527,17 @@ class $ConnectionsTable extends Connections
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _modelNameMeta = const VerificationMeta(
+    'modelName',
+  );
+  @override
+  late final GeneratedColumn<String> modelName = GeneratedColumn<String>(
+    'model_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _certificateFingerprintMeta =
       const VerificationMeta('certificateFingerprint');
   @override
@@ -608,6 +619,7 @@ class $ConnectionsTable extends Connections
     username,
     passwordKey,
     apiVersion,
+    modelName,
     certificateFingerprint,
     connectionType,
     bacnetDeviceId,
@@ -687,6 +699,12 @@ class $ConnectionsTable extends Connections
       context.handle(
         _apiVersionMeta,
         apiVersion.isAcceptableOrUnknown(data['api_version']!, _apiVersionMeta),
+      );
+    }
+    if (data.containsKey('model_name')) {
+      context.handle(
+        _modelNameMeta,
+        modelName.isAcceptableOrUnknown(data['model_name']!, _modelNameMeta),
       );
     }
     if (data.containsKey('certificate_fingerprint')) {
@@ -782,6 +800,10 @@ class $ConnectionsTable extends Connections
         DriftSqlType.string,
         data['${effectivePrefix}api_version'],
       ),
+      modelName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}model_name'],
+      ),
       certificateFingerprint: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}certificate_fingerprint'],
@@ -845,6 +867,10 @@ class Connection extends DataClass implements Insertable<Connection> {
   /// Pour BACnet, contiendra la version du protocole si disponible
   final String? apiVersion;
 
+  /// Modèle de l'automate (ex: "ECY-S1000", "ECY-PS100")
+  /// Détecté lors de la première connexion
+  final String? modelName;
+
   /// Empreinte du certificat (pour TOFU) - API Distech uniquement
   final String? certificateFingerprint;
 
@@ -874,6 +900,7 @@ class Connection extends DataClass implements Insertable<Connection> {
     required this.username,
     required this.passwordKey,
     this.apiVersion,
+    this.modelName,
     this.certificateFingerprint,
     required this.connectionType,
     this.bacnetDeviceId,
@@ -896,6 +923,9 @@ class Connection extends DataClass implements Insertable<Connection> {
     map['password_key'] = Variable<String>(passwordKey);
     if (!nullToAbsent || apiVersion != null) {
       map['api_version'] = Variable<String>(apiVersion);
+    }
+    if (!nullToAbsent || modelName != null) {
+      map['model_name'] = Variable<String>(modelName);
     }
     if (!nullToAbsent || certificateFingerprint != null) {
       map['certificate_fingerprint'] = Variable<String>(certificateFingerprint);
@@ -927,6 +957,9 @@ class Connection extends DataClass implements Insertable<Connection> {
       apiVersion: apiVersion == null && nullToAbsent
           ? const Value.absent()
           : Value(apiVersion),
+      modelName: modelName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(modelName),
       certificateFingerprint: certificateFingerprint == null && nullToAbsent
           ? const Value.absent()
           : Value(certificateFingerprint),
@@ -957,6 +990,7 @@ class Connection extends DataClass implements Insertable<Connection> {
       username: serializer.fromJson<String>(json['username']),
       passwordKey: serializer.fromJson<String>(json['passwordKey']),
       apiVersion: serializer.fromJson<String?>(json['apiVersion']),
+      modelName: serializer.fromJson<String?>(json['modelName']),
       certificateFingerprint: serializer.fromJson<String?>(
         json['certificateFingerprint'],
       ),
@@ -980,6 +1014,7 @@ class Connection extends DataClass implements Insertable<Connection> {
       'username': serializer.toJson<String>(username),
       'passwordKey': serializer.toJson<String>(passwordKey),
       'apiVersion': serializer.toJson<String?>(apiVersion),
+      'modelName': serializer.toJson<String?>(modelName),
       'certificateFingerprint': serializer.toJson<String?>(
         certificateFingerprint,
       ),
@@ -1001,6 +1036,7 @@ class Connection extends DataClass implements Insertable<Connection> {
     String? username,
     String? passwordKey,
     Value<String?> apiVersion = const Value.absent(),
+    Value<String?> modelName = const Value.absent(),
     Value<String?> certificateFingerprint = const Value.absent(),
     String? connectionType,
     Value<int?> bacnetDeviceId = const Value.absent(),
@@ -1017,6 +1053,7 @@ class Connection extends DataClass implements Insertable<Connection> {
     username: username ?? this.username,
     passwordKey: passwordKey ?? this.passwordKey,
     apiVersion: apiVersion.present ? apiVersion.value : this.apiVersion,
+    modelName: modelName.present ? modelName.value : this.modelName,
     certificateFingerprint: certificateFingerprint.present
         ? certificateFingerprint.value
         : this.certificateFingerprint,
@@ -1045,6 +1082,7 @@ class Connection extends DataClass implements Insertable<Connection> {
       apiVersion: data.apiVersion.present
           ? data.apiVersion.value
           : this.apiVersion,
+      modelName: data.modelName.present ? data.modelName.value : this.modelName,
       certificateFingerprint: data.certificateFingerprint.present
           ? data.certificateFingerprint.value
           : this.certificateFingerprint,
@@ -1074,6 +1112,7 @@ class Connection extends DataClass implements Insertable<Connection> {
           ..write('username: $username, ')
           ..write('passwordKey: $passwordKey, ')
           ..write('apiVersion: $apiVersion, ')
+          ..write('modelName: $modelName, ')
           ..write('certificateFingerprint: $certificateFingerprint, ')
           ..write('connectionType: $connectionType, ')
           ..write('bacnetDeviceId: $bacnetDeviceId, ')
@@ -1095,6 +1134,7 @@ class Connection extends DataClass implements Insertable<Connection> {
     username,
     passwordKey,
     apiVersion,
+    modelName,
     certificateFingerprint,
     connectionType,
     bacnetDeviceId,
@@ -1115,6 +1155,7 @@ class Connection extends DataClass implements Insertable<Connection> {
           other.username == this.username &&
           other.passwordKey == this.passwordKey &&
           other.apiVersion == this.apiVersion &&
+          other.modelName == this.modelName &&
           other.certificateFingerprint == this.certificateFingerprint &&
           other.connectionType == this.connectionType &&
           other.bacnetDeviceId == this.bacnetDeviceId &&
@@ -1133,6 +1174,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
   final Value<String> username;
   final Value<String> passwordKey;
   final Value<String?> apiVersion;
+  final Value<String?> modelName;
   final Value<String?> certificateFingerprint;
   final Value<String> connectionType;
   final Value<int?> bacnetDeviceId;
@@ -1149,6 +1191,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     this.username = const Value.absent(),
     this.passwordKey = const Value.absent(),
     this.apiVersion = const Value.absent(),
+    this.modelName = const Value.absent(),
     this.certificateFingerprint = const Value.absent(),
     this.connectionType = const Value.absent(),
     this.bacnetDeviceId = const Value.absent(),
@@ -1166,6 +1209,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     required String username,
     required String passwordKey,
     this.apiVersion = const Value.absent(),
+    this.modelName = const Value.absent(),
     this.certificateFingerprint = const Value.absent(),
     this.connectionType = const Value.absent(),
     this.bacnetDeviceId = const Value.absent(),
@@ -1186,6 +1230,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     Expression<String>? username,
     Expression<String>? passwordKey,
     Expression<String>? apiVersion,
+    Expression<String>? modelName,
     Expression<String>? certificateFingerprint,
     Expression<String>? connectionType,
     Expression<int>? bacnetDeviceId,
@@ -1203,6 +1248,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
       if (username != null) 'username': username,
       if (passwordKey != null) 'password_key': passwordKey,
       if (apiVersion != null) 'api_version': apiVersion,
+      if (modelName != null) 'model_name': modelName,
       if (certificateFingerprint != null)
         'certificate_fingerprint': certificateFingerprint,
       if (connectionType != null) 'connection_type': connectionType,
@@ -1223,6 +1269,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     Value<String>? username,
     Value<String>? passwordKey,
     Value<String?>? apiVersion,
+    Value<String?>? modelName,
     Value<String?>? certificateFingerprint,
     Value<String>? connectionType,
     Value<int?>? bacnetDeviceId,
@@ -1240,6 +1287,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
       username: username ?? this.username,
       passwordKey: passwordKey ?? this.passwordKey,
       apiVersion: apiVersion ?? this.apiVersion,
+      modelName: modelName ?? this.modelName,
       certificateFingerprint:
           certificateFingerprint ?? this.certificateFingerprint,
       connectionType: connectionType ?? this.connectionType,
@@ -1280,6 +1328,9 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     if (apiVersion.present) {
       map['api_version'] = Variable<String>(apiVersion.value);
     }
+    if (modelName.present) {
+      map['model_name'] = Variable<String>(modelName.value);
+    }
     if (certificateFingerprint.present) {
       map['certificate_fingerprint'] = Variable<String>(
         certificateFingerprint.value,
@@ -1315,6 +1366,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
           ..write('username: $username, ')
           ..write('passwordKey: $passwordKey, ')
           ..write('apiVersion: $apiVersion, ')
+          ..write('modelName: $modelName, ')
           ..write('certificateFingerprint: $certificateFingerprint, ')
           ..write('connectionType: $connectionType, ')
           ..write('bacnetDeviceId: $bacnetDeviceId, ')
@@ -6719,6 +6771,7 @@ typedef $$ConnectionsTableCreateCompanionBuilder =
       required String username,
       required String passwordKey,
       Value<String?> apiVersion,
+      Value<String?> modelName,
       Value<String?> certificateFingerprint,
       Value<String> connectionType,
       Value<int?> bacnetDeviceId,
@@ -6737,6 +6790,7 @@ typedef $$ConnectionsTableUpdateCompanionBuilder =
       Value<String> username,
       Value<String> passwordKey,
       Value<String?> apiVersion,
+      Value<String?> modelName,
       Value<String?> certificateFingerprint,
       Value<String> connectionType,
       Value<int?> bacnetDeviceId,
@@ -6959,6 +7013,11 @@ class $$ConnectionsTableFilterComposer
 
   ColumnFilters<String> get apiVersion => $composableBuilder(
     column: $table.apiVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get modelName => $composableBuilder(
+    column: $table.modelName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7216,6 +7275,11 @@ class $$ConnectionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get modelName => $composableBuilder(
+    column: $table.modelName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get certificateFingerprint => $composableBuilder(
     column: $table.certificateFingerprint,
     builder: (column) => ColumnOrderings(column),
@@ -7306,6 +7370,9 @@ class $$ConnectionsTableAnnotationComposer
     column: $table.apiVersion,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get modelName =>
+      $composableBuilder(column: $table.modelName, builder: (column) => column);
 
   GeneratedColumn<String> get certificateFingerprint => $composableBuilder(
     column: $table.certificateFingerprint,
@@ -7554,6 +7621,7 @@ class $$ConnectionsTableTableManager
                 Value<String> username = const Value.absent(),
                 Value<String> passwordKey = const Value.absent(),
                 Value<String?> apiVersion = const Value.absent(),
+                Value<String?> modelName = const Value.absent(),
                 Value<String?> certificateFingerprint = const Value.absent(),
                 Value<String> connectionType = const Value.absent(),
                 Value<int?> bacnetDeviceId = const Value.absent(),
@@ -7570,6 +7638,7 @@ class $$ConnectionsTableTableManager
                 username: username,
                 passwordKey: passwordKey,
                 apiVersion: apiVersion,
+                modelName: modelName,
                 certificateFingerprint: certificateFingerprint,
                 connectionType: connectionType,
                 bacnetDeviceId: bacnetDeviceId,
@@ -7588,6 +7657,7 @@ class $$ConnectionsTableTableManager
                 required String username,
                 required String passwordKey,
                 Value<String?> apiVersion = const Value.absent(),
+                Value<String?> modelName = const Value.absent(),
                 Value<String?> certificateFingerprint = const Value.absent(),
                 Value<String> connectionType = const Value.absent(),
                 Value<int?> bacnetDeviceId = const Value.absent(),
@@ -7604,6 +7674,7 @@ class $$ConnectionsTableTableManager
                 username: username,
                 passwordKey: passwordKey,
                 apiVersion: apiVersion,
+                modelName: modelName,
                 certificateFingerprint: certificateFingerprint,
                 connectionType: connectionType,
                 bacnetDeviceId: bacnetDeviceId,

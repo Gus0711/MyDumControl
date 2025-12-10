@@ -8,6 +8,7 @@ import '../../../application/providers/folder_providers.dart';
 import '../../../application/providers/super_favorites_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
+import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 
 /// Écran de liste des connexions sauvegardées organisées par dossiers
@@ -196,12 +197,13 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                     ],
                   ),
                 ),
+                // Bouton refresh pour tout le dossier
+                _FolderRefreshButton(
+                  connectionIds: connections.map((c) => c.id).toList(),
+                ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     switch (value) {
-                      case 'refresh':
-                        _refreshFolderSuperFavorites(ref, connections);
-                        break;
                       case 'edit':
                         _showEditFolderDialog(context, l10n, folder);
                         break;
@@ -211,16 +213,6 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'refresh',
-                      child: Row(
-                        children: [
-                          Icon(Icons.refresh, size: 20),
-                          SizedBox(width: 8),
-                          Text('Rafraîchir les valeurs'),
-                        ],
-                      ),
-                    ),
                     const PopupMenuItem(
                       value: 'edit',
                       child: Row(
@@ -289,17 +281,6 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     } catch (e) {
       return Colors.blue;
     }
-  }
-
-  /// Rafraîchit les super favoris de toutes les connexions d'un dossier
-  void _refreshFolderSuperFavorites(WidgetRef ref, List<Connection> connections) {
-    final connectionIds = connections.map((c) => c.id).toList();
-    ref.read(superFavoritesProvider.notifier).refreshFolder(connectionIds);
-  }
-
-  /// Rafraîchit les super favoris d'une connexion
-  void _refreshConnectionSuperFavorites(WidgetRef ref, int connectionId) {
-    ref.read(superFavoritesProvider.notifier).refreshConnection(connectionId);
   }
 
   Future<void> _showAddFolderDialog(BuildContext context, AppLocalizations l10n) async {
@@ -691,6 +672,7 @@ class _ConnectionCard extends ConsumerWidget {
     final superFavsState = ref.watch(superFavoritesProvider);
     final superFavorites = superFavsState.forConnection(connection.id);
     final isRefreshing = superFavsState.isRefreshing(connection.id);
+    final connectionInfo = superFavsState.getConnectionInfo(connection.id);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -739,25 +721,59 @@ class _ConnectionCard extends ConsumerWidget {
                                 fontSize: 11,
                               ),
                         ),
-                        if (connection.apiVersion != null) ...[
+                        // Badges : Modèle (depuis DB) + API version (toujours visibles)
+                        if (connection.modelName != null || connection.apiVersion != null) ...[
                           const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade100,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'API ${connection.apiVersion}',
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: Colors.blue.shade800,
-                              ),
-                            ),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              // Badge modèle de l'automate (depuis DB = toujours visible)
+                              if (connection.modelName != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.teal.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    connection.modelName!,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: Colors.teal.shade800,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              // Badge API version
+                              if (connection.apiVersion != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'API ${connection.apiVersion}',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: Colors.blue.shade800,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
+                        ],
+                        // Heure de l'automate (si disponible)
+                        if (connectionInfo?.controllerTime != null) ...[
+                          const SizedBox(height: 4),
+                          _buildControllerTimeRow(context, connectionInfo!.controllerTime!),
                         ],
                       ],
                     ),
@@ -923,6 +939,205 @@ class _ConnectionCard extends ConsumerWidget {
           ),
         );
       }).toList(),
+    );
+  }
+
+  /// Formate la date/heure de l'automate (DD/MM/YYYY HH:MM)
+  String _formatControllerDateTime(ControllerTime controllerTime) {
+    final dt = controllerTime.controllerDateTime;
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final y = dt.year;
+    final h = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '$d/$m/$y $h:$min';
+  }
+
+  /// Construit la ligne d'affichage de l'heure de l'automate
+  Widget _buildControllerTimeRow(BuildContext context, ControllerTime controllerTime) {
+    final hasTimeOffset = controllerTime.hasSignificantOffset;
+    final hasCriticalOffset = controllerTime.hasCriticalOffset;
+
+    return Row(
+      children: [
+        Icon(
+          hasTimeOffset ? Icons.warning_amber : Icons.access_time,
+          size: 12,
+          color: hasCriticalOffset
+              ? Colors.red.shade600
+              : hasTimeOffset
+                  ? Colors.orange.shade600
+                  : Colors.grey.shade500,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          _formatControllerDateTime(controllerTime),
+          style: TextStyle(
+            fontSize: 10,
+            color: hasCriticalOffset
+                ? Colors.red.shade700
+                : hasTimeOffset
+                    ? Colors.orange.shade700
+                    : Colors.grey.shade600,
+            fontWeight: hasTimeOffset ? FontWeight.bold : FontWeight.w500,
+            fontFamily: 'monospace',
+          ),
+        ),
+        // Indicateur de décalage si significatif
+        if (hasTimeOffset) ...[
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(
+              color: hasCriticalOffset ? Colors.red.shade100 : Colors.orange.shade100,
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text(
+              controllerTime.offsetDescription,
+              style: TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.bold,
+                color: hasCriticalOffset ? Colors.red.shade800 : Colors.orange.shade800,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Bouton de refresh pour un dossier entier (tous les automates)
+class _FolderRefreshButton extends ConsumerStatefulWidget {
+  final List<int> connectionIds;
+
+  const _FolderRefreshButton({required this.connectionIds});
+
+  @override
+  ConsumerState<_FolderRefreshButton> createState() => _FolderRefreshButtonState();
+}
+
+class _FolderRefreshButtonState extends ConsumerState<_FolderRefreshButton> {
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _startTimerIfNeeded() {
+    final state = ref.read(superFavoritesProvider);
+    // Prendre le max des cooldowns de toutes les connexions
+    int maxRemaining = 0;
+    for (final id in widget.connectionIds) {
+      final remaining = state.secondsUntilRefresh(id);
+      if (remaining > maxRemaining) maxRemaining = remaining;
+    }
+
+    if (maxRemaining > 0 && _timer == null) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) {
+          setState(() {});
+          // Vérifier si on peut arrêter le timer
+          final newState = ref.read(superFavoritesProvider);
+          int newMax = 0;
+          for (final id in widget.connectionIds) {
+            final r = newState.secondsUntilRefresh(id);
+            if (r > newMax) newMax = r;
+          }
+          if (newMax == 0) {
+            _timer?.cancel();
+            _timer = null;
+          }
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(superFavoritesProvider);
+
+    // Vérifier si au moins une connexion a des super favoris
+    bool hasSuperFavorites = false;
+    for (final id in widget.connectionIds) {
+      if (state.forConnection(id).isNotEmpty) {
+        hasSuperFavorites = true;
+        break;
+      }
+    }
+
+    // Ne pas afficher le bouton si aucun super favori dans le dossier
+    if (!hasSuperFavorites) {
+      return const SizedBox.shrink();
+    }
+
+    // Vérifier l'état de refresh pour toutes les connexions
+    bool isAnyRefreshing = false;
+    int maxSecondsRemaining = 0;
+
+    for (final id in widget.connectionIds) {
+      if (state.isRefreshing(id)) {
+        isAnyRefreshing = true;
+      }
+      final remaining = state.secondsUntilRefresh(id);
+      if (remaining > maxSecondsRemaining) {
+        maxSecondsRemaining = remaining;
+      }
+    }
+
+    // Démarrer le timer si nécessaire
+    if (maxSecondsRemaining > 0 && _timer == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startTimerIfNeeded();
+      });
+    }
+
+    // En cours de refresh : spinner
+    if (isAnyRefreshing) {
+      return const SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    // Cooldown actif : afficher le chrono
+    if (maxSecondsRemaining > 0) {
+      return SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: Text(
+            '${maxSecondsRemaining}s',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade500,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Refresh possible : bouton normal
+    return IconButton(
+      icon: const Icon(Icons.refresh, size: 22),
+      onPressed: () {
+        ref.read(superFavoritesProvider.notifier).refreshFolder(widget.connectionIds);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _startTimerIfNeeded();
+        });
+      },
+      tooltip: 'Rafraîchir tous les super favoris du dossier',
+      visualDensity: VisualDensity.compact,
     );
   }
 }

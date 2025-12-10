@@ -877,3 +877,187 @@ class ControllerTime {
     return '$hours h $mins min $direction';
   }
 }
+
+/// Informations réseau de l'automate
+/// Supporte API V1 (interface unique) et API V2 (interfaces multiples)
+class NetworkInfo {
+  /// Liste des interfaces réseau (V2) ou interface unique (V1)
+  final List<NetworkInterfaceInfo> interfaces;
+
+  const NetworkInfo({required this.interfaces});
+
+  /// Crée un NetworkInfo depuis une réponse API V1
+  factory NetworkInfo.fromJsonV1(Map<String, dynamic> json) {
+    return NetworkInfo(
+      interfaces: [
+        NetworkInterfaceInfo(
+          name: json['interface'] as String? ?? 'ethernet',
+          displayName: 'Ethernet',
+          ipAddress: json['ipAddress'] as String?,
+          macAddress: json['macAddress'] as String?,
+          subnetMask: json['subnetMask'] as String?,
+          gateway: json['gateway'] as String?,
+          enabled: true,
+          dhcpEnabled: false,
+        ),
+      ],
+    );
+  }
+
+  /// Crée un NetworkInfo depuis une réponse API V2 (liste des interfaces)
+  factory NetworkInfo.fromJsonV2(Map<String, dynamic> json) {
+    final interfaces = <NetworkInterfaceInfo>[];
+
+    // Bridge (interface principale sur ECLYPSE)
+    if (json.containsKey('bridge')) {
+      final bridge = json['bridge'];
+      if (bridge is Map<String, dynamic>) {
+        interfaces.add(NetworkInterfaceInfo.fromJsonV2('bridge', 'Bridge', bridge));
+      }
+    }
+
+    // Primary ethernet
+    if (json.containsKey('primary')) {
+      final primary = json['primary'];
+      if (primary is Map<String, dynamic>) {
+        interfaces.add(NetworkInterfaceInfo.fromJsonV2('primary', 'Ethernet 1', primary));
+      }
+    }
+
+    // Secondary ethernet
+    if (json.containsKey('secondary')) {
+      final secondary = json['secondary'];
+      if (secondary is Map<String, dynamic>) {
+        interfaces.add(NetworkInterfaceInfo.fromJsonV2('secondary', 'Ethernet 2', secondary));
+      }
+    }
+
+    // Wireless
+    if (json.containsKey('wireless')) {
+      final wireless = json['wireless'];
+      if (wireless is Map<String, dynamic>) {
+        interfaces.add(NetworkInterfaceInfo.fromJsonV2Wireless('wireless', 'Wi-Fi', wireless));
+      }
+    }
+
+    return NetworkInfo(interfaces: interfaces);
+  }
+
+  /// Interface principale (bridge ou première interface active)
+  NetworkInterfaceInfo? get primaryInterface {
+    // Chercher d'abord le bridge
+    final bridge = interfaces.where((i) => i.name == 'bridge' && i.enabled).firstOrNull;
+    if (bridge != null) return bridge;
+
+    // Sinon, la première interface active
+    return interfaces.where((i) => i.enabled && i.ipAddress != null).firstOrNull;
+  }
+
+  /// Toutes les interfaces actives
+  List<NetworkInterfaceInfo> get activeInterfaces =>
+      interfaces.where((i) => i.enabled).toList();
+
+  @override
+  String toString() {
+    return 'NetworkInfo(interfaces: ${interfaces.length})';
+  }
+}
+
+/// Une interface réseau individuelle
+class NetworkInterfaceInfo {
+  final String name;
+  final String displayName;
+  final String? ipAddress;
+  final String? macAddress;
+  final String? subnetMask;
+  final String? gateway;
+  final String? dnsPrimary;
+  final String? dnsSecondary;
+  final bool enabled;
+  final bool dhcpEnabled;
+
+  /// Pour le Wi-Fi
+  final String? ssid;
+  final String? wifiMode;
+
+  const NetworkInterfaceInfo({
+    required this.name,
+    required this.displayName,
+    this.ipAddress,
+    this.macAddress,
+    this.subnetMask,
+    this.gateway,
+    this.dnsPrimary,
+    this.dnsSecondary,
+    this.enabled = true,
+    this.dhcpEnabled = false,
+    this.ssid,
+    this.wifiMode,
+  });
+
+  /// Parse une interface depuis API V2
+  factory NetworkInterfaceInfo.fromJsonV2(String name, String displayName, Map<String, dynamic> json) {
+    final ipv4 = json['ipv4'] as Map<String, dynamic>?;
+    final enabled = json['enabled'] as bool? ?? false;
+
+    String? subnetMask;
+    final prefixLength = ipv4?['subnet-prefix-length'];
+    if (prefixLength != null) {
+      subnetMask = _prefixLengthToSubnetMask(prefixLength as int);
+    }
+
+    return NetworkInterfaceInfo(
+      name: name,
+      displayName: displayName,
+      ipAddress: ipv4?['ip-address'] as String?,
+      macAddress: json['mac-address'] as String?,
+      subnetMask: subnetMask,
+      gateway: ipv4?['gateway'] as String?,
+      dnsPrimary: ipv4?['dns-primary'] as String?,
+      dnsSecondary: ipv4?['dns-secondary'] as String?,
+      enabled: enabled && (ipv4?['enabled'] as bool? ?? false),
+      dhcpEnabled: ipv4?['dhcp-enabled'] as bool? ?? false,
+    );
+  }
+
+  /// Parse une interface Wi-Fi depuis API V2
+  factory NetworkInterfaceInfo.fromJsonV2Wireless(String name, String displayName, Map<String, dynamic> json) {
+    final ipv4 = json['ipv4'] as Map<String, dynamic>?;
+    final enabled = json['enabled'] as bool? ?? false;
+
+    String? subnetMask;
+    final prefixLength = ipv4?['subnet-prefix-length'];
+    if (prefixLength != null) {
+      subnetMask = _prefixLengthToSubnetMask(prefixLength as int);
+    }
+
+    return NetworkInterfaceInfo(
+      name: name,
+      displayName: displayName,
+      ipAddress: ipv4?['ip-address'] as String?,
+      macAddress: json['mac-address'] as String?,
+      subnetMask: subnetMask,
+      gateway: ipv4?['gateway'] as String?,
+      enabled: enabled,
+      dhcpEnabled: false,
+      ssid: json['ssid'] as String?,
+      wifiMode: json['mode'] as String?,
+    );
+  }
+
+  /// Convertit un préfixe CIDR en masque de sous-réseau
+  static String _prefixLengthToSubnetMask(int prefixLength) {
+    if (prefixLength <= 0 || prefixLength > 32) return '0.0.0.0';
+
+    final mask = (0xFFFFFFFF << (32 - prefixLength)) & 0xFFFFFFFF;
+    return '${(mask >> 24) & 0xFF}.${(mask >> 16) & 0xFF}.${(mask >> 8) & 0xFF}.${mask & 0xFF}';
+  }
+
+  /// Est-ce une interface Wi-Fi ?
+  bool get isWireless => name == 'wireless' || ssid != null;
+
+  @override
+  String toString() {
+    return 'NetworkInterfaceInfo($displayName: $ipAddress, enabled: $enabled)';
+  }
+}

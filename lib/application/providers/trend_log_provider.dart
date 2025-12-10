@@ -193,7 +193,7 @@ class TrendLogViewerState {
     this.isLoading = false,
     this.error,
     this.data,
-    this.selectedPeriod = TrendPeriod.day,
+    this.selectedPeriod = TrendPeriod.month,
     this.loadingMessage,
   });
 
@@ -242,12 +242,17 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
   bool? _lastConnectionWasBacnet;
   int? _lastConnectionId;
 
+  // Flag pour récupérer tout l'historique (sans limite de temps)
+  bool _loadAllData = false;
+
   TrendLogViewerNotifier(this._ref, this.trendLogInstance)
       : super(const TrendLogViewerState());
 
   /// Charge les données du trend log
-  Future<void> loadData({TrendPeriod? period, bool forceRefresh = false}) async {
-    final selectedPeriod = period ?? state.selectedPeriod;
+  /// Si allData=true, récupère tout l'historique sans limite de temps
+  Future<void> loadData({TrendPeriod? period, bool forceRefresh = false, bool allData = false}) async {
+    var selectedPeriod = period ?? state.selectedPeriod;
+    _loadAllData = allData; // Stocker pour passage aux méthodes de chargement
     final connectionState = _ref.read(activeConnectionProvider);
 
     // Vérifier si le type de connexion ou la connexion a changé -> invalider le cache
@@ -256,9 +261,12 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
 
     if (_lastConnectionWasBacnet != null &&
         (_lastConnectionWasBacnet != currentIsBacnet || _lastConnectionId != currentConnectionId)) {
-      _logger.i('loadData: connection changed (wasBacnet=$_lastConnectionWasBacnet, isBacnet=$currentIsBacnet, lastId=$_lastConnectionId, currentId=$currentConnectionId), invalidating cache');
+      _logger.i('loadData: connection changed (wasBacnet=$_lastConnectionWasBacnet, isBacnet=$currentIsBacnet, lastId=$_lastConnectionId, currentId=$currentConnectionId), invalidating cache and resetting period');
       _cachedBuffer = null;
       _cachedFullData = null;
+      // Réinitialiser la période à la valeur par défaut quand on change d'automate
+      selectedPeriod = TrendPeriod.month;
+      state = state.copyWith(selectedPeriod: selectedPeriod);
     }
 
     // Mettre à jour le type de connexion
@@ -386,10 +394,12 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
       return;
     }
 
-    state = state.copyWith(loadingMessage: 'Téléchargement de l\'historique...\n(peut prendre quelques minutes)');
+    state = state.copyWith(loadingMessage: _loadAllData
+        ? 'Téléchargement de tout l\'historique...\n(peut prendre plusieurs minutes)'
+        : 'Téléchargement de l\'historique...\n(peut prendre quelques minutes)');
 
-    // Récupérer le buffer
-    final bufferData = await client.getTrendLogBuffer(trendLogInstance);
+    // Récupérer le buffer (avec ou sans limite de temps)
+    final bufferData = await client.getTrendLogBuffer(trendLogInstance, allData: _loadAllData);
 
     if (bufferData == null || bufferData.isEmpty) {
       state = state.copyWith(
@@ -409,19 +419,16 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     // Parser les données selon le format
     TrendLogData trendData;
 
-    if (client.apiVersion == 'V2') {
-      // V2: Parser le JSON encodé (format columns/rows)
-      try {
-        final jsonData = json.decode(bufferData);
-        trendData = TrendLogBufferParser.parseV2(jsonData);
-        _logger.i('TrendLogViewer: parsed ${trendData.records.length} records from V2 JSON');
-      } catch (e) {
-        _logger.w('TrendLogViewer: V2 JSON parse failed, falling back to V1: $e');
-        trendData = TrendLogBufferParser.parseV1(bufferData);
-      }
-    } else {
-      // Parser V1
+    // Essayer d'abord de parser comme JSON (format V2 ou format /trend de V1)
+    try {
+      final jsonData = json.decode(bufferData);
+      trendData = TrendLogBufferParser.parseV2(jsonData);
+      _logger.i('TrendLogViewer: parsed ${trendData.records.length} records from JSON');
+    } catch (e) {
+      // Si le parsing JSON échoue, c'est probablement le format texte V1
+      _logger.d('TrendLogViewer: JSON parse failed, trying V1 text format: $e');
       trendData = TrendLogBufferParser.parseV1(bufferData);
+      _logger.i('TrendLogViewer: parsed ${trendData.records.length} records from V1 text format');
     }
 
     // Mettre en cache les données complètes
@@ -441,10 +448,33 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     if (period != TrendPeriod.all && period != TrendPeriod.custom && period.duration != Duration.zero) {
       final now = DateTime.now();
       final start = now.subtract(period.duration);
+
+      // Debug: afficher les plages de temps
+      _logger.d('_applyPeriodFilter: period=$period');
+      _logger.d('_applyPeriodFilter: now=$now (${now.timeZoneName})');
+      _logger.d('_applyPeriodFilter: start=$start');
+
+      // Afficher les timestamps min/max des données
+      if (_cachedFullData!.records.isNotEmpty) {
+        final sortedRecords = List.from(_cachedFullData!.records)
+          ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        final dataStart = sortedRecords.first.timestamp;
+        final dataEnd = sortedRecords.last.timestamp;
+        _logger.d('_applyPeriodFilter: data range: $dataStart -> $dataEnd');
+
+        // Convertir en UTC pour comparaison cohérente
+        final startUtc = start.toUtc();
+        final nowUtc = now.toUtc();
+        _logger.d('_applyPeriodFilter: filter range (UTC): $startUtc -> $nowUtc');
+        _logger.d('_applyPeriodFilter: data range (UTC): ${dataStart.toUtc()} -> ${dataEnd.toUtc()}');
+      }
+
       final filtered = _cachedFullData!.filterByTimeRange(start, now);
 
       // Si le filtre ne retourne aucune donnée avec des valeurs, utiliser toutes les données
       final hasNumericValues = filtered.records.any((r) => r.isValueRecord && r.numericValue != null);
+      _logger.d('_applyPeriodFilter: filtered ${filtered.records.length} records, hasNumericValues=$hasNumericValues');
+
       if (hasNumericValues) {
         filteredData = filtered;
       } else {
@@ -462,18 +492,22 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     );
   }
 
-  /// Change la période (recharge si besoin de plus de données)
+  /// Change la période (utilise le cache, on récupère toujours 30 jours de données)
+  /// Exception : "Tout" force un rechargement sans limite de temps
   void setPeriod(TrendPeriod period) {
-    final currentPeriod = state.selectedPeriod;
-    final needsMoreData = _getMaxRecordsForPeriod(period) > _getMaxRecordsForPeriod(currentPeriod);
-
-    if (_cachedFullData != null && !needsMoreData) {
-      // Utiliser le cache si on a assez de données
-      _applyPeriodFilter(period);
-    } else {
-      // Recharger les données pour la nouvelle période
+    // Si on passe sur "Tout", recharger sans limite de temps
+    if (period == TrendPeriod.all) {
       _cachedBuffer = null;
       _cachedFullData = null;
+      loadData(period: period, allData: true);
+      return;
+    }
+
+    if (_cachedFullData != null) {
+      // Utiliser le cache - on a déjà 30 jours de données
+      _applyPeriodFilter(period);
+    } else {
+      // Pas de cache, charger les données
       loadData(period: period);
     }
   }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mydumcontrol/l10n/app_localizations.dart';
 import '../../../application/providers/active_connection_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../domain/models/bacnet_object.dart';
 
 /// Écran d'informations détaillées sur l'appareil connecté
 class DeviceInfoScreen extends ConsumerWidget {
@@ -15,6 +17,7 @@ class DeviceInfoScreen extends ConsumerWidget {
     final device = connectionState.deviceInfo;
     final connection = connectionState.connection;
     final summary = connectionState.objectsSummary;
+    final networkInfo = connectionState.networkInfo;
 
     return Scaffold(
       appBar: AppBar(
@@ -40,6 +43,12 @@ class DeviceInfoScreen extends ConsumerWidget {
                 // Informations de connexion
                 _buildConnectionCard(context, l10n, connection),
                 const SizedBox(height: 16),
+
+                // Informations réseau (API V1 uniquement)
+                if (networkInfo != null) ...[
+                  _buildNetworkCard(context, networkInfo),
+                  const SizedBox(height: 16),
+                ],
 
                 // Résumé des objets BACnet
                 _buildObjectsSummaryCard(context, l10n, summary, connectionState.isLoadingSummary),
@@ -137,6 +146,202 @@ class DeviceInfoScreen extends ConsumerWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNetworkCard(BuildContext context, NetworkInfo networkInfo) {
+    final activeInterfaces = networkInfo.activeInterfaces;
+    final hasMultipleInterfaces = activeInterfaces.length > 1;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.lan, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Réseau',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+                if (activeInterfaces.isNotEmpty)
+                  Text(
+                    '${activeInterfaces.length} interface${activeInterfaces.length > 1 ? 's' : ''}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Afficher chaque interface
+            for (int i = 0; i < networkInfo.interfaces.length; i++) ...[
+              if (i > 0) const Divider(height: 24),
+              _buildInterfaceSection(context, networkInfo.interfaces[i], hasMultipleInterfaces),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInterfaceSection(BuildContext context, NetworkInterfaceInfo iface, bool showTitle) {
+    final isDisabled = !iface.enabled;
+    final textColor = isDisabled ? Colors.grey.shade400 : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Titre de l'interface (si plusieurs interfaces)
+        if (showTitle)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                Icon(
+                  iface.isWireless ? Icons.wifi : Icons.settings_ethernet,
+                  size: 18,
+                  color: isDisabled ? Colors.grey.shade400 : AppColors.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  iface.displayName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (iface.dhcpEnabled)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'DHCP',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                if (isDisabled)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Désactivé',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                if (iface.isWireless && iface.wifiMode != null)
+                  Container(
+                    margin: const EdgeInsets.only(left: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      iface.wifiMode!,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.blue.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+        // SSID pour Wi-Fi
+        if (iface.isWireless && iface.ssid != null)
+          _buildNetworkInfoRow(context, 'SSID', iface.ssid!, disabled: isDisabled),
+
+        // Infos IP
+        if (iface.ipAddress != null)
+          _buildNetworkInfoRow(context, 'Adresse IP', iface.ipAddress!, disabled: isDisabled),
+        if (iface.subnetMask != null)
+          _buildNetworkInfoRow(context, 'Masque', iface.subnetMask!, disabled: isDisabled),
+        if (iface.gateway != null && iface.gateway!.isNotEmpty)
+          _buildNetworkInfoRow(context, 'Passerelle', iface.gateway!, disabled: isDisabled),
+        if (iface.dnsPrimary != null && iface.dnsPrimary!.isNotEmpty)
+          _buildNetworkInfoRow(context, 'DNS primaire', iface.dnsPrimary!, disabled: isDisabled),
+        if (iface.macAddress != null)
+          _buildNetworkInfoRow(context, 'Adresse MAC', iface.macAddress!, isMac: true, disabled: isDisabled),
+      ],
+    );
+  }
+
+  Widget _buildNetworkInfoRow(BuildContext context, String label, String value, {bool isMac = false, bool disabled = false}) {
+    final textColor = disabled ? Colors.grey.shade400 : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: disabled ? Colors.grey.shade400 : Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontFamily: isMac ? 'monospace' : null,
+                color: textColor,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.copy, size: 18, color: disabled ? Colors.grey.shade300 : null),
+            onPressed: disabled
+                ? null
+                : () {
+                    Clipboard.setData(ClipboardData(text: value));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('$label copié'),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+            tooltip: 'Copier',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+        ],
       ),
     );
   }
