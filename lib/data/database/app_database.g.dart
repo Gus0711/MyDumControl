@@ -608,6 +608,17 @@ class $ConnectionsTable extends Connections
         type: DriftSqlType.dateTime,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _designerUrlMeta = const VerificationMeta(
+    'designerUrl',
+  );
+  @override
+  late final GeneratedColumn<String> designerUrl = GeneratedColumn<String>(
+    'designer_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -626,6 +637,7 @@ class $ConnectionsTable extends Connections
     createdAt,
     updatedAt,
     lastConnectedAt,
+    designerUrl,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -755,6 +767,15 @@ class $ConnectionsTable extends Connections
         ),
       );
     }
+    if (data.containsKey('designer_url')) {
+      context.handle(
+        _designerUrlMeta,
+        designerUrl.isAcceptableOrUnknown(
+          data['designer_url']!,
+          _designerUrlMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -828,6 +849,10 @@ class $ConnectionsTable extends Connections
         DriftSqlType.dateTime,
         data['${effectivePrefix}last_connected_at'],
       ),
+      designerUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}designer_url'],
+      ),
     );
   }
 
@@ -890,6 +915,10 @@ class Connection extends DataClass implements Insertable<Connection> {
 
   /// Dernière connexion réussie
   final DateTime? lastConnectedAt;
+
+  /// URL du Designer Envysion (ex: /eclypse/envysion/viewer.html?proj=SST_NORD)
+  /// Si renseignée, permet d'afficher le synoptique intégré via WebView
+  final String? designerUrl;
   const Connection({
     required this.id,
     this.folderId,
@@ -907,6 +936,7 @@ class Connection extends DataClass implements Insertable<Connection> {
     required this.createdAt,
     required this.updatedAt,
     this.lastConnectedAt,
+    this.designerUrl,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -938,6 +968,9 @@ class Connection extends DataClass implements Insertable<Connection> {
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || lastConnectedAt != null) {
       map['last_connected_at'] = Variable<DateTime>(lastConnectedAt);
+    }
+    if (!nullToAbsent || designerUrl != null) {
+      map['designer_url'] = Variable<String>(designerUrl);
     }
     return map;
   }
@@ -972,6 +1005,9 @@ class Connection extends DataClass implements Insertable<Connection> {
       lastConnectedAt: lastConnectedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(lastConnectedAt),
+      designerUrl: designerUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(designerUrl),
     );
   }
 
@@ -999,6 +1035,7 @@ class Connection extends DataClass implements Insertable<Connection> {
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       lastConnectedAt: serializer.fromJson<DateTime?>(json['lastConnectedAt']),
+      designerUrl: serializer.fromJson<String?>(json['designerUrl']),
     );
   }
   @override
@@ -1023,6 +1060,7 @@ class Connection extends DataClass implements Insertable<Connection> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'lastConnectedAt': serializer.toJson<DateTime?>(lastConnectedAt),
+      'designerUrl': serializer.toJson<String?>(designerUrl),
     };
   }
 
@@ -1043,6 +1081,7 @@ class Connection extends DataClass implements Insertable<Connection> {
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> lastConnectedAt = const Value.absent(),
+    Value<String?> designerUrl = const Value.absent(),
   }) => Connection(
     id: id ?? this.id,
     folderId: folderId.present ? folderId.value : this.folderId,
@@ -1066,6 +1105,7 @@ class Connection extends DataClass implements Insertable<Connection> {
     lastConnectedAt: lastConnectedAt.present
         ? lastConnectedAt.value
         : this.lastConnectedAt,
+    designerUrl: designerUrl.present ? designerUrl.value : this.designerUrl,
   );
   Connection copyWithCompanion(ConnectionsCompanion data) {
     return Connection(
@@ -1097,6 +1137,9 @@ class Connection extends DataClass implements Insertable<Connection> {
       lastConnectedAt: data.lastConnectedAt.present
           ? data.lastConnectedAt.value
           : this.lastConnectedAt,
+      designerUrl: data.designerUrl.present
+          ? data.designerUrl.value
+          : this.designerUrl,
     );
   }
 
@@ -1118,7 +1161,8 @@ class Connection extends DataClass implements Insertable<Connection> {
           ..write('bacnetDeviceId: $bacnetDeviceId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('lastConnectedAt: $lastConnectedAt')
+          ..write('lastConnectedAt: $lastConnectedAt, ')
+          ..write('designerUrl: $designerUrl')
           ..write(')'))
         .toString();
   }
@@ -1141,6 +1185,7 @@ class Connection extends DataClass implements Insertable<Connection> {
     createdAt,
     updatedAt,
     lastConnectedAt,
+    designerUrl,
   );
   @override
   bool operator ==(Object other) =>
@@ -1161,7 +1206,8 @@ class Connection extends DataClass implements Insertable<Connection> {
           other.bacnetDeviceId == this.bacnetDeviceId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
-          other.lastConnectedAt == this.lastConnectedAt);
+          other.lastConnectedAt == this.lastConnectedAt &&
+          other.designerUrl == this.designerUrl);
 }
 
 class ConnectionsCompanion extends UpdateCompanion<Connection> {
@@ -1181,6 +1227,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> lastConnectedAt;
+  final Value<String?> designerUrl;
   const ConnectionsCompanion({
     this.id = const Value.absent(),
     this.folderId = const Value.absent(),
@@ -1198,6 +1245,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastConnectedAt = const Value.absent(),
+    this.designerUrl = const Value.absent(),
   });
   ConnectionsCompanion.insert({
     this.id = const Value.absent(),
@@ -1216,6 +1264,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastConnectedAt = const Value.absent(),
+    this.designerUrl = const Value.absent(),
   }) : name = Value(name),
        host = Value(host),
        username = Value(username),
@@ -1237,6 +1286,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? lastConnectedAt,
+    Expression<String>? designerUrl,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1256,6 +1306,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (lastConnectedAt != null) 'last_connected_at': lastConnectedAt,
+      if (designerUrl != null) 'designer_url': designerUrl,
     });
   }
 
@@ -1276,6 +1327,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? lastConnectedAt,
+    Value<String?>? designerUrl,
   }) {
     return ConnectionsCompanion(
       id: id ?? this.id,
@@ -1295,6 +1347,7 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastConnectedAt: lastConnectedAt ?? this.lastConnectedAt,
+      designerUrl: designerUrl ?? this.designerUrl,
     );
   }
 
@@ -1351,6 +1404,9 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
     if (lastConnectedAt.present) {
       map['last_connected_at'] = Variable<DateTime>(lastConnectedAt.value);
     }
+    if (designerUrl.present) {
+      map['designer_url'] = Variable<String>(designerUrl.value);
+    }
     return map;
   }
 
@@ -1372,7 +1428,8 @@ class ConnectionsCompanion extends UpdateCompanion<Connection> {
           ..write('bacnetDeviceId: $bacnetDeviceId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('lastConnectedAt: $lastConnectedAt')
+          ..write('lastConnectedAt: $lastConnectedAt, ')
+          ..write('designerUrl: $designerUrl')
           ..write(')'))
         .toString();
   }
@@ -7752,6 +7809,7 @@ typedef $$ConnectionsTableCreateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> lastConnectedAt,
+      Value<String?> designerUrl,
     });
 typedef $$ConnectionsTableUpdateCompanionBuilder =
     ConnectionsCompanion Function({
@@ -7771,6 +7829,7 @@ typedef $$ConnectionsTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> lastConnectedAt,
+      Value<String?> designerUrl,
     });
 
 final class $$ConnectionsTableReferences
@@ -8043,6 +8102,11 @@ class $$ConnectionsTableFilterComposer
 
   ColumnFilters<DateTime> get lastConnectedAt => $composableBuilder(
     column: $table.lastConnectedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get designerUrl => $composableBuilder(
+    column: $table.designerUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8330,6 +8394,11 @@ class $$ConnectionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get designerUrl => $composableBuilder(
+    column: $table.designerUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$FoldersTableOrderingComposer get folderId {
     final $$FoldersTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -8417,6 +8486,11 @@ class $$ConnectionsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get lastConnectedAt => $composableBuilder(
     column: $table.lastConnectedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get designerUrl => $composableBuilder(
+    column: $table.designerUrl,
     builder: (column) => column,
   );
 
@@ -8674,6 +8748,7 @@ class $$ConnectionsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> lastConnectedAt = const Value.absent(),
+                Value<String?> designerUrl = const Value.absent(),
               }) => ConnectionsCompanion(
                 id: id,
                 folderId: folderId,
@@ -8691,6 +8766,7 @@ class $$ConnectionsTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastConnectedAt: lastConnectedAt,
+                designerUrl: designerUrl,
               ),
           createCompanionCallback:
               ({
@@ -8710,6 +8786,7 @@ class $$ConnectionsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> lastConnectedAt = const Value.absent(),
+                Value<String?> designerUrl = const Value.absent(),
               }) => ConnectionsCompanion.insert(
                 id: id,
                 folderId: folderId,
@@ -8727,6 +8804,7 @@ class $$ConnectionsTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastConnectedAt: lastConnectedAt,
+                designerUrl: designerUrl,
               ),
           withReferenceMapper: (p0) => p0
               .map(

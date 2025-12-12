@@ -91,11 +91,16 @@ class DeviceInfoScreen extends ConsumerWidget {
             ),
             if (device?.modelName != null) ...[
               const SizedBox(height: 4),
-              Text(
-                device!.modelName!,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
+              Builder(
+                builder: (context) {
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  return Text(
+                    device!.modelName!,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                        ),
+                  );
+                },
               ),
             ],
             if (connection?.apiVersion != null) ...[
@@ -174,12 +179,17 @@ class DeviceInfoScreen extends ConsumerWidget {
                   ),
                 ),
                 if (activeInterfaces.isNotEmpty)
-                  Text(
-                    '${activeInterfaces.length} interface${activeInterfaces.length > 1 ? 's' : ''}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final isDark = Theme.of(context).brightness == Brightness.dark;
+                      return Text(
+                        '${activeInterfaces.length} interface${activeInterfaces.length > 1 ? 's' : ''}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                        ),
+                      );
+                    },
                   ),
               ],
             ),
@@ -197,6 +207,7 @@ class DeviceInfoScreen extends ConsumerWidget {
   }
 
   Widget _buildInterfaceSection(BuildContext context, NetworkInterfaceInfo iface, bool showTitle) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isDisabled = !iface.enabled;
     final textColor = isDisabled ? Colors.grey.shade400 : null;
 
@@ -244,14 +255,14 @@ class DeviceInfoScreen extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
+                      color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       'Désactivé',
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.grey.shade600,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -297,6 +308,7 @@ class DeviceInfoScreen extends ConsumerWidget {
   }
 
   Widget _buildNetworkInfoRow(BuildContext context, String label, String value, {bool isMac = false, bool disabled = false}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = disabled ? Colors.grey.shade400 : null;
 
     return Padding(
@@ -309,7 +321,7 @@ class DeviceInfoScreen extends ConsumerWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: disabled ? Colors.grey.shade400 : Colors.grey.shade600,
+                color: disabled ? Colors.grey.shade400 : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -325,7 +337,7 @@ class DeviceInfoScreen extends ConsumerWidget {
             ),
           ),
           IconButton(
-            icon: Icon(Icons.copy, size: 18, color: disabled ? Colors.grey.shade300 : null),
+            icon: Icon(Icons.copy, size: 18, color: disabled ? Colors.grey.shade300 : (isDark ? Colors.grey.shade400 : null)),
             onPressed: disabled
                 ? null
                 : () {
@@ -383,15 +395,15 @@ class DeviceInfoScreen extends ConsumerWidget {
             if (summary != null) ...[
               Row(
                 children: [
-                  Expanded(child: _buildSummaryTile('Entrées', summary.totalInputs, Icons.input, Colors.blue)),
-                  Expanded(child: _buildSummaryTile('Sorties', summary.totalOutputs, Icons.output, Colors.orange)),
+                  Expanded(child: _buildSummaryTile(context, 'Entrées', summary.totalInputs, Icons.input, Colors.blue)),
+                  Expanded(child: _buildSummaryTile(context, 'Sorties', summary.totalOutputs, Icons.output, Colors.orange)),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: _buildSummaryTile('Valeurs', summary.totalValues, Icons.tag, Colors.green)),
-                  Expanded(child: _buildSummaryTile('Horaires', summary.schedules, Icons.schedule, Colors.purple)),
+                  Expanded(child: _buildSummaryTile(context, 'Valeurs', summary.totalValues, Icons.tag, Colors.green)),
+                  Expanded(child: _buildSummaryTile(context, 'Horaires', summary.schedules, Icons.schedule, Colors.purple)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -419,7 +431,8 @@ class DeviceInfoScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSummaryTile(String label, int count, IconData icon, Color color) {
+  Widget _buildSummaryTile(BuildContext context, String label, int count, IconData icon, Color color) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -446,7 +459,7 @@ class DeviceInfoScreen extends ConsumerWidget {
                   label,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade600,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                   ),
                 ),
               ],
@@ -489,6 +502,7 @@ class DeviceInfoScreen extends ConsumerWidget {
   }
 
   Widget _buildInfoRow(BuildContext context, String label, String value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -499,7 +513,7 @@ class DeviceInfoScreen extends ConsumerWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: Colors.grey.shade600,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 fontWeight: FontWeight.w500,
               ),
             ),

@@ -25,6 +25,7 @@ class Routes {
   static const String synopticCreate = '/synoptics/create';
   static const String synopticView = '/synoptics/:id';
   static const String synopticEdit = '/synoptics/:id/edit';
+  static const String envysionViewer = '/envysion/:connectionId';
 
   // Routes des dashboards
   static const String dashboards = '/dashboards';
@@ -51,4 +52,7 @@ class Routes {
 
   /// Génère le chemin pour visualiser un dashboard
   static String dashboardViewPath(int id) => '/dashboards/$id';
+
+  /// Génère le chemin pour visualiser le synoptique Envysion
+  static String envysionViewerPath(int connectionId) => '/envysion/$connectionId';
 }

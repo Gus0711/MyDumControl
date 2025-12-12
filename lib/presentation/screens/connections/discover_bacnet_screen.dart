@@ -253,7 +253,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
                           padding: const EdgeInsets.only(left: 16, top: 4),
                           child: Row(
                             children: [
-                              const Icon(Icons.circle, size: 8, color: Colors.orange),
+                              const Icon(Icons.circle, size: 10, color: Colors.orange),
                               const SizedBox(width: 8),
                               Text(addr.address),
                             ],

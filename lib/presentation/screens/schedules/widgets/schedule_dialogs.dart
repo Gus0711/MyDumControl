@@ -1,3 +1,7 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../../../../domain/models/schedule.dart';
 
@@ -574,22 +578,87 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
             ),
           ),
         ),
-        // ListWheelScrollView
-        ListWheelScrollView.useDelegate(
+        // Fix Windows #125291: sur desktop, désactiver scroll natif et gérer manuellement
+        // Sur mobile (Android/iOS), garder le scroll tactile natif
+        _buildPlatformAwareWheel(
           controller: controller,
-          itemExtent: 50,
-          perspective: 0.005,
-          diameterRatio: 1.5,
-          physics: const FixedExtentScrollPhysics(),
-          onSelectedItemChanged: onChanged,
-          childDelegate: ListWheelChildBuilderDelegate(
-            childCount: itemCount,
-            builder: (context, index) {
-              return Center(child: itemBuilder(index));
-            },
-          ),
+          itemCount: itemCount,
+          onChanged: onChanged,
+          itemBuilder: itemBuilder,
         ),
       ],
+    );
+  }
+
+  /// Construit le wheel picker adapté à la plateforme
+  Widget _buildPlatformAwareWheel({
+    required FixedExtentScrollController controller,
+    required int itemCount,
+    required ValueChanged<int> onChanged,
+    required Widget Function(int index) itemBuilder,
+  }) {
+    // Détecter si on est sur desktop (Windows, Linux, macOS) ou web
+    final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+    final wheelView = ListWheelScrollView.useDelegate(
+      controller: controller,
+      itemExtent: 50,
+      perspective: 0.005,
+      diameterRatio: 1.5,
+      // Sur desktop: désactiver scroll natif (bug molette)
+      // Sur mobile: garder scroll tactile natif
+      physics: isDesktop ? const NeverScrollableScrollPhysics() : const FixedExtentScrollPhysics(),
+      onSelectedItemChanged: onChanged,
+      childDelegate: ListWheelChildBuilderDelegate(
+        childCount: itemCount,
+        builder: (context, index) {
+          return Center(child: itemBuilder(index));
+        },
+      ),
+    );
+
+    // Sur mobile, retourner directement le wheel view
+    if (!isDesktop) {
+      return wheelView;
+    }
+
+    // Sur desktop, ajouter gestion manuelle molette + drag
+    return Listener(
+      onPointerSignal: (event) {
+        if (event is PointerScrollEvent) {
+          GestureBinding.instance.pointerSignalResolver.register(event, (event) {
+            final scrollEvent = event as PointerScrollEvent;
+            final currentItem = controller.selectedItem;
+            final direction = scrollEvent.scrollDelta.dy > 0 ? 1 : -1;
+            final newItem = (currentItem + direction).clamp(0, itemCount - 1);
+            if (newItem != currentItem) {
+              controller.animateToItem(
+                newItem,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+              );
+            }
+          });
+        }
+      },
+      child: GestureDetector(
+        onVerticalDragUpdate: (details) {
+          final delta = details.primaryDelta ?? 0;
+          if (delta.abs() > 15) {
+            final currentItem = controller.selectedItem;
+            final direction = delta < 0 ? 1 : -1;
+            final newItem = (currentItem + direction).clamp(0, itemCount - 1);
+            if (newItem != currentItem) {
+              controller.animateToItem(
+                newItem,
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOutCubic,
+              );
+            }
+          }
+        },
+        child: wheelView,
+      ),
     );
   }
 }

@@ -71,16 +71,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title, IconData icon) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // En mode sombre, utiliser une couleur plus claire pour les titres de section
+    final sectionColor = isDark
+        ? Colors.blue.shade300
+        : Theme.of(context).colorScheme.primary;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+          Icon(icon, size: 20, color: sectionColor),
           const SizedBox(width: 8),
           Text(
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
+                  color: sectionColor,
                   fontWeight: FontWeight.bold,
                 ),
           ),

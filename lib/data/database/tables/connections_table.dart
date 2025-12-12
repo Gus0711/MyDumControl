@@ -56,4 +56,8 @@ class Connections extends Table {
 
   /// Dernière connexion réussie
   DateTimeColumn get lastConnectedAt => dateTime().nullable()();
+
+  /// URL du Designer Envysion (ex: /eclypse/envysion/viewer.html?proj=SST_NORD)
+  /// Si renseignée, permet d'afficher le synoptique intégré via WebView
+  TextColumn get designerUrl => text().nullable()();
 }

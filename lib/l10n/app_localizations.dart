@@ -2365,6 +2365,72 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Relancez cette application'**
   String get bacnetPortSolution2;
+
+  /// No description provided for @envysionDesignerSection.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synoptique Envysion (optionnel)'**
+  String get envysionDesignerSection;
+
+  /// No description provided for @designerUrl.
+  ///
+  /// In fr, this message translates to:
+  /// **'URL du Designer'**
+  String get designerUrl;
+
+  /// No description provided for @designerUrlHelper.
+  ///
+  /// In fr, this message translates to:
+  /// **'Chemin vers le viewer Envysion intégré au contrôleur'**
+  String get designerUrlHelper;
+
+  /// No description provided for @synopticEnvysion.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synoptique Envysion'**
+  String get synopticEnvysion;
+
+  /// No description provided for @synopticLocal.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synoptiques locaux'**
+  String get synopticLocal;
+
+  /// No description provided for @openInBrowser.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir dans le navigateur'**
+  String get openInBrowser;
+
+  /// No description provided for @webViewNotSupported.
+  ///
+  /// In fr, this message translates to:
+  /// **'WebView non supportée sur cette plateforme'**
+  String get webViewNotSupported;
+
+  /// No description provided for @webViewNotSupportedMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'L\'affichage intégré n\'est pas disponible sur {platform}. Voulez-vous ouvrir dans le navigateur externe ?'**
+  String webViewNotSupportedMessage(Object platform);
+
+  /// No description provided for @loadingEnvysion.
+  ///
+  /// In fr, this message translates to:
+  /// **'Chargement du synoptique...'**
+  String get loadingEnvysion;
+
+  /// No description provided for @envysionLoadError.
+  ///
+  /// In fr, this message translates to:
+  /// **'Erreur de chargement'**
+  String get envysionLoadError;
+
+  /// No description provided for @envysionLoadErrorMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Impossible de charger le synoptique Envysion. Vérifiez l\'URL et votre connexion.'**
+  String get envysionLoadErrorMessage;
 }
 
 class _AppLocalizationsDelegate

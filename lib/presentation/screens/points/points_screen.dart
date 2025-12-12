@@ -263,6 +263,12 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
           controller: _tabController,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
           tabs: _categories.map((cat) {
             final count = counts[cat] ?? 0;
             return Tab(
@@ -720,14 +726,21 @@ class _TrendLogIndicator extends ConsumerWidget {
 
     if (!hasTrendLog) return const SizedBox.shrink();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Tooltip(
       message: l10n.trendLogAvailable,
       child: Container(
         padding: const EdgeInsets.all(4),
+        margin: const EdgeInsets.only(right: 2),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.blue.shade800.withAlpha(80) : Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(4),
+        ),
         child: Icon(
           Icons.show_chart,
-          size: 16,
-          color: Colors.blue.shade600,
+          size: 20,
+          color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
         ),
       ),
     );

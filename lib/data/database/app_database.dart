@@ -33,7 +33,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -88,6 +88,10 @@ class AppDatabase extends _$AppDatabase {
             // Migration de v10 à v11 : ajout des dashboards
             await m.createTable(dashboards);
             await m.createTable(dashboardWidgets);
+          }
+          if (from < 12) {
+            // Migration de v11 à v12 : ajout de designerUrl pour Envysion
+            await m.addColumn(connections, connections.designerUrl);
           }
         },
       );

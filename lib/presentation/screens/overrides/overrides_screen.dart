@@ -107,6 +107,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
     }
 
     if (overriddenPoints.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -122,7 +123,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
             const SizedBox(height: 8),
             Text(
               l10n.allPointsNormal,
-              style: TextStyle(color: Colors.grey.shade600),
+              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
             ),
             if (state.isLoading) ...[
               const SizedBox(height: 16),
@@ -215,6 +216,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
   }
 
   Widget _buildOverrideTile(BuildContext context, AppLocalizations l10n, BacnetObject point) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     // Déterminer si c'est une entrée forcée (out-of-service) ou un forçage classique (priority-array)
     final isInputForced = point.type.isInput && point.outOfService == true;
     final tileColor = isInputForced ? Colors.orange : Colors.red;
@@ -245,7 +247,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
         isInputForced
             ? '${l10n.outOfServiceLabel} • ${point.type.shortName}:${point.instance}'
             : '${l10n.priorityLabel(point.overridePriority ?? 0)} • ${point.type.shortName}:${point.instance}',
-        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -281,7 +283,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
             ],
           ),
           const SizedBox(width: 4),
-          Icon(Icons.chevron_right, color: Colors.grey.shade400),
+          Icon(Icons.chevron_right, color: isDark ? Colors.grey.shade500 : Colors.grey.shade400),
         ],
       ),
     );

@@ -46,6 +46,7 @@ class ConnectionRepository {
     String? apiVersion,
     String connectionType = 'distech_api',
     int? bacnetDeviceId,
+    String? designerUrl,
   }) async {
     // Générer une clé unique pour le mot de passe
     final passwordKey = 'conn_pwd_${DateTime.now().millisecondsSinceEpoch}';
@@ -65,6 +66,7 @@ class ConnectionRepository {
         apiVersion: Value(apiVersion),
         connectionType: Value(connectionType),
         bacnetDeviceId: Value(bacnetDeviceId),
+        designerUrl: Value(designerUrl),
       ),
     );
 
@@ -83,6 +85,7 @@ class ConnectionRepository {
     String? apiVersion,
     String? connectionType,
     int? bacnetDeviceId,
+    String? designerUrl,
   }) async {
     final existing = await database.getConnectionById(id);
     if (existing == null) return;
@@ -103,6 +106,7 @@ class ConnectionRepository {
         apiVersion: Value(apiVersion ?? existing.apiVersion),
         connectionType: connectionType ?? existing.connectionType,
         bacnetDeviceId: Value(bacnetDeviceId),
+        designerUrl: Value(designerUrl),
         updatedAt: DateTime.now(),
       ),
     );

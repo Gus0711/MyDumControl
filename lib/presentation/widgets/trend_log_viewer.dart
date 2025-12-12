@@ -698,6 +698,7 @@ class _StatItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final displayColor = color ?? Theme.of(context).colorScheme.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -706,14 +707,14 @@ class _StatItem extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 12, color: displayColor.withAlpha(180)),
+              Icon(icon, size: 16, color: displayColor.withAlpha(200)),
               const SizedBox(width: 4),
             ],
             Text(
               label,
               style: TextStyle(
                 fontSize: 11,
-                color: Colors.grey.shade600,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -741,6 +742,7 @@ class _LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -753,7 +755,7 @@ class _LoadingState extends StatelessWidget {
               Text(
                 message!,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600),
+                style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
               ),
             ],
           ],
@@ -806,17 +808,18 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.show_chart, size: 48, color: Colors.grey.shade400),
+            Icon(Icons.show_chart, size: 48, color: isDark ? Colors.grey.shade500 : Colors.grey.shade400),
             const SizedBox(height: 16),
             Text(
               'Aucune donnée pour cette période',
-              style: TextStyle(color: Colors.grey.shade600),
+              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
             ),
           ],
         ),
@@ -1293,10 +1296,11 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
   Widget _buildFullscreenChart(TrendLogData data) {
     final chartData = _ChartData.fromRecords(data.records);
     if (chartData == null) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Text(
           'Aucune donnée numérique',
-          style: TextStyle(color: Colors.grey.shade600),
+          style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
         ),
       );
     }
@@ -1491,10 +1495,11 @@ class _TrendChartState extends State<_TrendChart> {
   Widget build(BuildContext context) {
     // Protection: vérifier qu'on a des données valides
     if (widget.chartData.spots.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Text(
           'Aucune donnée à afficher',
-          style: TextStyle(color: Colors.grey.shade600),
+          style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
         ),
       );
     }
@@ -1551,10 +1556,11 @@ class _TrendChartState extends State<_TrendChart> {
     if (minX.isNaN || maxX.isNaN || minY.isNaN || maxY.isNaN ||
         minX.isInfinite || maxX.isInfinite || minY.isInfinite || maxY.isInfinite ||
         minX >= maxX || minY >= maxY) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Text(
           'Données invalides',
-          style: TextStyle(color: Colors.grey.shade600),
+          style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
         ),
       );
     }
@@ -2068,6 +2074,95 @@ class _ZoomIndicator extends StatelessWidget {
 // =============================================================================
 // TrendLogIndicator - Indicateur compact pour la liste des points
 // =============================================================================
+
+// =============================================================================
+// EmbeddedTrendChart - Widget graphique compact pour les dashboards
+// =============================================================================
+
+/// Widget graphique compact pour intégration dans les dashboards
+/// Ne contient pas de Card, s'adapte à l'espace disponible
+class EmbeddedTrendChart extends ConsumerWidget {
+  final int trendLogInstance;
+  final String? units;
+  final ChartColorTheme colorTheme;
+
+  const EmbeddedTrendChart({
+    super.key,
+    required this.trendLogInstance,
+    this.units,
+    this.colorTheme = ChartColorTheme.blue,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(trendLogViewerProvider(trendLogInstance));
+
+    if (state.isLoading && state.data == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (state.error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade300, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              'Erreur de chargement',
+              style: TextStyle(color: Colors.red.shade600, fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (state.data == null || state.data!.records.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.show_chart,
+              size: 32,
+              color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Aucune donnée',
+              style: TextStyle(
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final chartData = _ChartData.fromRecords(state.data!.records);
+    if (chartData == null) {
+      return const Center(child: Text('Aucune donnée numérique'));
+    }
+
+    // Widget qui s'adapte à l'espace disponible
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: _TrendChart(
+        chartData: chartData,
+        units: units,
+        colorTheme: colorTheme,
+        showDots: chartData.spots.length < 30,
+        dateFormat: 'HH:mm',
+        enableZoom: false,
+        showZoomControls: false,
+        showVerticalGrid: false,
+        showAxisLabel: false,
+      ),
+    );
+  }
+}
 
 /// Widget compact pour afficher l'icône de trend dans la liste des points
 class TrendLogIndicator extends ConsumerWidget {

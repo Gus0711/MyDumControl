@@ -123,14 +123,19 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
         // Connexions à la racine (sans dossier)
         if (rootConnections.isNotEmpty) ...[
           if (folders.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
-              child: Text(
-                'Sans dossier',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
-              ),
+            Builder(
+              builder: (context) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                return Padding(
+                  padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
+                  child: Text(
+                    'Sans dossier',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                        ),
+                  ),
+                );
+              },
             ),
           ...rootConnections.map((connection) => _ConnectionCard(
                 connection: connection,
@@ -152,6 +157,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     Folder folder,
     List<Connection> connections,
   ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isExpanded = _expandedFolders.contains(folder.id);
     final folderColor = _parseColor(folder.color);
 
@@ -192,7 +198,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                       Text(
                         '${connections.length} connexion${connections.length > 1 ? 's' : ''}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey.shade600,
+                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                             ),
                       ),
                     ],
@@ -241,7 +247,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                 ),
                 Icon(
                   isExpanded ? Icons.expand_less : Icons.expand_more,
-                  color: Colors.grey.shade600,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 ),
               ],
             ),
@@ -266,7 +272,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
             child: Text(
               'Dossier vide',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey.shade500,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
                     fontStyle: FontStyle.italic,
                   ),
             ),
@@ -606,6 +612,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context, AppLocalizations l10n) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
@@ -615,13 +622,13 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
             Icon(
               Icons.dns_outlined,
               size: 80,
-              color: Colors.grey.shade400,
+              color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
             ),
             const SizedBox(height: 24),
             Text(
               l10n.noConnections,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.grey.shade600,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                   ),
               textAlign: TextAlign.center,
             ),
@@ -629,7 +636,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
             Text(
               'Ajoutez une connexion pour commencer',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey.shade500,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
                   ),
               textAlign: TextAlign.center,
             ),
@@ -666,6 +673,7 @@ class _ConnectionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final protocol = connection.useHttps ? 'https' : 'http';
     final url = '$protocol://${connection.host}:${connection.port}';
 
@@ -693,7 +701,7 @@ class _ConnectionCard extends ConsumerWidget {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: ClipRRect(
@@ -722,7 +730,7 @@ class _ConnectionCard extends ConsumerWidget {
                         Text(
                           url,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.grey.shade600,
+                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                                 fontSize: 11,
                               ),
                         ),
@@ -778,7 +786,7 @@ class _ConnectionCard extends ConsumerWidget {
                         // Heure de l'automate (si disponible)
                         if (connectionInfo?.controllerTime != null) ...[
                           const SizedBox(height: 4),
-                          _buildControllerTimeRow(context, connectionInfo!.controllerTime!),
+                          _buildControllerTimeRow(context, connectionInfo!.controllerTime!, isDark),
                         ],
                       ],
                     ),
@@ -844,7 +852,7 @@ class _ConnectionCard extends ConsumerWidget {
                 const SizedBox(height: 8),
                 const Divider(height: 1),
                 const SizedBox(height: 8),
-                _buildSuperFavoritesList(context, superFavorites, isRefreshing),
+                _buildSuperFavoritesList(context, superFavorites, isRefreshing, isDark),
               ],
             ],
           ),
@@ -858,6 +866,7 @@ class _ConnectionCard extends ConsumerWidget {
     BuildContext context,
     List<SuperFavoriteWithValue> superFavorites,
     bool isRefreshing,
+    bool isDark,
   ) {
     // Vérifier s'il y a une erreur globale (même erreur sur tous les favoris)
     final globalError = superFavorites.isNotEmpty &&
@@ -899,7 +908,7 @@ class _ConnectionCard extends ConsumerWidget {
               Icon(
                 BacnetTypeUtils.getIconForType(sf.favorite.objectType),
                 size: 16,
-                color: Colors.grey.shade600,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               ),
               const SizedBox(width: 8),
               // Nom du point
@@ -907,7 +916,7 @@ class _ConnectionCard extends ConsumerWidget {
                 child: Text(
                   sf.favorite.pointName,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade700,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
                       ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -926,7 +935,7 @@ class _ConnectionCard extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: hasValue
                         ? Theme.of(context).colorScheme.primaryContainer
-                        : Colors.grey.shade200,
+                        : (isDark ? Colors.grey.shade700 : Colors.grey.shade200),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -936,7 +945,7 @@ class _ConnectionCard extends ConsumerWidget {
                       fontWeight: FontWeight.bold,
                       color: hasValue
                           ? Theme.of(context).colorScheme.primary
-                          : Colors.grey.shade500,
+                          : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
                     ),
                   ),
                 ),
@@ -959,7 +968,7 @@ class _ConnectionCard extends ConsumerWidget {
   }
 
   /// Construit la ligne d'affichage de l'heure de l'automate
-  Widget _buildControllerTimeRow(BuildContext context, ControllerTime controllerTime) {
+  Widget _buildControllerTimeRow(BuildContext context, ControllerTime controllerTime, bool isDark) {
     final hasTimeOffset = controllerTime.hasSignificantOffset;
     final hasCriticalOffset = controllerTime.hasCriticalOffset;
 
@@ -972,7 +981,7 @@ class _ConnectionCard extends ConsumerWidget {
               ? Colors.red.shade600
               : hasTimeOffset
                   ? Colors.orange.shade600
-                  : Colors.grey.shade500,
+                  : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
         ),
         const SizedBox(width: 4),
         Text(
@@ -983,7 +992,7 @@ class _ConnectionCard extends ConsumerWidget {
                 ? Colors.red.shade700
                 : hasTimeOffset
                     ? Colors.orange.shade700
-                    : Colors.grey.shade600,
+                    : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
             fontWeight: hasTimeOffset ? FontWeight.bold : FontWeight.w500,
             fontFamily: 'monospace',
           ),
@@ -1116,6 +1125,7 @@ class _FolderRefreshButtonState extends ConsumerState<_FolderRefreshButton> {
 
     // Cooldown actif : afficher le chrono
     if (maxSecondsRemaining > 0) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return SizedBox(
         width: 40,
         height: 40,
@@ -1125,7 +1135,7 @@ class _FolderRefreshButtonState extends ConsumerState<_FolderRefreshButton> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: Colors.grey.shade500,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
             ),
           ),
         ),
@@ -1222,6 +1232,7 @@ class _RefreshButtonState extends ConsumerState<_RefreshButton> {
 
     // Cooldown actif : afficher le chrono
     if (secondsRemaining > 0) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return SizedBox(
         width: 40,
         height: 40,
@@ -1231,7 +1242,7 @@ class _RefreshButtonState extends ConsumerState<_RefreshButton> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: Colors.grey.shade500,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
             ),
           ),
         ),

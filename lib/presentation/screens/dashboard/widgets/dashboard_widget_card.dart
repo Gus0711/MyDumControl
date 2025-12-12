@@ -128,9 +128,11 @@ class DashboardWidgetCard extends ConsumerWidget {
       );
     }
 
-    return TrendLogViewer(
+    // Utiliser EmbeddedTrendChart pour le mode dashboard (plus compact)
+    return EmbeddedTrendChart(
       trendLogInstance: config.trendLogInstance,
       units: config.units,
+      colorTheme: ChartColorTheme.fromName(config.colorTheme),
     );
   }
 
@@ -232,6 +234,7 @@ class DashboardWidgetCard extends ConsumerWidget {
   }
 
   Widget _buildUnconfigured(BuildContext context, String type, IconData icon) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -239,13 +242,13 @@ class DashboardWidgetCard extends ConsumerWidget {
           Icon(
             icon,
             size: 40,
-            color: Colors.grey.shade400,
+            color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
           ),
           const SizedBox(height: 8),
           Text(
             type,
             style: TextStyle(
-              color: Colors.grey.shade600,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -253,7 +256,7 @@ class DashboardWidgetCard extends ConsumerWidget {
           Text(
             'Non configuré',
             style: TextStyle(
-              color: Colors.grey.shade400,
+              color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
               fontSize: 12,
             ),
           ),
@@ -398,6 +401,7 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -408,7 +412,7 @@ class _StatChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
+          Icon(icon, size: 16, color: color),
           const SizedBox(width: 6),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -418,7 +422,7 @@ class _StatChip extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 10,
-                  color: Colors.grey.shade600,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 ),
               ),
               Text(

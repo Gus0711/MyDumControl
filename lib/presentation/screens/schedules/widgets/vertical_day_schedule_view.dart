@@ -308,7 +308,7 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
                           if (hasClipboard)
                             Icon(
                               Icons.content_copy,
-                              size: 8,
+                              size: 12,
                               color: colorScheme.onTertiaryContainer,
                             ),
                         ],

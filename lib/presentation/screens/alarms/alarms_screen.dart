@@ -180,6 +180,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
     }
 
     if (alarms.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -190,7 +191,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
                   : Icons.check_circle_outline,
               size: 64,
               color: alarmsState.searchQuery.isNotEmpty
-                  ? Colors.grey.shade400
+                  ? (isDark ? Colors.grey.shade500 : Colors.grey.shade400)
                   : Colors.green.shade400,
             ),
             const SizedBox(height: 16),
@@ -200,7 +201,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
                   : l10n.noAlarms,
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey.shade600,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               ),
             ),
             if (alarmsState.searchQuery.isEmpty) ...[
@@ -209,7 +210,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
                 l10n.allEquipmentNormal,
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey.shade500,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
                 ),
               ),
             ],
@@ -239,6 +240,7 @@ class _AlarmTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final typeColor = BacnetTypeUtils.getTypeColor(alarm.type);
 
     return Card(
@@ -309,7 +311,7 @@ class _AlarmTile extends StatelessWidget {
                               alarm.objectId,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey.shade600,
+                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                                 fontFamily: 'monospace',
                               ),
                             ),
@@ -334,7 +336,7 @@ class _AlarmTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 20),
+                  Icon(Icons.chevron_right, color: isDark ? Colors.grey.shade500 : Colors.grey.shade400, size: 20),
                 ],
               ),
 
@@ -345,7 +347,7 @@ class _AlarmTile extends StatelessWidget {
                   alarm.description!,
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.grey.shade700,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -357,13 +359,13 @@ class _AlarmTile extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.access_time, size: 14, color: Colors.grey.shade500),
+                    Icon(Icons.access_time, size: 16, color: isDark ? Colors.grey.shade400 : Colors.grey.shade500),
                     const SizedBox(width: 4),
                     Text(
                       _formatTimestamp(alarm.alarmTimestamp!),
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade500,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
                       ),
                     ),
                   ],

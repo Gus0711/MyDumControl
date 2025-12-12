@@ -1246,4 +1246,42 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get bacnetPortSolution2 => 'Relancez cette application';
+
+  @override
+  String get envysionDesignerSection => 'Synoptique Envysion (optionnel)';
+
+  @override
+  String get designerUrl => 'URL du Designer';
+
+  @override
+  String get designerUrlHelper =>
+      'Chemin vers le viewer Envysion intégré au contrôleur';
+
+  @override
+  String get synopticEnvysion => 'Synoptique Envysion';
+
+  @override
+  String get synopticLocal => 'Synoptiques locaux';
+
+  @override
+  String get openInBrowser => 'Ouvrir dans le navigateur';
+
+  @override
+  String get webViewNotSupported =>
+      'WebView non supportée sur cette plateforme';
+
+  @override
+  String webViewNotSupportedMessage(Object platform) {
+    return 'L\'affichage intégré n\'est pas disponible sur $platform. Voulez-vous ouvrir dans le navigateur externe ?';
+  }
+
+  @override
+  String get loadingEnvysion => 'Chargement du synoptique...';
+
+  @override
+  String get envysionLoadError => 'Erreur de chargement';
+
+  @override
+  String get envysionLoadErrorMessage =>
+      'Impossible de charger le synoptique Envysion. Vérifiez l\'URL et votre connexion.';
 }

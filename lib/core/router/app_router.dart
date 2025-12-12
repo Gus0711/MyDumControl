@@ -19,6 +19,7 @@ import '../../presentation/screens/alarms/alarms_screen.dart';
 import '../../presentation/screens/synoptics/synoptics_list_screen.dart';
 import '../../presentation/screens/synoptics/synoptic_viewer_screen.dart';
 import '../../presentation/screens/synoptics/synoptic_editor_screen.dart';
+import '../../presentation/screens/synoptics/envysion_viewer_screen.dart';
 import '../../presentation/screens/dashboard/dashboard_list_screen.dart';
 import '../../presentation/screens/dashboard/dashboard_screen.dart';
 import '../../presentation/screens/settings/settings_screen.dart';
@@ -230,6 +231,21 @@ class AppRouter {
             ],
           ),
         ],
+      ),
+
+      // Envysion Viewer (synoptique integre via WebView)
+      GoRoute(
+        path: Routes.envysionViewer,
+        name: 'envysionViewer',
+        pageBuilder: (context, state) {
+          final connectionIdStr = state.pathParameters['connectionId']!;
+          final connectionId = int.tryParse(connectionIdStr) ?? 0;
+          return PageTransitions.slideTransition(
+            context: context,
+            state: state,
+            child: EnvysionViewerScreen(connectionId: connectionId),
+          );
+        },
       ),
 
       // Dashboards

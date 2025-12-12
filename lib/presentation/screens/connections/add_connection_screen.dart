@@ -50,6 +50,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _bacnetDeviceIdController = TextEditingController();
+  final _designerUrlController = TextEditingController();
 
   bool _isPasswordVisible = false;
   bool _useHttps = true;
@@ -81,6 +82,9 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         if (connection.bacnetDeviceId != null) {
           _bacnetDeviceIdController.text = connection.bacnetDeviceId.toString();
         }
+        if (connection.designerUrl != null) {
+          _designerUrlController.text = connection.designerUrl!;
+        }
       });
     }
   }
@@ -108,6 +112,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     _usernameController.dispose();
     _passwordController.dispose();
     _bacnetDeviceIdController.dispose();
+    _designerUrlController.dispose();
     super.dispose();
   }
 
@@ -330,13 +335,35 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                   ),
                 ),
                 obscureText: !_isPasswordVisible,
-                textInputAction: TextInputAction.done,
+                textInputAction: TextInputAction.next,
                 validator: (value) {
                   if (!widget.isEditing && !Validators.isNotEmpty(value)) {
                     return l10n.fieldRequired;
                   }
                   return null;
                 },
+              ),
+              const SizedBox(height: 24),
+
+              // Section Envysion Designer (optionnel)
+              Text(
+                l10n.envysionDesignerSection,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _designerUrlController,
+                decoration: InputDecoration(
+                  labelText: l10n.designerUrl,
+                  hintText: '/eclypse/envysion/viewer.html?proj=MON_PROJET',
+                  prefixIcon: const Icon(Icons.web),
+                  helperText: l10n.designerUrlHelper,
+                  helperMaxLines: 2,
+                ),
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.done,
               ),
             ] else ...[
               // Champs BACnet
@@ -694,6 +721,11 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       final bacnetDeviceId = _bacnetDeviceIdController.text.isNotEmpty
           ? int.parse(_bacnetDeviceIdController.text)
           : null;
+      // Designer URL (API Distech uniquement)
+      final designerUrl = _connectionType == ConnectionType.distechApi &&
+              _designerUrlController.text.trim().isNotEmpty
+          ? _designerUrlController.text.trim()
+          : null;
 
       if (widget.isEditing) {
         await repository.updateConnection(
@@ -707,6 +739,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
           apiVersion: _detectedApiVersion,
           connectionType: _connectionType.value,
           bacnetDeviceId: bacnetDeviceId,
+          designerUrl: designerUrl,
         );
       } else {
         await repository.createConnection(
@@ -719,6 +752,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
           apiVersion: _detectedApiVersion,
           connectionType: _connectionType.value,
           bacnetDeviceId: bacnetDeviceId,
+          designerUrl: designerUrl,
         );
       }
 

@@ -42,6 +42,10 @@ dependencies:
   share_plus: ^10.1.4
   file_picker: ^8.0.3
 
+  # WebView (Envysion Designer integration)
+  flutter_inappwebview: ^6.1.5
+  url_launcher: ^6.3.1
+
   # Utils
   freezed_annotation: ^2.4.1
   json_annotation: ^4.9.0

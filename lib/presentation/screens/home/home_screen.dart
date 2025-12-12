@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:myglobaldc/l10n/app_localizations.dart';
 import '../../../application/providers/active_connection_provider.dart';
 import '../../../application/providers/points_provider.dart';
@@ -26,6 +27,28 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _pointsLoadTriggered = false;
   bool _initialLoadComplete = false;
+
+  /// Ouvre le synoptique Envysion dans le navigateur externe
+  Future<void> _openEnvysionInBrowser() async {
+    final state = ref.read(activeConnectionProvider);
+    if (state.connection == null) return;
+    final conn = state.connection!;
+    final protocol = conn.useHttps ? 'https' : 'http';
+    final host = conn.host;
+    final port = conn.port;
+    final designerPath = conn.designerUrl ?? '';
+
+    String urlStr = '$protocol://$host';
+    if ((protocol == 'https' && port != 443) || (protocol == 'http' && port != 80)) {
+      urlStr += ':$port';
+    }
+    urlStr += designerPath;
+
+    final uri = Uri.parse(urlStr);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   void initState() {
@@ -262,6 +285,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final alarmsCount = ref.watch(alarmsCountProvider);
     final hasAlarms = alarmsCount > 0;
 
+    // Verifier si Envysion est configure pour cette connexion
+    final hasEnvysion = state.connection?.designerUrl != null &&
+        state.connection!.designerUrl!.isNotEmpty;
+
     // Menu items - ordre: Favoris, Points, Dashboard, Horaires, Alarmes, Forçages, Synoptique, Informations
     final menuItems = [
       _MenuItem(
@@ -308,10 +335,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         badge: hasOverrides ? overrideCount.toString() : null,
       ),
       _MenuItem(
-        icon: Icons.dashboard,
-        title: 'Synoptique',
+        icon: hasEnvysion ? Icons.web : Icons.dashboard,
+        title: hasEnvysion ? l10n.synopticEnvysion : 'Synoptique',
         color: Colors.teal.shade600,
-        route: Routes.synoptics,
+        route: hasEnvysion ? null : Routes.synoptics,
+        onTap: hasEnvysion ? _openEnvysionInBrowser : null,
       ),
       _MenuItem(
         icon: Icons.info,
@@ -466,7 +494,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           _buildDrawerItem(context, icon: Icons.calendar_month, title: l10n.schedules, route: Routes.schedules),
           _buildDrawerItem(context, icon: Icons.notifications_active, title: l10n.alarms, route: Routes.alarms),
           _buildDrawerItem(context, icon: Icons.lock, title: l10n.overrides, route: Routes.overrides),
-          _buildDrawerItem(context, icon: Icons.dashboard, title: 'Synoptique', route: Routes.synoptics),
+          _buildDrawerItem(
+            context,
+            icon: connection?.designerUrl != null && connection!.designerUrl!.isNotEmpty
+                ? Icons.web
+                : Icons.dashboard,
+            title: connection?.designerUrl != null && connection!.designerUrl!.isNotEmpty
+                ? l10n.synopticEnvysion
+                : 'Synoptique',
+            route: connection?.designerUrl != null && connection!.designerUrl!.isNotEmpty
+                ? null
+                : Routes.synoptics,
+            onTap: connection?.designerUrl != null && connection!.designerUrl!.isNotEmpty
+                ? _openEnvysionInBrowser
+                : null,
+          ),
           const Divider(),
           _buildDrawerItem(context, icon: Icons.info_outline, title: l10n.deviceInfo, route: Routes.deviceInfo),
           _buildDrawerItem(context, icon: Icons.settings, title: l10n.settings, route: Routes.settings),
@@ -489,23 +531,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     BuildContext context, {
     required IconData icon,
     required String title,
-    required String route,
+    String? route,
+    VoidCallback? onTap,
     bool isSelected = false,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Couleur visible en dark et light mode pour l'élément sélectionné
+    final selectedColor = isDark ? Colors.blue.shade300 : AppColors.primary;
+
     return ListTile(
-      leading: Icon(icon, color: isSelected ? AppColors.primary : null),
+      leading: Icon(icon, color: isSelected ? selectedColor : null),
       title: Text(
         title,
         style: TextStyle(
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? AppColors.primary : null,
+          color: isSelected ? selectedColor : null,
         ),
       ),
       selected: isSelected,
       onTap: () {
         Navigator.pop(context);
         if (!isSelected) {
-          context.push(route);
+          if (onTap != null) {
+            onTap();
+          } else if (route != null) {
+            context.push(route);
+          }
         }
       },
     );
@@ -516,15 +567,17 @@ class _MenuItem {
   final IconData icon;
   final String title;
   final Color color;
-  final String route;
+  final String? route;
   final String? badge;
+  final VoidCallback? onTap;
 
   const _MenuItem({
     required this.icon,
     required this.title,
     required this.color,
-    required this.route,
+    this.route,
     this.badge,
+    this.onTap,
   });
 }
 
@@ -609,7 +662,12 @@ class _AnimatedMenuTileState extends State<_AnimatedMenuTile>
 
     _tapController.forward(from: 0).then((_) {
       if (mounted) {
-        context.push(widget.item.route);
+        // Utiliser le callback personnalisé si fourni, sinon naviguer vers la route
+        if (widget.item.onTap != null) {
+          widget.item.onTap!();
+        } else if (widget.item.route != null) {
+          context.push(widget.item.route!);
+        }
       }
     });
   }

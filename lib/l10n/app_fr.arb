@@ -416,5 +416,17 @@
   },
   "bacnetPortConflictSolution": "Solutions :",
   "bacnetPortSolution1": "Fermez YABE ou autres applications BACnet",
-  "bacnetPortSolution2": "Relancez cette application"
+  "bacnetPortSolution2": "Relancez cette application",
+
+  "envysionDesignerSection": "Synoptique Envysion (optionnel)",
+  "designerUrl": "URL du Designer",
+  "designerUrlHelper": "Chemin vers le viewer Envysion intégré au contrôleur",
+  "synopticEnvysion": "Synoptique Envysion",
+  "synopticLocal": "Synoptiques locaux",
+  "openInBrowser": "Ouvrir dans le navigateur",
+  "webViewNotSupported": "WebView non supportée sur cette plateforme",
+  "webViewNotSupportedMessage": "L'affichage intégré n'est pas disponible sur {platform}. Voulez-vous ouvrir dans le navigateur externe ?",
+  "loadingEnvysion": "Chargement du synoptique...",
+  "envysionLoadError": "Erreur de chargement",
+  "envysionLoadErrorMessage": "Impossible de charger le synoptique Envysion. Vérifiez l'URL et votre connexion."
 }

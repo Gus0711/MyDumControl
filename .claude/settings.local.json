@@ -43,7 +43,9 @@
       "Bash(npm run build:*)",
       "Bash(dart run:*)",
       "Bash(grep:*)",
-      "Bash(if not exist \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\docs\\features\" mkdir \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\docs\\features\")"
+      "Bash(if not exist \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\docs\\features\" mkdir \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\docs\\features\")",
+      "Bash(winget install:*)",
+      "Bash(flutter pub outdated:*)"
     ],
     "deny": [],
     "ask": []

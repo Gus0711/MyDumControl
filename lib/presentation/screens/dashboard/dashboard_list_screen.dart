@@ -74,6 +74,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -96,7 +97,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
             Text(
               'Créez votre premier tableau de bord pour visualiser\nplusieurs graphiques sur une seule page.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600),
+              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
@@ -138,6 +139,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
   }
 
   Widget _buildErrorState(BuildContext context, Object error) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -154,7 +156,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
             Text(
               error.toString(),
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600),
+              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
@@ -306,20 +308,37 @@ class _DashboardCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        dashboard.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.dashboard,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              dashboard.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        'Grille ${dashboard.columns}x${dashboard.rows}',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 13,
-                        ),
+                      Builder(
+                        builder: (context) {
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          return Text(
+                            'Grille ${dashboard.columns}x${dashboard.rows}',
+                            style: TextStyle(
+                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                              fontSize: 13,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -491,42 +510,52 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
 
             // Aperçu
             Center(
-              child: Container(
-                width: 120,
-                height: 80,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.all(8),
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: _columns,
-                    mainAxisSpacing: 4,
-                    crossAxisSpacing: 4,
-                  ),
-                  itemCount: _columns * _rows,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withAlpha(60),
-                        borderRadius: BorderRadius.circular(4),
+              child: Builder(
+                builder: (context) {
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  return Container(
+                    width: 120,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: isDark ? Colors.grey.shade600 : Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    child: GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: _columns,
+                        mainAxisSpacing: 4,
+                        crossAxisSpacing: 4,
                       ),
-                    );
-                  },
-                ),
+                      itemCount: _columns * _rows,
+                      itemBuilder: (context, index) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withAlpha(60),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
               ),
             ),
 
             const SizedBox(height: 8),
             Center(
-              child: Text(
-                '${_columns * _rows} widgets',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 12,
-                ),
+              child: Builder(
+                builder: (context) {
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  return Text(
+                    '${_columns * _rows} widgets',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                      fontSize: 12,
+                    ),
+                  );
+                },
               ),
             ),
           ],
