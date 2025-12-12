@@ -1,6 +1,6 @@
 {
-    "name": "mydumcontrol",
-    "short_name": "mydumcontrol",
+    "name": "MyGlobalDC",
+    "short_name": "MyGlobalDC",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F5F5F5",

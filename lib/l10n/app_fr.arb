@@ -1,6 +1,6 @@
 {
   "@@locale": "fr",
-  "appTitle": "MyDumControl",
+  "appTitle": "MyGlobalDC",
   "@appTitle": {
     "description": "Titre de l'application"
   },
@@ -189,6 +189,11 @@
   "properties": "Propriétés",
   "active": "Actif",
   "inactive": "Inactif",
+  "editDescription": "Modifier la description",
+  "descriptionHint": "Entrez une description...",
+  "descriptionUpdated": "Description mise à jour",
+  "descriptionUpdateError": "Erreur lors de la mise à jour",
+  "noDescription": "Aucune description",
 
   "loadingEllipsis": "Chargement...",
   "modified": "Modifié",
@@ -341,5 +346,75 @@
   "ipRangeSameSubnet": "Les IPs doivent être sur le même sous-réseau /24",
   "scanComplete": "Scan terminé",
   "orManualEntry": "ou saisie manuelle :",
-  "useIpScan": "Scanner plage IP (ECLYPSE)"
+  "useIpScan": "Scanner plage IP (ECLYPSE)",
+
+  "dashboards": "Dashboards",
+  "dashboard": "Dashboard",
+  "noDashboard": "Aucun dashboard",
+  "createDashboardHint": "Créez des dashboards pour visualiser\nvos graphiques et courbes d'historique",
+  "createDashboard": "Créer un dashboard",
+  "newDashboard": "Nouveau dashboard",
+  "editDashboard": "Modifier le dashboard",
+  "deleteDashboard": "Supprimer le dashboard",
+  "dashboardName": "Nom du dashboard",
+  "dashboardNameRequired": "Le nom est requis",
+  "deleteDashboardConfirm": "Supprimer ce dashboard ?",
+  "deleteDashboardMessage": "Le dashboard \"{name}\" et tous ses widgets seront supprimés.",
+  "dashboardDeleted": "Dashboard supprimé",
+  "widgets": "{count} widget(s)",
+  "addWidget": "Ajouter un widget",
+  "configureWidget": "Configurer le widget",
+  "deleteWidget": "Supprimer le widget",
+  "widgetDeleted": "Widget supprimé",
+  "singleChart": "Graphique simple",
+  "singleChartDescription": "Affiche l'historique d'un seul point",
+  "multiCurveChart": "Multi-courbes",
+  "multiCurveChartDescription": "Compare plusieurs points sur un même graphique",
+  "statsCard": "Statistiques",
+  "statsCardDescription": "Affiche min, max et moyenne d'un point",
+  "selectTrendLog": "Sélectionnez un trend log",
+  "noTrendLogSelected": "Aucun trend log sélectionné",
+  "selectTrendLogs": "Sélectionnez les trend logs",
+  "selectedTrendLogs": "{count} trend log(s) sélectionné(s)",
+  "minCurvesRequired": "Sélectionnez au moins 2 trend logs",
+  "maxCurvesReached": "Maximum 8 courbes autorisées",
+  "showMin": "Afficher minimum",
+  "showMax": "Afficher maximum",
+  "showAvg": "Afficher moyenne",
+  "curveVisibility": "Visibilité des courbes",
+  "periodDay": "Jour",
+  "periodWeek": "Semaine",
+  "periodMonth": "Mois",
+  "periodYear": "Année",
+
+  "networkInterface": "Interface réseau",
+  "allInterfaces": "Toutes les interfaces",
+  "searchingBacnetDevices": "Recherche des appareils BACnet...",
+  "deviceIdConflict": "Conflit Device ID",
+  "deviceIdConflictMessage": "Plusieurs appareils partagent le même Device ID BACnet. Ceci est interdit par le protocole et peut causer des dysfonctionnements.",
+  "conflictingAddresses": "Adresses IP en conflit :",
+  "conflictRecommendation": "Action recommandée : Reconfigurer les appareils pour avoir des Device ID uniques.",
+  "understood": "Compris",
+  "idConflict": "ID conflit",
+  "alsoAt": "Aussi à",
+  "conflicts": "conflit(s)",
+
+  "bacnetPortWarning": "Port {actualPort} utilisé (standard: {standardPort})",
+  "@bacnetPortWarning": {
+    "placeholders": {
+      "actualPort": {"type": "int"},
+      "standardPort": {"type": "int"}
+    }
+  },
+  "bacnetPortConflict": "Conflit de port BACnet",
+  "bacnetPortConflictDetail": "Le port standard BACnet ({standardPort}) est déjà utilisé par une autre application. L'application utilise le port {actualPort} à la place.",
+  "@bacnetPortConflictDetail": {
+    "placeholders": {
+      "standardPort": {"type": "int"},
+      "actualPort": {"type": "int"}
+    }
+  },
+  "bacnetPortConflictSolution": "Solutions :",
+  "bacnetPortSolution1": "Fermez YABE ou autres applications BACnet",
+  "bacnetPortSolution2": "Relancez cette application"
 }

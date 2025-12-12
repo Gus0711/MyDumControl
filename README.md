@@ -1,6 +1,6 @@
-# mydumcontrol
+# MyGlobalDC
 
-A new Flutter project.
+Application de gestion des automates ECLYPSE Distech Controls.
 
 ## Getting Started
 

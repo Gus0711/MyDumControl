@@ -6,10 +6,12 @@ import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/trend_log_provider.dart';
 import '../../../application/providers/favorites_provider.dart';
 import '../../../application/providers/active_connection_provider.dart';
+import '../../../application/providers/bacnet_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/favorite_button.dart';
+import '../../widgets/gradient_app_bar.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Helper pour obtenir le nom localisé d'une catégorie
@@ -206,8 +208,8 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
     ref.listen(favoritesProvider, (_, _) => _updateFavoriteIds());
 
     return Scaffold(
-      appBar: AppBar(
-        title: _showSearch ? _buildSearchField(l10n) : Text(l10n.points),
+      appBar: GradientAppBar(
+        titleWidget: _showSearch ? _buildSearchField(l10n) : Text(l10n.points),
         actions: [
           // Bouton recherche
           IconButton(
@@ -311,6 +313,10 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
       ),
       body: Column(
         children: [
+          // Warning port BACnet non standard
+          if (ref.watch(activeConnectionProvider).isBacnetConnection)
+            _BacnetPortWarningBanner(),
+
           // Indicateur de cache
           if (pointsState.fromCache && pointsState.isLoading)
             Container(
@@ -553,10 +559,10 @@ class _PointTile extends ConsumerWidget {
         ),
       ),
       title: Tooltip(
-        message: point.objectName,
+        message: point.displayName,
         waitDuration: const Duration(milliseconds: 500),
         child: Text(
-          point.objectName,
+          point.displayName,
           style: const TextStyle(fontWeight: FontWeight.w500),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -572,11 +578,12 @@ class _PointTile extends ConsumerWidget {
               fontFamily: 'monospace',
             ),
           ),
+          // Si description existe, afficher le nom technique pour référence
           if (point.description != null && point.description!.isNotEmpty) ...[
             Text(' - ', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
             Expanded(
               child: Text(
-                point.description!,
+                point.objectName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
@@ -722,6 +729,80 @@ class _TrendLogIndicator extends ConsumerWidget {
           size: 16,
           color: Colors.blue.shade600,
         ),
+      ),
+    );
+  }
+}
+
+/// Banner d'avertissement pour le port BACnet non standard
+class _BacnetPortWarningBanner extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final portInfo = ref.watch(bacnetPortInfoProvider);
+
+    // Ne rien afficher si le port standard est utilisé
+    if (portInfo.isUsingStandardPort || portInfo.actualPort == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: Colors.orange.shade50,
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade700),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              l10n.bacnetPortWarning(portInfo.actualPort!, portInfo.standardPort),
+              style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.info_outline, size: 18, color: Colors.orange.shade700),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () => _showPortInfoDialog(context, l10n, portInfo),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPortInfoDialog(BuildContext context, AppLocalizations l10n, BacnetPortInfo portInfo) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+            const SizedBox(width: 8),
+            Text(l10n.bacnetPortConflict),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.bacnetPortConflictDetail(portInfo.standardPort, portInfo.actualPort!)),
+            const SizedBox(height: 16),
+            Text(
+              l10n.bacnetPortConflictSolution,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text('• ${l10n.bacnetPortSolution1}'),
+            Text('• ${l10n.bacnetPortSolution2}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.understood),
+          ),
+        ],
       ),
     );
   }

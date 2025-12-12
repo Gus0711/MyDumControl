@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +13,8 @@ class DiscoveredBacnetDevice {
   final String? deviceName;
   final String? vendorName;
   final String? modelName;
+  final bool hasConflict;
+  final List<String> conflictingHosts;
 
   DiscoveredBacnetDevice({
     required this.host,
@@ -19,7 +22,29 @@ class DiscoveredBacnetDevice {
     this.deviceName,
     this.vendorName,
     this.modelName,
+    this.hasConflict = false,
+    this.conflictingHosts = const [],
   });
+
+  DiscoveredBacnetDevice copyWith({
+    String? host,
+    int? deviceId,
+    String? deviceName,
+    String? vendorName,
+    String? modelName,
+    bool? hasConflict,
+    List<String>? conflictingHosts,
+  }) {
+    return DiscoveredBacnetDevice(
+      host: host ?? this.host,
+      deviceId: deviceId ?? this.deviceId,
+      deviceName: deviceName ?? this.deviceName,
+      vendorName: vendorName ?? this.vendorName,
+      modelName: modelName ?? this.modelName,
+      hasConflict: hasConflict ?? this.hasConflict,
+      conflictingHosts: conflictingHosts ?? this.conflictingHosts,
+    );
+  }
 }
 
 /// Ecran de decouverte des appareils BACnet
@@ -33,12 +58,36 @@ class DiscoverBacnetScreen extends ConsumerStatefulWidget {
 class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
   bool _isDiscovering = false;
   List<DiscoveredBacnetDevice> _discoveredDevices = [];
+  List<DeviceIdConflict> _conflicts = [];
   String? _errorMessage;
+  StreamSubscription<DeviceIdConflict>? _conflictSubscription;
 
   @override
   void initState() {
     super.initState();
     // Lancer la decouverte automatiquement
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startBroadcastDiscovery();
+    });
+  }
+
+  @override
+  void dispose() {
+    _conflictSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Change l'interface réseau et relance la découverte
+  Future<void> _onInterfaceChanged(NetworkInterfaceChoice? newInterface) async {
+    final bacnetService = ref.read(bacnetServiceProvider);
+
+    // Rebind le service sur la nouvelle interface
+    await bacnetService.rebindToInterface(newInterface);
+
+    // Mettre à jour le provider
+    ref.read(selectedBacnetInterfaceProvider.notifier).state = newInterface;
+
+    // Relancer la découverte
     _startBroadcastDiscovery();
   }
 
@@ -47,30 +96,82 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
     setState(() {
       _isDiscovering = true;
       _discoveredDevices = [];
+      _conflicts = [];
       _errorMessage = null;
     });
 
     try {
       final bacnetService = ref.read(bacnetServiceProvider);
 
-      final devices = await bacnetService.discoverLocalDevices(
-        port: 47808,
-        timeout: const Duration(seconds: 3),
-      );
+      // Écouter les conflits
+      _conflictSubscription?.cancel();
+      _conflictSubscription = bacnetService.conflictStream.listen((conflict) {
+        if (mounted) {
+          setState(() {
+            _conflicts.add(conflict);
+            // Mettre à jour le device concerné
+            final index = _discoveredDevices.indexWhere((d) => d.deviceId == conflict.deviceId);
+            if (index != -1) {
+              _discoveredDevices[index] = _discoveredDevices[index].copyWith(
+                hasConflict: true,
+                conflictingHosts: conflict.allAddresses.map((a) => a.address).toList(),
+              );
+            }
+          });
+          _showConflictSnackbar(conflict);
+        }
+      });
+
+      // Écouter les devices au fur et à mesure qu'ils sont découverts
+      final subscription = bacnetService.iAmStream.listen((device) {
+        if (mounted) {
+          setState(() {
+            // Mettre à jour ou ajouter
+            final existingIndex = _discoveredDevices.indexWhere((d) => d.deviceId == device.deviceId);
+            if (existingIndex != -1) {
+              _discoveredDevices[existingIndex] = _discoveredDevices[existingIndex].copyWith(
+                host: device.address.address,
+                hasConflict: device.hasConflict,
+                conflictingHosts: device.hasConflict
+                    ? [device.address.address, ...device.conflictingAddresses.map((a) => a.address)]
+                    : [],
+              );
+            } else {
+              _discoveredDevices.add(DiscoveredBacnetDevice(
+                host: device.address.address,
+                deviceId: device.deviceId,
+                hasConflict: device.hasConflict,
+                conflictingHosts: device.hasConflict
+                    ? [device.address.address, ...device.conflictingAddresses.map((a) => a.address)]
+                    : [],
+              ));
+            }
+          });
+          // Récupérer les détails immédiatement
+          _fetchDeviceDetails(bacnetService, device.address.address, 47808, device.deviceId);
+        }
+      });
+
+      try {
+        await bacnetService.discoverLocalDevices(
+          port: 47808,
+          timeout: const Duration(seconds: 5),
+          sendCount: 3,
+          sendInterval: const Duration(milliseconds: 800),
+        );
+      } finally {
+        await subscription.cancel();
+      }
 
       if (mounted) {
         setState(() {
-          _discoveredDevices = devices.map((device) => DiscoveredBacnetDevice(
-            host: device.address.address,
-            deviceId: device.deviceId,
-          )).toList();
           _isDiscovering = false;
         });
-      }
 
-      // Recuperer les details en arriere-plan
-      for (final device in devices) {
-        _fetchDeviceDetails(bacnetService, device.address.address, 47808, device.deviceId);
+        // Afficher le dialog récapitulatif si des conflits ont été détectés
+        if (_conflicts.isNotEmpty) {
+          _showConflictsDialog();
+        }
       }
 
     } catch (e) {
@@ -81,6 +182,108 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
         });
       }
     }
+  }
+
+  void _showConflictSnackbar(DeviceIdConflict conflict) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.orange[700],
+        content: Row(
+          children: [
+            const Icon(Icons.warning, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Conflit Device ID ${conflict.deviceId}',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Détails',
+          textColor: Colors.white,
+          onPressed: _showConflictsDialog,
+        ),
+      ),
+    );
+  }
+
+  void _showConflictsDialog() {
+    final l10n = AppLocalizations.of(context)!;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange[700]),
+            const SizedBox(width: 12),
+            Text(l10n.deviceIdConflict),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.deviceIdConflictMessage,
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 16),
+                ..._conflicts.map((conflict) => Card(
+                  color: Colors.orange.withOpacity(0.1),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Device ID : ${conflict.deviceId}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(l10n.conflictingAddresses),
+                        ...conflict.allAddresses.map((addr) => Padding(
+                          padding: const EdgeInsets.only(left: 16, top: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.circle, size: 8, color: Colors.orange),
+                              const SizedBox(width: 8),
+                              Text(addr.address),
+                            ],
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                )),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.conflictRecommendation,
+                  style: TextStyle(
+                    fontStyle: FontStyle.italic,
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.understood),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Recupere les details d'un device
@@ -96,9 +299,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
         setState(() {
           final index = _discoveredDevices.indexWhere((d) => d.deviceId == deviceId);
           if (index != -1) {
-            _discoveredDevices[index] = DiscoveredBacnetDevice(
-              host: host,
-              deviceId: deviceId,
+            _discoveredDevices[index] = _discoveredDevices[index].copyWith(
               deviceName: result.deviceName,
               vendorName: result.vendorName,
               modelName: result.modelName,
@@ -140,6 +341,9 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
       ),
       body: Column(
         children: [
+          // Sélecteur d'interface réseau
+          _buildInterfaceSelector(theme, l10n),
+
           // Alerte reseau local
           Container(
             width: double.infinity,
@@ -187,6 +391,79 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildInterfaceSelector(ThemeData theme, AppLocalizations l10n) {
+    final interfacesAsync = ref.watch(availableNetworkInterfacesProvider);
+    final selectedInterface = ref.watch(selectedBacnetInterfaceProvider);
+
+    return interfacesAsync.when(
+      data: (interfaces) {
+        // Une seule interface ou moins, pas besoin de sélecteur
+        if (interfaces.length <= 1) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant,
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.lan, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonFormField<NetworkInterfaceChoice?>(
+                  value: selectedInterface,
+                  decoration: InputDecoration(
+                    labelText: l10n.networkInterface,
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  isExpanded: true,
+                  items: [
+                    DropdownMenuItem(
+                      value: null,
+                      child: Text(l10n.allInterfaces),
+                    ),
+                    ...interfaces.map((iface) => DropdownMenuItem(
+                      value: iface,
+                      child: Row(
+                        children: [
+                          Icon(
+                            iface.isWireless ? Icons.wifi : Icons.cable,
+                            size: 16,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${iface.name} (${iface.address})',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                  ],
+                  onChanged: _isDiscovering ? null : _onInterfaceChanged,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 
@@ -247,7 +524,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Recherche des appareils BACnet...',
+              l10n.searchingBacnetDevices,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -299,7 +576,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Compteur
+        // Compteur et alerte conflits
         Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -312,15 +589,29 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              if (_isDiscovering)
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
+              Row(
+                children: [
+                  if (_conflicts.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ActionChip(
+                        avatar: const Icon(Icons.warning, size: 16, color: Colors.orange),
+                        label: Text('${_conflicts.length} ${l10n.conflicts}'),
+                        onPressed: _showConflictsDialog,
+                        backgroundColor: Colors.orange.withOpacity(0.1),
+                      ),
+                    ),
+                  if (_isDiscovering)
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -370,6 +661,12 @@ class _BacnetDeviceCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      shape: device.hasConflict
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: Colors.orange, width: 2),
+            )
+          : null,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -378,18 +675,39 @@ class _BacnetDeviceCard extends StatelessWidget {
           child: Row(
             children: [
               // Icone
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: avatarColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.device_hub,
-                  color: avatarColor,
-                  size: 28,
-                ),
+              Stack(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: avatarColor.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.device_hub,
+                      color: avatarColor,
+                      size: 28,
+                    ),
+                  ),
+                  if (device.hasConflict)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.warning,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 16),
 
@@ -398,11 +716,33 @@ class _BacnetDeviceCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      device.deviceName ?? 'Device ${device.deviceId}',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            device.deviceName ?? 'Device ${device.deviceId}',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (device.hasConflict)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              l10n.idConflict,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -429,6 +769,17 @@ class _BacnetDeviceCard extends StatelessWidget {
                         '${l10n.model}: ${device.modelName}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    if (device.hasConflict && device.conflictingHosts.length > 1)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${l10n.alsoAt}: ${device.conflictingHosts.where((h) => h != device.host).join(", ")}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.orange[700],
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                   ],

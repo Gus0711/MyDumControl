@@ -4,10 +4,22 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Couleurs principales - Inspirées de Distech Controls
-  static const Color primary = Color(0xFF1565C0); // Bleu Distech
-  static const Color primaryLight = Color(0xFF5E92F3);
-  static const Color primaryDark = Color(0xFF003C8F);
+  // Couleurs principales - Dégradé sombre professionnel
+  static const Color primary = Color(0xFF16213E); // Bleu nuit principal
+  static const Color primaryLight = Color(0xFF0F3460);
+  static const Color primaryDark = Color(0xFF1A1A2E);
+
+  // Couleurs du dégradé (pour AppBar, headers, etc.)
+  static const Color gradientStart = Color(0xFF1A1A2E);
+  static const Color gradientMiddle = Color(0xFF16213E);
+  static const Color gradientEnd = Color(0xFF0F3460);
+
+  // Dégradé prédéfini
+  static const LinearGradient primaryGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [gradientStart, gradientMiddle, gradientEnd],
+  );
 
   static const Color secondary = Color(0xFF00897B); // Teal
   static const Color secondaryLight = Color(0xFF4EBAAA);

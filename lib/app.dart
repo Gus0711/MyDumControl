@@ -7,8 +7,8 @@ import 'core/router/app_router.dart';
 import 'application/providers/settings_provider.dart';
 
 /// Widget racine de l'application
-class MyDumControlApp extends ConsumerWidget {
-  const MyDumControlApp({super.key});
+class MyGlobalDCApp extends ConsumerWidget {
+  const MyGlobalDCApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -16,7 +16,7 @@ class MyDumControlApp extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
 
     return MaterialApp.router(
-      title: 'MyDumControl',
+      title: 'MyGlobalDC',
       debugShowCheckedModeBanner: false,
 
       // Thèmes - utilise le paramètre sauvegardé

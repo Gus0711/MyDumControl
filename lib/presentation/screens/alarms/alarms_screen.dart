@@ -7,6 +7,7 @@ import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/gradient_app_bar.dart';
 
 /// Écran de liste des alarmes actives
 class AlarmsScreen extends ConsumerStatefulWidget {
@@ -35,8 +36,8 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
     final pointsState = ref.watch(pointsProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: _showSearch ? _buildSearchField(l10n) : Text(l10n.alarms),
+      appBar: GradientAppBar(
+        titleWidget: _showSearch ? _buildSearchField(l10n) : Text(l10n.alarms),
         actions: [
           // Bouton recherche
           IconButton(
@@ -277,7 +278,7 @@ class _AlarmTile extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          alarm.objectName,
+                          alarm.displayName,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,

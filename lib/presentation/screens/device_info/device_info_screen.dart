@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mydumcontrol/l10n/app_localizations.dart';
+import 'package:myglobaldc/l10n/app_localizations.dart';
 import '../../../application/providers/active_connection_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../widgets/gradient_app_bar.dart';
 
 /// Écran d'informations détaillées sur l'appareil connecté
 class DeviceInfoScreen extends ConsumerWidget {
@@ -20,8 +21,8 @@ class DeviceInfoScreen extends ConsumerWidget {
     final networkInfo = connectionState.networkInfo;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.deviceInfo),
+      appBar: GradientAppBar(
+        title: l10n.deviceInfo,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

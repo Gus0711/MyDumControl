@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mydumcontrol/l10n/app_localizations.dart';
+import 'package:myglobaldc/l10n/app_localizations.dart';
 import '../../../application/providers/active_connection_provider.dart';
 import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/favorites_provider.dart';
@@ -11,6 +11,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../widgets/skeleton_loading.dart';
+import '../../widgets/gradient_app_bar.dart';
 
 /// Écran principal - Menu de navigation vers les fonctionnalités
 class HomeScreen extends ConsumerStatefulWidget {
@@ -95,14 +96,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GradientAppBar(
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: Row(
+        titleWidget: Row(
           children: [
             Expanded(
               child: Text(
@@ -116,7 +117,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 ),
               ),
             // Affichage de l'heure de l'automate
@@ -261,7 +262,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final alarmsCount = ref.watch(alarmsCountProvider);
     final hasAlarms = alarmsCount > 0;
 
-    // Menu items - ordre: Favoris, Points, Horaires, Alarmes, Forçages, Synoptique, Paramètres, Informations
+    // Menu items - ordre: Favoris, Points, Dashboard, Horaires, Alarmes, Forçages, Synoptique, Informations
     final menuItems = [
       _MenuItem(
         icon: Icons.star,
@@ -276,6 +277,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: l10n.points,
         color: Colors.blue.shade700,
         route: Routes.points,
+      ),
+      _MenuItem(
+        icon: Icons.bar_chart,
+        title: 'Dashboard',
+        color: Colors.indigo.shade600,
+        route: Routes.dashboards,
       ),
       _MenuItem(
         icon: Icons.calendar_month,
@@ -305,12 +312,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: 'Synoptique',
         color: Colors.teal.shade600,
         route: Routes.synoptics,
-      ),
-      _MenuItem(
-        icon: Icons.settings,
-        title: l10n.settings,
-        color: Colors.blueGrey.shade500,
-        route: Routes.settings,
       ),
       _MenuItem(
         icon: Icons.info,
@@ -418,13 +419,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: const BoxDecoration(color: AppColors.primary),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF1A1A2E),
+                  Color(0xFF16213E),
+                  Color(0xFF0F3460),
+                ],
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                const Icon(Icons.settings_remote, size: 48, color: Colors.white),
-                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'assets/images/logov2_no_back.png',
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Text(
                   device?.objectName ?? connection?.name ?? 'ECLYPSE Controller',
                   style: const TextStyle(
@@ -435,7 +454,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 Text(
                   connection != null ? '${connection.host}:${connection.port}' : '',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
+                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
                 ),
               ],
             ),
@@ -443,13 +462,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           _buildDrawerItem(context, icon: Icons.home, title: l10n.home, route: Routes.home, isSelected: true),
           _buildDrawerItem(context, icon: Icons.star, title: 'Favoris', route: Routes.favorites),
           _buildDrawerItem(context, icon: Icons.list_alt, title: l10n.points, route: Routes.points),
+          _buildDrawerItem(context, icon: Icons.bar_chart, title: 'Dashboard', route: Routes.dashboards),
           _buildDrawerItem(context, icon: Icons.calendar_month, title: l10n.schedules, route: Routes.schedules),
           _buildDrawerItem(context, icon: Icons.notifications_active, title: l10n.alarms, route: Routes.alarms),
           _buildDrawerItem(context, icon: Icons.lock, title: l10n.overrides, route: Routes.overrides),
           _buildDrawerItem(context, icon: Icons.dashboard, title: 'Synoptique', route: Routes.synoptics),
           const Divider(),
-          _buildDrawerItem(context, icon: Icons.settings, title: l10n.settings, route: Routes.settings),
           _buildDrawerItem(context, icon: Icons.info_outline, title: l10n.deviceInfo, route: Routes.deviceInfo),
+          _buildDrawerItem(context, icon: Icons.settings, title: l10n.settings, route: Routes.settings),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),

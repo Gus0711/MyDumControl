@@ -110,6 +110,31 @@ class UnconfirmedService {
   static const int utcTimeSynchronization = 9;
 }
 
+/// Network Layer Message Types (quand NpduControl.networkLayerMessage est set)
+/// Ces messages sont utilisés pour la découverte et la gestion des routeurs BACnet
+class NetworkLayerMessageType {
+  static const int whoIsRouterToNetwork = 0x00;
+  static const int iAmRouterToNetwork = 0x01;
+  static const int iCouldBeRouterToNetwork = 0x02;
+  static const int rejectMessageToNetwork = 0x03;
+  static const int routerBusyToNetwork = 0x04;
+  static const int routerAvailableToNetwork = 0x05;
+  static const int initializeRoutingTable = 0x06;
+  static const int initializeRoutingTableAck = 0x07;
+  static const int establishConnectionToNetwork = 0x08;
+  static const int disconnectConnectionToNetwork = 0x09;
+  static const int challengeRequest = 0x0A;
+  static const int securityPayload = 0x0B;
+  static const int securityResponse = 0x0C;
+  static const int requestKeyUpdate = 0x0D;
+  static const int updateKeySet = 0x0E;
+  static const int updateDistributionKey = 0x0F;
+  static const int requestMasterKey = 0x10;
+  static const int setMasterKey = 0x11;
+  static const int whatIsNetworkNumber = 0x12;
+  static const int networkNumberIs = 0x13;
+}
+
 /// BACnet Object Types
 class BacnetObjectTypeCode {
   static const int analogInput = 0;

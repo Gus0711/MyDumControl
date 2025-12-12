@@ -9,6 +9,7 @@ import 'tables/favorite_folder_assignments_table.dart';
 import 'tables/cache_tables.dart';
 import 'tables/synoptics_table.dart';
 import 'tables/synoptic_bindings_table.dart';
+import 'tables/dashboard_tables.dart';
 
 part 'app_database.g.dart';
 
@@ -25,12 +26,14 @@ part 'app_database.g.dart';
   CachedObjectsSummary,
   Synoptics,
   SynopticBindings,
+  Dashboards,
+  DashboardWidgets,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -80,6 +83,11 @@ class AppDatabase extends _$AppDatabase {
           if (from < 10) {
             // Migration de v9 à v10 : ajout du modèle de l'automate
             await m.addColumn(connections, connections.modelName);
+          }
+          if (from < 11) {
+            // Migration de v10 à v11 : ajout des dashboards
+            await m.createTable(dashboards);
+            await m.createTable(dashboardWidgets);
           }
         },
       );
@@ -1128,5 +1136,181 @@ class AppDatabase extends _$AppDatabase {
   Future<List<String>> getPointRefsForSynoptic(int synopticId) async {
     final bindings = await getBindingsForSynoptic(synopticId);
     return bindings.map((b) => b.pointRef).toSet().toList();
+  }
+
+  // ==========================================================================
+  // === DASHBOARDS ===
+  // ==========================================================================
+
+  /// Récupère tous les dashboards pour une connexion
+  Future<List<Dashboard>> getDashboardsForConnection(int? connectionId) async {
+    final query = select(dashboards)
+      ..where((d) => connectionId != null
+          ? d.connectionId.equals(connectionId) | d.connectionId.isNull()
+          : d.connectionId.isNull())
+      ..orderBy([(d) => OrderingTerm.asc(d.sortOrder)]);
+    return query.get();
+  }
+
+  /// Stream des dashboards pour une connexion
+  Stream<List<Dashboard>> watchDashboardsForConnection(int? connectionId) {
+    final query = select(dashboards)
+      ..where((d) => connectionId != null
+          ? d.connectionId.equals(connectionId) | d.connectionId.isNull()
+          : d.connectionId.isNull())
+      ..orderBy([(d) => OrderingTerm.asc(d.sortOrder)]);
+    return query.watch();
+  }
+
+  /// Récupère un dashboard par son ID
+  Future<Dashboard?> getDashboardById(int id) {
+    return (select(dashboards)..where((d) => d.id.equals(id))).getSingleOrNull();
+  }
+
+  /// Stream d'un dashboard par ID
+  Stream<Dashboard?> watchDashboardById(int id) {
+    return (select(dashboards)..where((d) => d.id.equals(id))).watchSingleOrNull();
+  }
+
+  /// Crée un nouveau dashboard
+  Future<int> createDashboard({
+    required String name,
+    int? connectionId,
+    int columns = 2,
+    int rows = 2,
+  }) async {
+    // Calculer le prochain sortOrder
+    final existing = await getDashboardsForConnection(connectionId);
+    final nextOrder = existing.isEmpty ? 0 : existing.length;
+
+    return into(dashboards).insert(DashboardsCompanion(
+      name: Value(name),
+      connectionId: Value(connectionId),
+      columns: Value(columns),
+      rows: Value(rows),
+      sortOrder: Value(nextOrder),
+    ));
+  }
+
+  /// Met à jour un dashboard
+  Future<bool> updateDashboard({
+    required int id,
+    String? name,
+    int? columns,
+    int? rows,
+  }) async {
+    final updated = await (update(dashboards)..where((d) => d.id.equals(id))).write(
+      DashboardsCompanion(
+        name: name != null ? Value(name) : const Value.absent(),
+        columns: columns != null ? Value(columns) : const Value.absent(),
+        rows: rows != null ? Value(rows) : const Value.absent(),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+    return updated > 0;
+  }
+
+  /// Supprime un dashboard et tous ses widgets
+  Future<int> deleteDashboard(int id) async {
+    // Supprimer d'abord les widgets
+    await (delete(dashboardWidgets)..where((w) => w.dashboardId.equals(id))).go();
+    // Puis supprimer le dashboard
+    return (delete(dashboards)..where((d) => d.id.equals(id))).go();
+  }
+
+  /// Réorganise l'ordre des dashboards
+  Future<void> reorderDashboards(List<int> dashboardIds) async {
+    await transaction(() async {
+      for (int i = 0; i < dashboardIds.length; i++) {
+        await (update(dashboards)..where((d) => d.id.equals(dashboardIds[i]))).write(
+          DashboardsCompanion(sortOrder: Value(i)),
+        );
+      }
+    });
+  }
+
+  // ==========================================================================
+  // === DASHBOARD WIDGETS ===
+  // ==========================================================================
+
+  /// Récupère les widgets d'un dashboard
+  Future<List<DashboardWidget>> getDashboardWidgets(int dashboardId) {
+    return (select(dashboardWidgets)
+          ..where((w) => w.dashboardId.equals(dashboardId))
+          ..orderBy([(w) => OrderingTerm.asc(w.position)]))
+        .get();
+  }
+
+  /// Stream des widgets d'un dashboard
+  Stream<List<DashboardWidget>> watchDashboardWidgets(int dashboardId) {
+    return (select(dashboardWidgets)
+          ..where((w) => w.dashboardId.equals(dashboardId))
+          ..orderBy([(w) => OrderingTerm.asc(w.position)]))
+        .watch();
+  }
+
+  /// Ajoute un widget au dashboard
+  Future<int> addDashboardWidget({
+    required int dashboardId,
+    required int position,
+    required DashboardWidgetType widgetType,
+    String? configJson,
+  }) {
+    return into(dashboardWidgets).insert(DashboardWidgetsCompanion(
+      dashboardId: Value(dashboardId),
+      position: Value(position),
+      widgetType: Value(widgetType),
+      configJson: Value(configJson),
+    ));
+  }
+
+  /// Met à jour un widget
+  Future<bool> updateDashboardWidget({
+    required int widgetId,
+    DashboardWidgetType? widgetType,
+    String? configJson,
+    int? position,
+  }) async {
+    final updated = await (update(dashboardWidgets)..where((w) => w.id.equals(widgetId))).write(
+      DashboardWidgetsCompanion(
+        widgetType: widgetType != null ? Value(widgetType) : const Value.absent(),
+        configJson: configJson != null ? Value(configJson) : const Value.absent(),
+        position: position != null ? Value(position) : const Value.absent(),
+      ),
+    );
+    return updated > 0;
+  }
+
+  /// Supprime un widget
+  Future<int> deleteDashboardWidget(int widgetId) {
+    return (delete(dashboardWidgets)..where((w) => w.id.equals(widgetId))).go();
+  }
+
+  /// Supprime un widget par position (utile pour vider un slot)
+  Future<int> deleteDashboardWidgetByPosition(int dashboardId, int position) {
+    return (delete(dashboardWidgets)
+          ..where((w) => w.dashboardId.equals(dashboardId) & w.position.equals(position)))
+        .go();
+  }
+
+  /// Réorganise les widgets dans le dashboard
+  Future<void> reorderDashboardWidgets(int dashboardId, Map<int, int> widgetPositions) async {
+    await transaction(() async {
+      for (final entry in widgetPositions.entries) {
+        await (update(dashboardWidgets)..where((w) => w.id.equals(entry.key))).write(
+          DashboardWidgetsCompanion(position: Value(entry.value)),
+        );
+      }
+    });
+  }
+
+  /// Compte les widgets d'un dashboard
+  Future<int> countDashboardWidgets(int dashboardId) async {
+    final count = dashboardWidgets.id.count();
+    final query = selectOnly(dashboardWidgets)
+      ..addColumns([count])
+      ..where(dashboardWidgets.dashboardId.equals(dashboardId));
+    final result = await query.getSingle();
+    return result.read(count) ?? 0;
   }
 }

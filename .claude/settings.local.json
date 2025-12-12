@@ -34,7 +34,16 @@
       "mcp__context7__get-library-docs",
       "WebSearch",
       "WebFetch(domain:pub.dev)",
-      "Bash(del \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\A_lire_avant_reprise.md\")"
+      "Bash(del \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\A_lire_avant_reprise.md\")",
+      "Bash(tree:*)",
+      "Bash(npm create:*)",
+      "Bash(npx astro:*)",
+      "Bash(copy \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\assets\\images\\logo.png\" \"C:\\Users\\augus\\Documents\\GitHub\\press_mydumcontrol\\public\\images\\logo.png\")",
+      "Bash(copy \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\images_model\\*.jpg\" \"C:\\Users\\augus\\Documents\\GitHub\\press_mydumcontrol\\public\\mockups\"\")",
+      "Bash(npm run build:*)",
+      "Bash(dart run:*)",
+      "Bash(grep:*)",
+      "Bash(if not exist \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\docs\\features\" mkdir \"C:\\Users\\augus\\Documents\\GitHub\\MyDumControl\\docs\\features\")"
     ],
     "deny": [],
     "ask": []

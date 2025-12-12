@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// Titre de l'application
   ///
   /// In fr, this message translates to:
-  /// **'MyDumControl'**
+  /// **'MyGlobalDC'**
   String get appTitle;
 
   /// Titre de la page des connexions
@@ -1184,6 +1184,36 @@ abstract class AppLocalizations {
   /// **'Inactif'**
   String get inactive;
 
+  /// No description provided for @editDescription.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modifier la description'**
+  String get editDescription;
+
+  /// No description provided for @descriptionHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Entrez une description...'**
+  String get descriptionHint;
+
+  /// No description provided for @descriptionUpdated.
+  ///
+  /// In fr, this message translates to:
+  /// **'Description mise à jour'**
+  String get descriptionUpdated;
+
+  /// No description provided for @descriptionUpdateError.
+  ///
+  /// In fr, this message translates to:
+  /// **'Erreur lors de la mise à jour'**
+  String get descriptionUpdateError;
+
+  /// No description provided for @noDescription.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune description'**
+  String get noDescription;
+
   /// No description provided for @loadingEllipsis.
   ///
   /// In fr, this message translates to:
@@ -2005,6 +2035,336 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Scanner plage IP (ECLYPSE)'**
   String get useIpScan;
+
+  /// No description provided for @dashboards.
+  ///
+  /// In fr, this message translates to:
+  /// **'Dashboards'**
+  String get dashboards;
+
+  /// No description provided for @dashboard.
+  ///
+  /// In fr, this message translates to:
+  /// **'Dashboard'**
+  String get dashboard;
+
+  /// No description provided for @noDashboard.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun dashboard'**
+  String get noDashboard;
+
+  /// No description provided for @createDashboardHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Créez des dashboards pour visualiser\nvos graphiques et courbes d\'historique'**
+  String get createDashboardHint;
+
+  /// No description provided for @createDashboard.
+  ///
+  /// In fr, this message translates to:
+  /// **'Créer un dashboard'**
+  String get createDashboard;
+
+  /// No description provided for @newDashboard.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nouveau dashboard'**
+  String get newDashboard;
+
+  /// No description provided for @editDashboard.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modifier le dashboard'**
+  String get editDashboard;
+
+  /// No description provided for @deleteDashboard.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer le dashboard'**
+  String get deleteDashboard;
+
+  /// No description provided for @dashboardName.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nom du dashboard'**
+  String get dashboardName;
+
+  /// No description provided for @dashboardNameRequired.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le nom est requis'**
+  String get dashboardNameRequired;
+
+  /// No description provided for @deleteDashboardConfirm.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer ce dashboard ?'**
+  String get deleteDashboardConfirm;
+
+  /// No description provided for @deleteDashboardMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le dashboard \"{name}\" et tous ses widgets seront supprimés.'**
+  String deleteDashboardMessage(Object name);
+
+  /// No description provided for @dashboardDeleted.
+  ///
+  /// In fr, this message translates to:
+  /// **'Dashboard supprimé'**
+  String get dashboardDeleted;
+
+  /// No description provided for @widgets.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} widget(s)'**
+  String widgets(Object count);
+
+  /// No description provided for @addWidget.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ajouter un widget'**
+  String get addWidget;
+
+  /// No description provided for @configureWidget.
+  ///
+  /// In fr, this message translates to:
+  /// **'Configurer le widget'**
+  String get configureWidget;
+
+  /// No description provided for @deleteWidget.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer le widget'**
+  String get deleteWidget;
+
+  /// No description provided for @widgetDeleted.
+  ///
+  /// In fr, this message translates to:
+  /// **'Widget supprimé'**
+  String get widgetDeleted;
+
+  /// No description provided for @singleChart.
+  ///
+  /// In fr, this message translates to:
+  /// **'Graphique simple'**
+  String get singleChart;
+
+  /// No description provided for @singleChartDescription.
+  ///
+  /// In fr, this message translates to:
+  /// **'Affiche l\'historique d\'un seul point'**
+  String get singleChartDescription;
+
+  /// No description provided for @multiCurveChart.
+  ///
+  /// In fr, this message translates to:
+  /// **'Multi-courbes'**
+  String get multiCurveChart;
+
+  /// No description provided for @multiCurveChartDescription.
+  ///
+  /// In fr, this message translates to:
+  /// **'Compare plusieurs points sur un même graphique'**
+  String get multiCurveChartDescription;
+
+  /// No description provided for @statsCard.
+  ///
+  /// In fr, this message translates to:
+  /// **'Statistiques'**
+  String get statsCard;
+
+  /// No description provided for @statsCardDescription.
+  ///
+  /// In fr, this message translates to:
+  /// **'Affiche min, max et moyenne d\'un point'**
+  String get statsCardDescription;
+
+  /// No description provided for @selectTrendLog.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sélectionnez un trend log'**
+  String get selectTrendLog;
+
+  /// No description provided for @noTrendLogSelected.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun trend log sélectionné'**
+  String get noTrendLogSelected;
+
+  /// No description provided for @selectTrendLogs.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sélectionnez les trend logs'**
+  String get selectTrendLogs;
+
+  /// No description provided for @selectedTrendLogs.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} trend log(s) sélectionné(s)'**
+  String selectedTrendLogs(Object count);
+
+  /// No description provided for @minCurvesRequired.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sélectionnez au moins 2 trend logs'**
+  String get minCurvesRequired;
+
+  /// No description provided for @maxCurvesReached.
+  ///
+  /// In fr, this message translates to:
+  /// **'Maximum 8 courbes autorisées'**
+  String get maxCurvesReached;
+
+  /// No description provided for @showMin.
+  ///
+  /// In fr, this message translates to:
+  /// **'Afficher minimum'**
+  String get showMin;
+
+  /// No description provided for @showMax.
+  ///
+  /// In fr, this message translates to:
+  /// **'Afficher maximum'**
+  String get showMax;
+
+  /// No description provided for @showAvg.
+  ///
+  /// In fr, this message translates to:
+  /// **'Afficher moyenne'**
+  String get showAvg;
+
+  /// No description provided for @curveVisibility.
+  ///
+  /// In fr, this message translates to:
+  /// **'Visibilité des courbes'**
+  String get curveVisibility;
+
+  /// No description provided for @periodDay.
+  ///
+  /// In fr, this message translates to:
+  /// **'Jour'**
+  String get periodDay;
+
+  /// No description provided for @periodWeek.
+  ///
+  /// In fr, this message translates to:
+  /// **'Semaine'**
+  String get periodWeek;
+
+  /// No description provided for @periodMonth.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mois'**
+  String get periodMonth;
+
+  /// No description provided for @periodYear.
+  ///
+  /// In fr, this message translates to:
+  /// **'Année'**
+  String get periodYear;
+
+  /// No description provided for @networkInterface.
+  ///
+  /// In fr, this message translates to:
+  /// **'Interface réseau'**
+  String get networkInterface;
+
+  /// No description provided for @allInterfaces.
+  ///
+  /// In fr, this message translates to:
+  /// **'Toutes les interfaces'**
+  String get allInterfaces;
+
+  /// No description provided for @searchingBacnetDevices.
+  ///
+  /// In fr, this message translates to:
+  /// **'Recherche des appareils BACnet...'**
+  String get searchingBacnetDevices;
+
+  /// No description provided for @deviceIdConflict.
+  ///
+  /// In fr, this message translates to:
+  /// **'Conflit Device ID'**
+  String get deviceIdConflict;
+
+  /// No description provided for @deviceIdConflictMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Plusieurs appareils partagent le même Device ID BACnet. Ceci est interdit par le protocole et peut causer des dysfonctionnements.'**
+  String get deviceIdConflictMessage;
+
+  /// No description provided for @conflictingAddresses.
+  ///
+  /// In fr, this message translates to:
+  /// **'Adresses IP en conflit :'**
+  String get conflictingAddresses;
+
+  /// No description provided for @conflictRecommendation.
+  ///
+  /// In fr, this message translates to:
+  /// **'Action recommandée : Reconfigurer les appareils pour avoir des Device ID uniques.'**
+  String get conflictRecommendation;
+
+  /// No description provided for @understood.
+  ///
+  /// In fr, this message translates to:
+  /// **'Compris'**
+  String get understood;
+
+  /// No description provided for @idConflict.
+  ///
+  /// In fr, this message translates to:
+  /// **'ID conflit'**
+  String get idConflict;
+
+  /// No description provided for @alsoAt.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aussi à'**
+  String get alsoAt;
+
+  /// No description provided for @conflicts.
+  ///
+  /// In fr, this message translates to:
+  /// **'conflit(s)'**
+  String get conflicts;
+
+  /// No description provided for @bacnetPortWarning.
+  ///
+  /// In fr, this message translates to:
+  /// **'Port {actualPort} utilisé (standard: {standardPort})'**
+  String bacnetPortWarning(int actualPort, int standardPort);
+
+  /// No description provided for @bacnetPortConflict.
+  ///
+  /// In fr, this message translates to:
+  /// **'Conflit de port BACnet'**
+  String get bacnetPortConflict;
+
+  /// No description provided for @bacnetPortConflictDetail.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le port standard BACnet ({standardPort}) est déjà utilisé par une autre application. L\'application utilise le port {actualPort} à la place.'**
+  String bacnetPortConflictDetail(int standardPort, int actualPort);
+
+  /// No description provided for @bacnetPortConflictSolution.
+  ///
+  /// In fr, this message translates to:
+  /// **'Solutions :'**
+  String get bacnetPortConflictSolution;
+
+  /// No description provided for @bacnetPortSolution1.
+  ///
+  /// In fr, this message translates to:
+  /// **'Fermez YABE ou autres applications BACnet'**
+  String get bacnetPortSolution1;
+
+  /// No description provided for @bacnetPortSolution2.
+  ///
+  /// In fr, this message translates to:
+  /// **'Relancez cette application'**
+  String get bacnetPortSolution2;
 }
 
 class _AppLocalizationsDelegate

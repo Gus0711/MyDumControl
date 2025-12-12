@@ -196,6 +196,11 @@ class BacnetObject {
   /// Identifiant unique de l'objet
   String get objectId => '${type.shortName}:$instance';
 
+  /// Nom d'affichage : description si non vide, sinon objectName
+  /// Permet à l'utilisateur de personnaliser l'affichage sans impacter l'intégrateur
+  String get displayName =>
+      (description != null && description!.isNotEmpty) ? description! : objectName;
+
   /// Valeur formatée pour l'affichage
   String get formattedValue {
     if (presentValue == null) return '-';

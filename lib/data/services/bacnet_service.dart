@@ -7,6 +7,7 @@ import 'bacnet/bacnet_constants.dart';
 import 'bacnet/bacnet_encoder.dart';
 import 'bacnet/bacnet_decoder.dart';
 import '../../domain/models/bacnet_object.dart';
+import '../../domain/models/network_interface_choice.dart';
 
 // Re-export pour usage externe
 export 'bacnet/bacnet_encoder.dart' show ReadRangeType, BacnetTimeValue, BacnetDailySchedule, BacnetWeeklySchedule, ScheduleValueTag;
@@ -43,14 +44,40 @@ class BacnetService {
   bool _isInitialized = false;
   bool _isInitializing = false; // Protection contre les initialisations concurrentes
 
+  // Multi-homing : interface réseau sélectionnée
+  NetworkInterfaceChoice? _boundInterface;
+
+  // Détection conflits Device ID
+  final Map<int, IAmInfo> _seenDevices = {};
+  final _conflictController = StreamController<DeviceIdConflict>.broadcast();
+
+  // Info port BACnet
+  static const int standardBacnetPort = 47808;
+  bool _isUsingStandardPort = false;
+  int? _actualPort;
+
   BacnetService({
     Duration timeout = const Duration(seconds: 5),
   }) : _timeout = timeout;
 
+  /// Interface réseau actuellement utilisée (null = toutes)
+  NetworkInterfaceChoice? get boundInterface => _boundInterface;
+
+  /// Stream des conflits Device ID détectés
+  Stream<DeviceIdConflict> get conflictStream => _conflictController.stream;
+
+  /// Indique si le service utilise le port BACnet standard (47808)
+  /// Si false, certains devices peuvent ne pas répondre
+  bool get isUsingStandardPort => _isUsingStandardPort;
+
+  /// Port UDP actuellement utilisé (null si pas initialisé)
+  int? get actualPort => _actualPort;
+
   /// Initialise le socket UDP
   /// Utilise le port 47808 (BACnet standard) comme port source pour la découverte
   /// Certains devices ne répondent qu'aux requêtes venant de ce port
-  Future<void> init() async {
+  /// [bindInterface] : Si spécifié, bind uniquement sur cette interface réseau
+  Future<void> init({NetworkInterfaceChoice? bindInterface}) async {
     if (_isInitialized) return;
 
     // Protection contre les appels concurrents
@@ -63,19 +90,30 @@ class BacnetService {
     }
     _isInitializing = true;
 
+    // Déterminer l'adresse de bind
+    final bindAddress = bindInterface != null
+        ? InternetAddress(bindInterface.address)
+        : InternetAddress.anyIPv4;
+
     // Essayer d'abord le port BACnet standard 47808 (meilleure compatibilité)
     // Si déjà utilisé, fallback sur un port dynamique
     try {
       _socket = await RawDatagramSocket.bind(
-        InternetAddress.anyIPv4,
-        47808,
+        bindAddress,
+        standardBacnetPort,
         reuseAddress: true,
       );
-      _logger.i('BACnet service bound to port 47808 (standard BACnet port)');
+      _boundInterface = bindInterface;
+      _isUsingStandardPort = true;
+      _actualPort = standardBacnetPort;
+      _logger.i('BACnet service bound to ${bindInterface?.address ?? "0.0.0.0"}:$standardBacnetPort');
     } catch (e) {
-      _logger.w('Could not bind to port 47808: $e. Using dynamic port.');
-      _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
-      _logger.d('BACnet service bound to dynamic port ${_socket!.port}');
+      _logger.w('Could not bind to port $standardBacnetPort: $e. Using dynamic port.');
+      _socket = await RawDatagramSocket.bind(bindAddress, 0);
+      _boundInterface = bindInterface;
+      _isUsingStandardPort = false;
+      _actualPort = _socket!.port;
+      _logger.w('BACnet service using non-standard port ${_socket!.port} - some devices may not respond');
     }
 
     _socket!.broadcastEnabled = true; // Activer le broadcast pour Who-Is
@@ -95,17 +133,52 @@ class BacnetService {
     _logger.i('BACnet service initialized on port ${_socket!.port}, broadcast enabled');
   }
 
+  /// Réinitialise le service sur une nouvelle interface réseau
+  /// Note: Ne ferme pas les StreamControllers pour permettre aux listeners de continuer
+  Future<void> rebindToInterface(NetworkInterfaceChoice? newInterface) async {
+    _logger.i('Rebinding BACnet service to ${newInterface?.address ?? "all interfaces"}');
+
+    // Fermer seulement le socket, pas les controllers
+    _socket?.close();
+    _socket = null;
+    _isInitialized = false;
+    _isInitializing = false;
+    _boundInterface = null;
+    _isUsingStandardPort = false;
+    _actualPort = null;
+    _pendingRequests.clear();
+    // Ne pas fermer _iAmController et _conflictController !
+
+    await init(bindInterface: newInterface);
+  }
+
   /// Ferme le socket et libère les ressources
   void dispose() {
     _socket?.close();
     _socket = null;
     _isInitialized = false;
     _isInitializing = false;
+    _boundInterface = null;
+    _isUsingStandardPort = false;
+    _actualPort = null;
     _pendingRequests.clear();
+    _seenDevices.clear();
     if (!_iAmController.isClosed) {
       _iAmController.close();
     }
+    if (!_routerController.isClosed) {
+      _routerController.close();
+    }
+    if (!_conflictController.isClosed) {
+      _conflictController.close();
+    }
     _logger.d('BACnet service disposed');
+  }
+
+  /// Réinitialise le cache des devices vus (avant une nouvelle découverte)
+  void clearSeenDevices() {
+    _seenDevices.clear();
+    _logger.d('Cleared seen devices cache');
   }
 
   /// Vérifie que le service est initialisé
@@ -148,6 +221,15 @@ class BacnetService {
       return; // Ignorer silencieusement les messages de gestion BVLC
     }
 
+    // Vérifier si c'est un Network Layer Message (I-Am-Router-To-Network)
+    if (datagram.data.length >= 7) {
+      final npduControl = datagram.data[5];
+      if ((npduControl & NpduControl.networkLayerMessage) != 0) {
+        _handleNetworkLayerMessage(datagram.data, datagram.address);
+        return;
+      }
+    }
+
     try {
       final response = BacnetDecoder.decode(datagram.data);
 
@@ -182,17 +264,88 @@ class BacnetService {
     }
   }
 
+  /// Gère les Network Layer Messages (I-Am-Router-To-Network, etc.)
+  void _handleNetworkLayerMessage(Uint8List data, InternetAddress address) {
+    // BVLC (4 bytes) + NPDU Version (1) + Control (1) + Message Type (1)
+    if (data.length < 7) return;
+
+    final messageType = data[6];
+
+    // I-Am-Router-To-Network (0x01)
+    if (messageType == NetworkLayerMessageType.iAmRouterToNetwork) {
+      // Parse les numéros de réseau (2 bytes chacun)
+      final networks = <int>[];
+      int offset = 7;
+      while (offset + 1 < data.length) {
+        final networkNumber = (data[offset] << 8) | data[offset + 1];
+        networks.add(networkNumber);
+        offset += 2;
+      }
+
+      if (networks.isNotEmpty && !_routerController.isClosed) {
+        _logger.i('I-Am-Router-To-Network from ${address.address}: networks=$networks');
+        _routerController.add(RouterInfo(
+          address: address,
+          networks: networks,
+        ));
+      }
+    }
+  }
+
   /// Gère les messages I-Am (pour la découverte)
   final _iAmController = StreamController<IAmInfo>.broadcast();
   Stream<IAmInfo> get iAmStream => _iAmController.stream;
 
+  /// Gère les messages I-Am-Router-To-Network
+  final _routerController = StreamController<RouterInfo>.broadcast();
+  Stream<RouterInfo> get routerStream => _routerController.stream;
+
   void _handleIAm(BacnetResponse response, InternetAddress address) {
-    if (response.objectInstance != null && !_iAmController.isClosed) {
-      _iAmController.add(IAmInfo(
-        address: address,
-        deviceId: response.objectInstance!,
-      ));
+    if (response.objectInstance == null) return;
+    if (_iAmController.isClosed) {
+      _logger.w('_handleIAm: iAmController is CLOSED! Cannot emit device ${response.objectInstance}');
+      return;
     }
+
+    final deviceId = response.objectInstance!;
+    final existingDevice = _seenDevices[deviceId];
+
+    if (existingDevice != null) {
+      // Device ID déjà vu
+      if (existingDevice.address.address != address.address) {
+        // CONFLIT : Même deviceId, adresse IP différente
+        _logger.w('CONFLIT Device ID $deviceId: '
+            '${existingDevice.address.address} ET ${address.address}');
+
+        // Mettre à jour le device existant avec le conflit
+        final updatedDevice = existingDevice.withConflict(address);
+        _seenDevices[deviceId] = updatedDevice;
+
+        // Émettre l'alerte de conflit
+        if (!_conflictController.isClosed) {
+          _conflictController.add(DeviceIdConflict(
+            deviceId: deviceId,
+            firstAddress: existingDevice.address,
+            secondAddress: address,
+            allAddresses: [existingDevice.address, ...updatedDevice.conflictingAddresses],
+          ));
+        }
+
+        // Émettre aussi sur iAmStream pour mise à jour UI
+        _iAmController.add(updatedDevice);
+      }
+      // Même adresse, même deviceId = juste un duplicate I-Am, ignorer
+      return;
+    }
+
+    // Nouveau device
+    final newDevice = IAmInfo(
+      address: address,
+      deviceId: deviceId,
+    );
+    _seenDevices[deviceId] = newDevice;
+    _logger.d('_handleIAm: Emitting new device $deviceId to iAmStream');
+    _iAmController.add(newDevice);
   }
 
   /// Envoie un paquet et attend la réponse
@@ -392,18 +545,44 @@ class BacnetService {
 
   /// Découverte broadcast sur le réseau local
   /// Envoie Who-Is à toutes les adresses de broadcast détectées
+  /// Amélioration:
+  /// - Envois multiples avec délais pour maximiser les réponses
+  /// - Découverte des routeurs BACnet et envoi Who-Is aux réseaux distants
+  /// - Détection des conflits de Device ID
   Future<List<IAmInfo>> discoverLocalDevices({
     int port = 47808,
-    Duration timeout = const Duration(seconds: 3),
+    Duration timeout = const Duration(seconds: 5),
+    int sendCount = 3, // Nombre d'envois Who-Is
+    Duration sendInterval = const Duration(milliseconds: 800), // Délai entre envois
   }) async {
     await init();
 
+    // Réinitialiser le cache des devices vus pour la détection de conflits
+    clearSeenDevices();
+
     final devices = <IAmInfo>[];
-    final subscription = iAmStream.listen((device) {
-      // Éviter les doublons
-      if (!devices.any((d) => d.deviceId == device.deviceId)) {
+    final discoveredNetworks = <int>{};
+
+    final deviceSubscription = iAmStream.listen((device) {
+      // Mettre à jour ou ajouter le device (supporte les mises à jour avec conflits)
+      final existingIndex = devices.indexWhere((d) => d.deviceId == device.deviceId);
+      if (existingIndex != -1) {
+        // Remplacer par la version mise à jour (avec conflits éventuels)
+        devices[existingIndex] = device;
+        _logger.d('Updated device ${device.deviceId} (conflicts: ${device.hasConflict})');
+      } else {
         devices.add(device);
         _logger.i('Discovered device ${device.deviceId} at ${device.address.address}');
+      }
+    });
+
+    final routerSubscription = routerStream.listen((router) {
+      // Collecter les réseaux découverts via les routeurs
+      for (final network in router.networks) {
+        if (!discoveredNetworks.contains(network)) {
+          discoveredNetworks.add(network);
+          _logger.i('Discovered BACnet network $network via router ${router.address.address}');
+        }
       }
     });
 
@@ -412,27 +591,91 @@ class BacnetService {
       final broadcastAddresses = await _getLocalBroadcastAddresses();
       _logger.i('Broadcast addresses: $broadcastAddresses');
 
-      // Construire le paquet Who-Is broadcast
-      final packet = BacnetEncoder.encodeWhoIsRequest(broadcast: true);
+      // === PHASE 1: Découverte des routeurs BACnet ===
+      _logger.i('Phase 1: Discovering BACnet routers...');
+      final whoIsRouterPacket = BacnetEncoder.encodeWhoIsRouterToNetwork();
 
-      // Envoyer sur toutes les interfaces
       for (final broadcastAddr in broadcastAddresses) {
         try {
           final address = InternetAddress(broadcastAddr);
-          _socket!.send(packet, address, port);
-          _logger.d('Who-Is broadcast sent to $broadcastAddr:$port');
+          _socket!.send(whoIsRouterPacket, address, port);
         } catch (e) {
-          _logger.w('Failed to send to $broadcastAddr: $e');
+          // Ignorer les erreurs
+        }
+      }
+      try {
+        final globalBroadcast = InternetAddress('255.255.255.255');
+        _socket!.send(whoIsRouterPacket, globalBroadcast, port);
+      } catch (e) {
+        // Ignorer
+      }
+
+      // Attendre les réponses des routeurs
+      await Future.delayed(const Duration(milliseconds: 500));
+      _logger.i('Found ${discoveredNetworks.length} remote BACnet networks: $discoveredNetworks');
+
+      // === PHASE 2: Who-Is broadcasts locaux ===
+      _logger.i('Phase 2: Local Who-Is broadcasts...');
+
+      // Construire les paquets Who-Is
+      final packetGlobal = BacnetEncoder.encodeWhoIsRequest(broadcast: true);
+      final packetWithRange = BacnetEncoder.encodeWhoIsRequest(
+        broadcast: true,
+        lowLimit: 0,
+        highLimit: 4194303, // Max device ID BACnet
+      );
+
+      // Envoyer plusieurs fois avec délai
+      for (int i = 0; i < sendCount; i++) {
+        if (i > 0) {
+          await Future.delayed(sendInterval);
+        }
+
+        _logger.d('Who-Is broadcast round ${i + 1}/$sendCount');
+
+        final packet = (i % 2 == 0) ? packetGlobal : packetWithRange;
+
+        for (final broadcastAddr in broadcastAddresses) {
+          try {
+            final address = InternetAddress(broadcastAddr);
+            _socket!.send(packet, address, port);
+          } catch (e) {
+            _logger.w('Failed to send to $broadcastAddr: $e');
+          }
+        }
+
+        try {
+          final globalBroadcast = InternetAddress('255.255.255.255');
+          _socket!.send(packet, globalBroadcast, port);
+        } catch (e) {
+          _logger.w('Failed to send global broadcast: $e');
         }
       }
 
-      // Aussi envoyer sur 255.255.255.255 (global broadcast)
-      try {
-        final globalBroadcast = InternetAddress('255.255.255.255');
-        _socket!.send(packet, globalBroadcast, port);
-        _logger.d('Who-Is global broadcast sent to 255.255.255.255:$port');
-      } catch (e) {
-        _logger.w('Failed to send global broadcast: $e');
+      // === PHASE 3: Who-Is vers les réseaux distants découverts ===
+      if (discoveredNetworks.isNotEmpty) {
+        _logger.i('Phase 3: Who-Is to ${discoveredNetworks.length} remote networks...');
+
+        for (final networkNumber in discoveredNetworks) {
+          final networkWhoIs = BacnetEncoder.encodeWhoIsToNetwork(
+            destinationNetwork: networkNumber,
+            lowLimit: 0,
+            highLimit: 4194303,
+          );
+
+          for (final broadcastAddr in broadcastAddresses) {
+            try {
+              final address = InternetAddress(broadcastAddr);
+              _socket!.send(networkWhoIs, address, port);
+              _logger.d('Who-Is sent to network $networkNumber via $broadcastAddr');
+            } catch (e) {
+              // Ignorer
+            }
+          }
+
+          // Petit délai entre chaque réseau
+          await Future.delayed(const Duration(milliseconds: 200));
+        }
       }
 
       // Attendre les réponses
@@ -441,7 +684,8 @@ class BacnetService {
       _logger.i('Discovery completed: ${devices.length} devices found');
       return devices;
     } finally {
-      await subscription.cancel();
+      await deviceSubscription.cancel();
+      await routerSubscription.cancel();
     }
   }
 
@@ -532,8 +776,17 @@ class BacnetService {
     }
   }
 
-  /// Récupère les adresses de broadcast de toutes les interfaces réseau
+  /// Récupère les adresses de broadcast
+  /// Si une interface est sélectionnée, utilise uniquement son broadcast
+  /// Sinon, retourne les broadcasts de toutes les interfaces
   Future<List<String>> _getLocalBroadcastAddresses() async {
+    // Si une interface spécifique est sélectionnée, utiliser uniquement son broadcast
+    if (_boundInterface != null) {
+      _logger.d('Using bound interface broadcast: ${_boundInterface!.broadcastAddress}');
+      return [_boundInterface!.broadcastAddress];
+    }
+
+    // Sinon, scanner toutes les interfaces
     final broadcastAddresses = <String>[];
 
     try {
@@ -2103,8 +2356,58 @@ class _ObjectInfo {
 class IAmInfo {
   final InternetAddress address;
   final int deviceId;
+  final int? networkNumber; // Réseau BACnet d'origine (si routé)
 
-  IAmInfo({required this.address, required this.deviceId});
+  /// Liste des autres adresses ayant répondu avec le même deviceId (conflits)
+  final List<InternetAddress> conflictingAddresses;
+
+  /// Indique s'il y a un conflit de Device ID
+  bool get hasConflict => conflictingAddresses.isNotEmpty;
+
+  IAmInfo({
+    required this.address,
+    required this.deviceId,
+    this.networkNumber,
+    this.conflictingAddresses = const [],
+  });
+
+  /// Crée une copie avec une adresse conflictuelle ajoutée
+  IAmInfo withConflict(InternetAddress conflictAddress) {
+    return IAmInfo(
+      address: address,
+      deviceId: deviceId,
+      networkNumber: networkNumber,
+      conflictingAddresses: [...conflictingAddresses, conflictAddress],
+    );
+  }
+}
+
+/// Représente un conflit de Device ID détecté
+class DeviceIdConflict {
+  final int deviceId;
+  final InternetAddress firstAddress;
+  final InternetAddress secondAddress;
+  final List<InternetAddress> allAddresses;
+  final DateTime detectedAt;
+
+  DeviceIdConflict({
+    required this.deviceId,
+    required this.firstAddress,
+    required this.secondAddress,
+    required this.allAddresses,
+  }) : detectedAt = DateTime.now();
+
+  @override
+  String toString() => 'DeviceIdConflict(id=$deviceId, '
+      'addresses=${allAddresses.map((a) => a.address).join(", ")})';
+}
+
+/// Info d'un routeur BACnet répondant à Who-Is-Router-To-Network
+class RouterInfo {
+  final InternetAddress address;
+  final List<int> networks; // Liste des réseaux BACnet accessibles via ce routeur
+
+  RouterInfo({required this.address, required this.networks});
 }
 
 /// Données rafraîchies d'un point BACnet

@@ -9,7 +9,7 @@ class AppLocalizationsFr extends AppLocalizations {
   AppLocalizationsFr([String locale = 'fr']) : super(locale);
 
   @override
-  String get appTitle => 'MyDumControl';
+  String get appTitle => 'MyGlobalDC';
 
   @override
   String get connections => 'Connexions';
@@ -581,6 +581,21 @@ class AppLocalizationsFr extends AppLocalizations {
   String get inactive => 'Inactif';
 
   @override
+  String get editDescription => 'Modifier la description';
+
+  @override
+  String get descriptionHint => 'Entrez une description...';
+
+  @override
+  String get descriptionUpdated => 'Description mise à jour';
+
+  @override
+  String get descriptionUpdateError => 'Erreur lors de la mise à jour';
+
+  @override
+  String get noDescription => 'Aucune description';
+
+  @override
   String get loadingEllipsis => 'Chargement...';
 
   @override
@@ -1052,4 +1067,183 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get useIpScan => 'Scanner plage IP (ECLYPSE)';
+
+  @override
+  String get dashboards => 'Dashboards';
+
+  @override
+  String get dashboard => 'Dashboard';
+
+  @override
+  String get noDashboard => 'Aucun dashboard';
+
+  @override
+  String get createDashboardHint =>
+      'Créez des dashboards pour visualiser\nvos graphiques et courbes d\'historique';
+
+  @override
+  String get createDashboard => 'Créer un dashboard';
+
+  @override
+  String get newDashboard => 'Nouveau dashboard';
+
+  @override
+  String get editDashboard => 'Modifier le dashboard';
+
+  @override
+  String get deleteDashboard => 'Supprimer le dashboard';
+
+  @override
+  String get dashboardName => 'Nom du dashboard';
+
+  @override
+  String get dashboardNameRequired => 'Le nom est requis';
+
+  @override
+  String get deleteDashboardConfirm => 'Supprimer ce dashboard ?';
+
+  @override
+  String deleteDashboardMessage(Object name) {
+    return 'Le dashboard \"$name\" et tous ses widgets seront supprimés.';
+  }
+
+  @override
+  String get dashboardDeleted => 'Dashboard supprimé';
+
+  @override
+  String widgets(Object count) {
+    return '$count widget(s)';
+  }
+
+  @override
+  String get addWidget => 'Ajouter un widget';
+
+  @override
+  String get configureWidget => 'Configurer le widget';
+
+  @override
+  String get deleteWidget => 'Supprimer le widget';
+
+  @override
+  String get widgetDeleted => 'Widget supprimé';
+
+  @override
+  String get singleChart => 'Graphique simple';
+
+  @override
+  String get singleChartDescription => 'Affiche l\'historique d\'un seul point';
+
+  @override
+  String get multiCurveChart => 'Multi-courbes';
+
+  @override
+  String get multiCurveChartDescription =>
+      'Compare plusieurs points sur un même graphique';
+
+  @override
+  String get statsCard => 'Statistiques';
+
+  @override
+  String get statsCardDescription => 'Affiche min, max et moyenne d\'un point';
+
+  @override
+  String get selectTrendLog => 'Sélectionnez un trend log';
+
+  @override
+  String get noTrendLogSelected => 'Aucun trend log sélectionné';
+
+  @override
+  String get selectTrendLogs => 'Sélectionnez les trend logs';
+
+  @override
+  String selectedTrendLogs(Object count) {
+    return '$count trend log(s) sélectionné(s)';
+  }
+
+  @override
+  String get minCurvesRequired => 'Sélectionnez au moins 2 trend logs';
+
+  @override
+  String get maxCurvesReached => 'Maximum 8 courbes autorisées';
+
+  @override
+  String get showMin => 'Afficher minimum';
+
+  @override
+  String get showMax => 'Afficher maximum';
+
+  @override
+  String get showAvg => 'Afficher moyenne';
+
+  @override
+  String get curveVisibility => 'Visibilité des courbes';
+
+  @override
+  String get periodDay => 'Jour';
+
+  @override
+  String get periodWeek => 'Semaine';
+
+  @override
+  String get periodMonth => 'Mois';
+
+  @override
+  String get periodYear => 'Année';
+
+  @override
+  String get networkInterface => 'Interface réseau';
+
+  @override
+  String get allInterfaces => 'Toutes les interfaces';
+
+  @override
+  String get searchingBacnetDevices => 'Recherche des appareils BACnet...';
+
+  @override
+  String get deviceIdConflict => 'Conflit Device ID';
+
+  @override
+  String get deviceIdConflictMessage =>
+      'Plusieurs appareils partagent le même Device ID BACnet. Ceci est interdit par le protocole et peut causer des dysfonctionnements.';
+
+  @override
+  String get conflictingAddresses => 'Adresses IP en conflit :';
+
+  @override
+  String get conflictRecommendation =>
+      'Action recommandée : Reconfigurer les appareils pour avoir des Device ID uniques.';
+
+  @override
+  String get understood => 'Compris';
+
+  @override
+  String get idConflict => 'ID conflit';
+
+  @override
+  String get alsoAt => 'Aussi à';
+
+  @override
+  String get conflicts => 'conflit(s)';
+
+  @override
+  String bacnetPortWarning(int actualPort, int standardPort) {
+    return 'Port $actualPort utilisé (standard: $standardPort)';
+  }
+
+  @override
+  String get bacnetPortConflict => 'Conflit de port BACnet';
+
+  @override
+  String bacnetPortConflictDetail(int standardPort, int actualPort) {
+    return 'Le port standard BACnet ($standardPort) est déjà utilisé par une autre application. L\'application utilise le port $actualPort à la place.';
+  }
+
+  @override
+  String get bacnetPortConflictSolution => 'Solutions :';
+
+  @override
+  String get bacnetPortSolution1 => 'Fermez YABE ou autres applications BACnet';
+
+  @override
+  String get bacnetPortSolution2 => 'Relancez cette application';
 }

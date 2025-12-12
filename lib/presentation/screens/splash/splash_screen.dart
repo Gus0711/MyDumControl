@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/routes.dart';
-import '../../../core/theme/app_colors.dart';
 
 /// Écran de démarrage de l'application
 class SplashScreen extends StatefulWidget {
@@ -11,19 +10,49 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+
   @override
   void initState() {
     super.initState();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+      ),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack),
+      ),
+    );
+
+    _animationController.forward();
     _initializeAndNavigate();
   }
 
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
   Future<void> _initializeAndNavigate() async {
-    // Simuler un temps de chargement pour les initialisations
     await Future.delayed(const Duration(seconds: 2));
 
     if (mounted) {
-      // Naviguer vers la liste des connexions
       context.go(Routes.connections);
     }
   }
@@ -31,52 +60,153 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF1A1A2E),
+              Color(0xFF16213E),
+              Color(0xFF0F3460),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: Stack(
           children: [
-            // Logo ou icône
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Icon(
-                Icons.settings_remote,
-                size: 64,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            // Nom de l'application
-            const Text(
-              'MyDumControl',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+            // Cercles décoratifs en arrière-plan
+            Positioned(
+              top: -100,
+              right: -100,
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF0F3460).withOpacity(0.3),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            // Sous-titre
-            Text(
-              'ECLYPSE Controller Management',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.white.withOpacity(0.8),
+            Positioned(
+              bottom: -150,
+              left: -100,
+              child: Container(
+                width: 400,
+                height: 400,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF1A1A2E).withOpacity(0.5),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 48),
-            // Indicateur de chargement
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                strokeWidth: 2,
+            // Contenu principal
+            Center(
+              child: AnimatedBuilder(
+                animation: _animationController,
+                builder: (context, child) {
+                  return FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: child,
+                    ),
+                  );
+                },
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo avec ombre
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF0F3460).withOpacity(0.5),
+                            blurRadius: 30,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: Image.asset(
+                          'assets/images/logov2_no_back.png',
+                          width: 140,
+                          height: 140,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Nom de l'application
+                    ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        colors: [
+                          Colors.white,
+                          Color(0xFFE0E0E0),
+                        ],
+                      ).createShader(bounds),
+                      child: const Text(
+                        'MyGlobalDC',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Sous-titre
+                    Text(
+                      'ECLYPSE Controller Management',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w300,
+                        color: Colors.white.withOpacity(0.7),
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 60),
+                    // Indicateur de chargement personnalisé
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.white.withOpacity(0.8),
+                        ),
+                        strokeWidth: 2,
+                        backgroundColor: Colors.white.withOpacity(0.1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Version en bas
+            Positioned(
+              bottom: 32,
+              left: 0,
+              right: 0,
+              child: Text(
+                'v1.0.0',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.3),
+                ),
               ),
             ),
           ],

@@ -98,7 +98,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(point.objectName),
+        title: Text(point.displayName),
         actions: [
           // Bouton favori
           FavoriteButton(point: point, size: 24),
@@ -171,7 +171,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           children: [
             TrendLogViewer(
               trendLogInstance: trendLogInstance,
-              pointName: point.objectName,
+              pointName: point.displayName,
               units: point.units,
             ),
             const SizedBox(height: 16),
@@ -1195,8 +1195,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
             ),
             const SizedBox(height: 16),
             _buildInfoRow(l10n.name, point.objectName),
-            if (point.description != null && point.description!.isNotEmpty)
-              _buildInfoRow(l10n.description, point.description!),
+            _buildDescriptionRow(context, point, l10n),
             _buildInfoRow(l10n.identifier, point.objectId),
             _buildInfoRow(l10n.type, point.type.displayName),
             _buildInfoRow(l10n.instance, point.instance.toString()),
@@ -1206,6 +1205,96 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildDescriptionRow(BuildContext context, BacnetObject point, AppLocalizations l10n) {
+    final hasDescription = point.description != null && point.description!.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              l10n.description,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              hasDescription ? point.description! : l10n.noDescription,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontStyle: hasDescription ? FontStyle.normal : FontStyle.italic,
+                color: hasDescription ? null : Colors.grey.shade500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () => _showEditDescriptionDialog(context, point, l10n),
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                Icons.edit,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEditDescriptionDialog(BuildContext context, BacnetObject point, AppLocalizations l10n) async {
+    final controller = TextEditingController(text: point.description ?? '');
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.editDescription),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: l10n.descriptionHint,
+            border: const OutlineInputBorder(),
+          ),
+          maxLines: 3,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: Text(l10n.save),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && mounted) {
+      final success = await ref.read(pointsProvider.notifier).writeDescription(point, result);
+
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(success ? l10n.descriptionUpdated : l10n.descriptionUpdateError),
+            backgroundColor: success ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildPropertiesCard(BuildContext context, BacnetObject point, AppLocalizations l10n) {

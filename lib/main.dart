@@ -7,12 +7,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Log de démarrage
-  logger.i('MyDumControl - Démarrage de l\'application');
+  logger.i('MyGlobalDC - Démarrage de l\'application');
 
   // Exécuter l'application avec Riverpod
   runApp(
     const ProviderScope(
-      child: MyDumControlApp(),
+      child: MyGlobalDCApp(),
     ),
   );
 }

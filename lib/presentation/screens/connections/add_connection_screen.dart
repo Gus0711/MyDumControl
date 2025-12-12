@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mydumcontrol/l10n/app_localizations.dart';
+import 'package:myglobaldc/l10n/app_localizations.dart';
 import '../../../application/providers/api_provider.dart';
 import '../../../application/providers/connection_providers.dart';
 import '../../../application/providers/bacnet_provider.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/router/routes.dart';
+import '../../widgets/gradient_app_bar.dart';
 
 /// Types de connexion supportes
 enum ConnectionType {
@@ -171,8 +172,8 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isEditing ? l10n.editConnection : l10n.addConnection),
+      appBar: GradientAppBar(
+        title: widget.isEditing ? l10n.editConnection : l10n.addConnection,
       ),
       body: Form(
         key: _formKey,
@@ -431,114 +432,144 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
   }
 
   Widget _buildDiscoverButton(AppLocalizations l10n) {
-    final theme = Theme.of(context);
-
     if (_connectionType == ConnectionType.distechApi) {
       // Bouton decouverte ECLYPSE
-      return Card(
-        color: theme.colorScheme.primaryContainer,
-        child: InkWell(
-          onTap: _openDiscoverEclypse,
+      return Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF1A1A2E),
+              Color(0xFF16213E),
+              Color(0xFF0F3460),
+            ],
+          ),
           borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _openDiscoverEclypse,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.wifi_find,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
-                  child: Icon(
-                    Icons.wifi_find,
-                    color: theme.colorScheme.primary,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.discoverEclypse,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer,
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.discoverEclypse,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.discoverEclypseSubtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer,
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.discoverEclypseSubtitle,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              ],
+                  Icon(
+                    Icons.chevron_right,
+                    color: Colors.white.withOpacity(0.7),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       );
     } else {
       // Bouton decouverte BACnet
-      return Card(
-        color: theme.colorScheme.primaryContainer,
-        child: InkWell(
-          onTap: _openDiscoverBacnet,
+      return Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF1A1A2E),
+              Color(0xFF16213E),
+              Color(0xFF0F3460),
+            ],
+          ),
           borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _openDiscoverBacnet,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.device_hub,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
-                  child: Icon(
-                    Icons.device_hub,
-                    color: theme.colorScheme.primary,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.discoverDevices,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer,
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.discoverDevices,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.broadcastDiscoverySubtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer,
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.broadcastDiscoverySubtitle,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              ],
+                  Icon(
+                    Icons.chevron_right,
+                    color: Colors.white.withOpacity(0.7),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

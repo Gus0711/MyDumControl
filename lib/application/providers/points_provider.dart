@@ -954,6 +954,73 @@ class PointsNotifier extends StateNotifier<PointsState> {
     }
   }
 
+  /// Modifie la description d'un point
+  Future<bool> writeDescription(BacnetObject point, String description) async {
+    final connectionState = _ref.read(activeConnectionProvider);
+    if (!connectionState.isConnected) {
+      return false;
+    }
+
+    // ========================================
+    // CONNEXION BACNET NATIVE
+    // ========================================
+    if (connectionState.isBacnetConnection) {
+      return _writeDescriptionBacnet(point, description);
+    }
+
+    // ========================================
+    // CONNEXION API DISTECH
+    // ========================================
+    if (connectionState.client == null) {
+      return false;
+    }
+
+    try {
+      final success = await connectionState.client!.writeDescription(
+        point.type,
+        point.instance,
+        description,
+      );
+
+      if (success) {
+        // Mettre à jour localement
+        _updatePointLocally(point, description: description);
+      }
+
+      return success;
+    } catch (e) {
+      _logger.e('writeDescription error: $e');
+      return false;
+    }
+  }
+
+  /// Écrit la description via BACnet natif
+  Future<bool> _writeDescriptionBacnet(BacnetObject point, String description) async {
+    final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
+    if (bacnetConnection == null) return false;
+
+    try {
+      final bacnetService = _ref.read(bacnetServiceProvider);
+      final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+
+      await bacnetService.writeProperty(
+        host: bacnetConnection.host,
+        port: bacnetConnection.port,
+        objectType: objectTypeCode,
+        objectInstance: point.instance,
+        propertyId: BacnetPropertyId.description,
+        value: description,
+      );
+
+      // Mettre à jour localement
+      _updatePointLocally(point, description: description);
+      return true;
+    } catch (e) {
+      _logger.e('_writeDescriptionBacnet error: $e');
+      return false;
+    }
+  }
+
   /// Convertit un BacnetObjectType en code numérique BACnet
   int _bacnetObjectTypeToCode(BacnetObjectType type) {
     switch (type) {
@@ -996,6 +1063,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
     int? overridePriority,
     dynamic overrideValue,
     bool? outOfService,
+    String? description,
   }) {
     final updatedPoints = state.points.map((p) {
       if (p.type == point.type && p.instance == point.instance) {
@@ -1005,6 +1073,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
           overridePriority: isOverridden == false ? null : (overridePriority ?? p.overridePriority),
           overrideValue: isOverridden == false ? null : (overrideValue ?? p.overrideValue),
           outOfService: outOfService ?? p.outOfService,
+          description: description ?? p.description,
         );
       }
       return p;

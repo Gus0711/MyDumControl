@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "mydumcontrol" "\0"
+            VALUE "FileDescription", "MyGlobalDC" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "mydumcontrol" "\0"
+            VALUE "InternalName", "myglobaldc" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "mydumcontrol.exe" "\0"
-            VALUE "ProductName", "mydumcontrol" "\0"
+            VALUE "OriginalFilename", "myglobaldc.exe" "\0"
+            VALUE "ProductName", "MyGlobalDC" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

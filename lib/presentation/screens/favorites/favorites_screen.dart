@@ -13,6 +13,7 @@ import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/favorite_button.dart';
 import '../../widgets/favorite_folder_dialog.dart';
 import '../../widgets/assign_folders_dialog.dart';
+import '../../widgets/gradient_app_bar.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Écran des favoris - affiche les points favoris organisés par dossiers
@@ -75,8 +76,8 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     final allFavoritesAsync = ref.watch(favoritesProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: _selectionMode
+      appBar: GradientAppBar(
+        titleWidget: _selectionMode
             ? Text(l10n.selectedCount(_selectedFavoriteIds.length))
             : Text(l10n.favorites),
         leading: _selectionMode

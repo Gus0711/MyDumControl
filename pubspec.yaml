@@ -1,4 +1,4 @@
-name: mydumcontrol
+name: myglobaldc
 description: "Application de gestion des automates ECLYPSE Distech Controls"
 publish_to: 'none'
 version: 1.0.0+1
@@ -86,19 +86,19 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/logo.png"
+  image_path: "assets/images/logov2_no_back.png"
   min_sdk_android: 21
   web:
     generate: true
-    image_path: "assets/images/logo.png"
+    image_path: "assets/images/logov2_no_back.png"
     background_color: "#F5F5F5"
     theme_color: "#1565C0"
   windows:
     generate: true
-    image_path: "assets/images/logo.png"
+    image_path: "assets/images/logov2_no_back.png"
   macos:
     generate: true
-    image_path: "assets/images/logo.png"
+    image_path: "assets/images/logov2_no_back.png"
   linux:
     generate: true
-    image_path: "assets/images/logo.png"
+    image_path: "assets/images/logov2_no_back.png"

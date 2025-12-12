@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=MyGlobalDC
+Comment=Gestion des automates ECLYPSE Distech Controls
+Exec=/opt/myglobaldc/myglobaldc
+Icon=/opt/myglobaldc/data/flutter_assets/assets/images/logov2_no_back.png
+Terminal=false
+Type=Application
+Categories=Utility;Network;

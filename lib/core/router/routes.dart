@@ -26,6 +26,10 @@ class Routes {
   static const String synopticView = '/synoptics/:id';
   static const String synopticEdit = '/synoptics/:id/edit';
 
+  // Routes des dashboards
+  static const String dashboards = '/dashboards';
+  static const String dashboardView = '/dashboards/:id';
+
   // Routes des paramètres et infos
   static const String settings = '/settings';
   static const String deviceInfo = '/device-info';
@@ -44,4 +48,7 @@ class Routes {
 
   /// Génère le chemin pour éditer les liaisons d'un synoptique
   static String synopticEditPath(int id) => '/synoptics/$id/edit';
+
+  /// Génère le chemin pour visualiser un dashboard
+  static String dashboardViewPath(int id) => '/dashboards/$id';
 }

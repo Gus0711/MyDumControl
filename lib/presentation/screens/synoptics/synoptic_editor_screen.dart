@@ -444,7 +444,8 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
       if (_searchQuery.isEmpty) return true;
       final query = _searchQuery.toLowerCase();
       return p.objectName.toLowerCase().contains(query) ||
-          p.objectId.toLowerCase().contains(query);
+          p.objectId.toLowerCase().contains(query) ||
+          (p.description?.toLowerCase().contains(query) ?? false);
     }).toList();
 
     return DraggableScrollableSheet(
@@ -735,7 +736,7 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                             selected: isSelected,
                             selectedTileColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                             title: Text(
-                              point.objectName,
+                              point.displayName,
                               overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(

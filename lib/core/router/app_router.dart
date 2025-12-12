@@ -19,6 +19,8 @@ import '../../presentation/screens/alarms/alarms_screen.dart';
 import '../../presentation/screens/synoptics/synoptics_list_screen.dart';
 import '../../presentation/screens/synoptics/synoptic_viewer_screen.dart';
 import '../../presentation/screens/synoptics/synoptic_editor_screen.dart';
+import '../../presentation/screens/dashboard/dashboard_list_screen.dart';
+import '../../presentation/screens/dashboard/dashboard_screen.dart';
 import '../../presentation/screens/settings/settings_screen.dart';
 
 /// Configuration du router de l'application
@@ -226,6 +228,33 @@ class AppRouter {
                 },
               ),
             ],
+          ),
+        ],
+      ),
+
+      // Dashboards
+      GoRoute(
+        path: Routes.dashboards,
+        name: 'dashboards',
+        pageBuilder: (context, state) => PageTransitions.slideTransition(
+          context: context,
+          state: state,
+          child: const DashboardListScreen(),
+        ),
+        routes: [
+          // Vue d'un dashboard
+          GoRoute(
+            path: ':id',
+            name: 'dashboardView',
+            pageBuilder: (context, state) {
+              final idStr = state.pathParameters['id']!;
+              final id = int.tryParse(idStr) ?? 0;
+              return PageTransitions.scaleTransition(
+                context: context,
+                state: state,
+                child: DashboardScreen(dashboardId: id),
+              );
+            },
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import '../../../application/providers/schedule_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/schedule.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/gradient_app_bar.dart';
 
 /// Écran de liste des schedules (plannings)
 class SchedulesListScreen extends ConsumerWidget {
@@ -16,8 +17,8 @@ class SchedulesListScreen extends ConsumerWidget {
     final schedulesAsync = ref.watch(schedulesListProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.plannings),
+      appBar: GradientAppBar(
+        title: l10n.plannings,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

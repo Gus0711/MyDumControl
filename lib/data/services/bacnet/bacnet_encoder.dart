@@ -86,6 +86,85 @@ class BacnetEncoder {
     );
   }
 
+  /// Encode un paquet Who-Is-Router-To-Network (Network Layer Message)
+  /// Utilisé pour découvrir les routeurs BACnet et les réseaux qu'ils desservent
+  /// [networkNumber] optionnel: si fourni, demande spécifiquement le routeur vers ce réseau
+  static Uint8List encodeWhoIsRouterToNetwork({int? networkNumber}) {
+    final builder = BytesBuilder();
+
+    // BVLC Header (broadcast)
+    builder.addByte(bvlcTypeBacnetIp); // 0x81
+    builder.addByte(BvlcFunction.originalBroadcastNpdu); // 0x0B
+    // Length placeholder - will be updated
+    builder.addByte(0x00);
+    builder.addByte(0x00);
+
+    // NPDU Header
+    builder.addByte(npduVersion); // 0x01
+    // Control: Network Layer Message, no destination/source specifier
+    builder.addByte(NpduControl.networkLayerMessage); // 0x80
+
+    // Network Layer Message Type: Who-Is-Router-To-Network
+    builder.addByte(NetworkLayerMessageType.whoIsRouterToNetwork); // 0x00
+
+    // Optional: specific network number to query
+    if (networkNumber != null) {
+      builder.addByte((networkNumber >> 8) & 0xFF);
+      builder.addByte(networkNumber & 0xFF);
+    }
+
+    final packet = builder.toBytes();
+    // Update length in BVLC header
+    packet[2] = (packet.length >> 8) & 0xFF;
+    packet[3] = packet.length & 0xFF;
+
+    return packet;
+  }
+
+  /// Encode un paquet Who-Is avec destination réseau spécifique
+  /// Utilisé pour envoyer Who-Is à un réseau BACnet distant via un routeur
+  static Uint8List encodeWhoIsToNetwork({
+    required int destinationNetwork,
+    int? lowLimit,
+    int? highLimit,
+  }) {
+    final apdu = _encodeWhoIsApdu(lowLimit: lowLimit, highLimit: highLimit);
+
+    final builder = BytesBuilder();
+
+    // BVLC Header (broadcast)
+    builder.addByte(bvlcTypeBacnetIp); // 0x81
+    builder.addByte(BvlcFunction.originalBroadcastNpdu); // 0x0B
+    // Length placeholder
+    builder.addByte(0x00);
+    builder.addByte(0x00);
+
+    // NPDU Header avec destination network
+    builder.addByte(npduVersion); // 0x01
+    // Control: destination specifier set
+    builder.addByte(NpduControl.destinationSpecifier); // 0x20
+
+    // DNET (destination network)
+    builder.addByte((destinationNetwork >> 8) & 0xFF);
+    builder.addByte(destinationNetwork & 0xFF);
+
+    // DLEN = 0 means broadcast to all devices on that network
+    builder.addByte(0x00);
+
+    // Hop count
+    builder.addByte(0xFF); // 255 hops max
+
+    // APDU
+    builder.add(apdu);
+
+    final packet = builder.toBytes();
+    // Update length
+    packet[2] = (packet.length >> 8) & 0xFF;
+    packet[3] = packet.length & 0xFF;
+
+    return packet;
+  }
+
   /// Encode un paquet ReadPropertyMultiple
   static Uint8List encodeReadPropertyMultipleRequest({
     required int invokeId,

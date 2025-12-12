@@ -1628,6 +1628,93 @@ class ConnectedApiClient {
     return _releaseInputV1(type, instance);
   }
 
+  /// Écrit la description d'un objet BACnet
+  Future<bool> writeDescription(BacnetObjectType type, int instance, String description) async {
+    if (apiVersion == 'V2') {
+      return _writePropertyV2(type, instance, 'description', description);
+    }
+    return _writePropertyV1(type, instance, 'description', description);
+  }
+
+  /// Écrit une propriété quelconque sur un objet (V1)
+  Future<bool> _writePropertyV1(BacnetObjectType type, int instance, String property, dynamic value) async {
+    final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
+    final typeName = _objectTypeToCamelCase(type);
+
+    final body = {
+      'encode': 'text',
+      'propertyReferences': [
+        {
+          'type': typeName,
+          'instance': instance,
+          'property': property,
+          'value': value.toString(),
+        }
+      ],
+    };
+
+    _logger.i('_writePropertyV1: POST $url property=$property, value=$value');
+
+    try {
+      final response = await _dio.post(
+        url,
+        data: body,
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      _logger.i('_writePropertyV1: status=${response.statusCode}');
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      _logger.e('_writePropertyV1 error: $e');
+      return false;
+    }
+  }
+
+  /// Écrit une propriété quelconque sur un objet (V2)
+  /// Utilise write-property-multiple avec property-references (format V2)
+  Future<bool> _writePropertyV2(BacnetObjectType type, int instance, String property, dynamic value) async {
+    final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
+    final typeName = _objectTypeToCamelCase(type);
+
+    final body = {
+      'encode': 'text',
+      'property-references': [
+        {
+          'type': typeName,
+          'instance': instance,
+          'property': property,
+          'value': value.toString(),
+        }
+      ],
+    };
+
+    _logger.i('_writePropertyV2: POST $url property=$property, value=$value');
+
+    try {
+      final response = await _dio.post(
+        url,
+        data: body,
+        options: Options(
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      _logger.i('_writePropertyV2: status=${response.statusCode}');
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      _logger.e('_writePropertyV2 error: $e');
+      return false;
+    }
+  }
+
   // ============ Méthodes V1 ============
 
   /// Écriture V1 via write-property-multiple

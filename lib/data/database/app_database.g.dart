@@ -6405,6 +6405,974 @@ class SynopticBindingsCompanion extends UpdateCompanion<SynopticBinding> {
   }
 }
 
+class $DashboardsTable extends Dashboards
+    with TableInfo<$DashboardsTable, Dashboard> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DashboardsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 100,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _connectionIdMeta = const VerificationMeta(
+    'connectionId',
+  );
+  @override
+  late final GeneratedColumn<int> connectionId = GeneratedColumn<int>(
+    'connection_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES connections (id)',
+    ),
+  );
+  static const VerificationMeta _columnsMeta = const VerificationMeta(
+    'columns',
+  );
+  @override
+  late final GeneratedColumn<int> columns = GeneratedColumn<int>(
+    'columns',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(2),
+  );
+  static const VerificationMeta _rowsMeta = const VerificationMeta('rows');
+  @override
+  late final GeneratedColumn<int> rows = GeneratedColumn<int>(
+    'rows',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(2),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    connectionId,
+    columns,
+    rows,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'dashboards';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Dashboard> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('connection_id')) {
+      context.handle(
+        _connectionIdMeta,
+        connectionId.isAcceptableOrUnknown(
+          data['connection_id']!,
+          _connectionIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('columns')) {
+      context.handle(
+        _columnsMeta,
+        columns.isAcceptableOrUnknown(data['columns']!, _columnsMeta),
+      );
+    }
+    if (data.containsKey('rows')) {
+      context.handle(
+        _rowsMeta,
+        rows.isAcceptableOrUnknown(data['rows']!, _rowsMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Dashboard map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Dashboard(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      connectionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}connection_id'],
+      ),
+      columns: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}columns'],
+      )!,
+      rows: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}rows'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DashboardsTable createAlias(String alias) {
+    return $DashboardsTable(attachedDatabase, alias);
+  }
+}
+
+class Dashboard extends DataClass implements Insertable<Dashboard> {
+  /// Identifiant unique
+  final int id;
+
+  /// Nom du dashboard (donné par l'utilisateur)
+  final String name;
+
+  /// Connexion associée (null = dashboard global)
+  final int? connectionId;
+
+  /// Nombre de colonnes de la grille (2-4)
+  final int columns;
+
+  /// Nombre de lignes de la grille (2-4)
+  final int rows;
+
+  /// Ordre de tri pour l'affichage
+  final int sortOrder;
+
+  /// Date de création
+  final DateTime createdAt;
+
+  /// Date de dernière modification
+  final DateTime updatedAt;
+  const Dashboard({
+    required this.id,
+    required this.name,
+    this.connectionId,
+    required this.columns,
+    required this.rows,
+    required this.sortOrder,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || connectionId != null) {
+      map['connection_id'] = Variable<int>(connectionId);
+    }
+    map['columns'] = Variable<int>(columns);
+    map['rows'] = Variable<int>(rows);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  DashboardsCompanion toCompanion(bool nullToAbsent) {
+    return DashboardsCompanion(
+      id: Value(id),
+      name: Value(name),
+      connectionId: connectionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(connectionId),
+      columns: Value(columns),
+      rows: Value(rows),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Dashboard.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Dashboard(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      connectionId: serializer.fromJson<int?>(json['connectionId']),
+      columns: serializer.fromJson<int>(json['columns']),
+      rows: serializer.fromJson<int>(json['rows']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'connectionId': serializer.toJson<int?>(connectionId),
+      'columns': serializer.toJson<int>(columns),
+      'rows': serializer.toJson<int>(rows),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  Dashboard copyWith({
+    int? id,
+    String? name,
+    Value<int?> connectionId = const Value.absent(),
+    int? columns,
+    int? rows,
+    int? sortOrder,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => Dashboard(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    connectionId: connectionId.present ? connectionId.value : this.connectionId,
+    columns: columns ?? this.columns,
+    rows: rows ?? this.rows,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  Dashboard copyWithCompanion(DashboardsCompanion data) {
+    return Dashboard(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      connectionId: data.connectionId.present
+          ? data.connectionId.value
+          : this.connectionId,
+      columns: data.columns.present ? data.columns.value : this.columns,
+      rows: data.rows.present ? data.rows.value : this.rows,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Dashboard(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('connectionId: $connectionId, ')
+          ..write('columns: $columns, ')
+          ..write('rows: $rows, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    connectionId,
+    columns,
+    rows,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Dashboard &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.connectionId == this.connectionId &&
+          other.columns == this.columns &&
+          other.rows == this.rows &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class DashboardsCompanion extends UpdateCompanion<Dashboard> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<int?> connectionId;
+  final Value<int> columns;
+  final Value<int> rows;
+  final Value<int> sortOrder;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const DashboardsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.connectionId = const Value.absent(),
+    this.columns = const Value.absent(),
+    this.rows = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  DashboardsCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    this.connectionId = const Value.absent(),
+    this.columns = const Value.absent(),
+    this.rows = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  }) : name = Value(name);
+  static Insertable<Dashboard> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<int>? connectionId,
+    Expression<int>? columns,
+    Expression<int>? rows,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (connectionId != null) 'connection_id': connectionId,
+      if (columns != null) 'columns': columns,
+      if (rows != null) 'rows': rows,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  DashboardsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<int?>? connectionId,
+    Value<int>? columns,
+    Value<int>? rows,
+    Value<int>? sortOrder,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return DashboardsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      connectionId: connectionId ?? this.connectionId,
+      columns: columns ?? this.columns,
+      rows: rows ?? this.rows,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (connectionId.present) {
+      map['connection_id'] = Variable<int>(connectionId.value);
+    }
+    if (columns.present) {
+      map['columns'] = Variable<int>(columns.value);
+    }
+    if (rows.present) {
+      map['rows'] = Variable<int>(rows.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DashboardsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('connectionId: $connectionId, ')
+          ..write('columns: $columns, ')
+          ..write('rows: $rows, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DashboardWidgetsTable extends DashboardWidgets
+    with TableInfo<$DashboardWidgetsTable, DashboardWidget> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DashboardWidgetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _dashboardIdMeta = const VerificationMeta(
+    'dashboardId',
+  );
+  @override
+  late final GeneratedColumn<int> dashboardId = GeneratedColumn<int>(
+    'dashboard_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES dashboards (id)',
+    ),
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DashboardWidgetType, String>
+  widgetType =
+      GeneratedColumn<String>(
+        'widget_type',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<DashboardWidgetType>(
+        $DashboardWidgetsTable.$converterwidgetType,
+      );
+  static const VerificationMeta _configJsonMeta = const VerificationMeta(
+    'configJson',
+  );
+  @override
+  late final GeneratedColumn<String> configJson = GeneratedColumn<String>(
+    'config_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    dashboardId,
+    position,
+    widgetType,
+    configJson,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'dashboard_widgets';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DashboardWidget> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('dashboard_id')) {
+      context.handle(
+        _dashboardIdMeta,
+        dashboardId.isAcceptableOrUnknown(
+          data['dashboard_id']!,
+          _dashboardIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_dashboardIdMeta);
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    if (data.containsKey('config_json')) {
+      context.handle(
+        _configJsonMeta,
+        configJson.isAcceptableOrUnknown(data['config_json']!, _configJsonMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  DashboardWidget map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DashboardWidget(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      dashboardId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}dashboard_id'],
+      )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+      widgetType: $DashboardWidgetsTable.$converterwidgetType.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}widget_type'],
+        )!,
+      ),
+      configJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}config_json'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DashboardWidgetsTable createAlias(String alias) {
+    return $DashboardWidgetsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DashboardWidgetType, String> $converterwidgetType =
+      const DashboardWidgetTypeConverter();
+}
+
+class DashboardWidget extends DataClass implements Insertable<DashboardWidget> {
+  /// Identifiant unique
+  final int id;
+
+  /// Dashboard parent
+  final int dashboardId;
+
+  /// Position dans la grille (index 0-based)
+  final int position;
+
+  /// Type de widget
+  final DashboardWidgetType widgetType;
+
+  /// Configuration JSON du widget
+  ///
+  /// Pour singleTrendChart:
+  /// {
+  ///   "trendLogInstance": 300123,
+  ///   "pointName": "Temperature",
+  ///   "units": "°C",
+  ///   "colorTheme": "blue"
+  /// }
+  ///
+  /// Pour multiCurveChart:
+  /// {
+  ///   "trendLogInstances": [300123, 300124, 300125],
+  ///   "curveNames": {"300123": "Temp 1", "300124": "Temp 2"},
+  ///   "curveUnits": {"300123": "°C", "300124": "°C"}
+  /// }
+  ///
+  /// Pour statsCard:
+  /// {
+  ///   "trendLogInstance": 300123,
+  ///   "pointName": "Zone Temperature",
+  ///   "units": "°C",
+  ///   "showCurrent": true,
+  ///   "showMin": true,
+  ///   "showMax": true,
+  ///   "showAvg": true
+  /// }
+  final String? configJson;
+
+  /// Date de création
+  final DateTime createdAt;
+  const DashboardWidget({
+    required this.id,
+    required this.dashboardId,
+    required this.position,
+    required this.widgetType,
+    this.configJson,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['dashboard_id'] = Variable<int>(dashboardId);
+    map['position'] = Variable<int>(position);
+    {
+      map['widget_type'] = Variable<String>(
+        $DashboardWidgetsTable.$converterwidgetType.toSql(widgetType),
+      );
+    }
+    if (!nullToAbsent || configJson != null) {
+      map['config_json'] = Variable<String>(configJson);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  DashboardWidgetsCompanion toCompanion(bool nullToAbsent) {
+    return DashboardWidgetsCompanion(
+      id: Value(id),
+      dashboardId: Value(dashboardId),
+      position: Value(position),
+      widgetType: Value(widgetType),
+      configJson: configJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(configJson),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory DashboardWidget.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DashboardWidget(
+      id: serializer.fromJson<int>(json['id']),
+      dashboardId: serializer.fromJson<int>(json['dashboardId']),
+      position: serializer.fromJson<int>(json['position']),
+      widgetType: serializer.fromJson<DashboardWidgetType>(json['widgetType']),
+      configJson: serializer.fromJson<String?>(json['configJson']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'dashboardId': serializer.toJson<int>(dashboardId),
+      'position': serializer.toJson<int>(position),
+      'widgetType': serializer.toJson<DashboardWidgetType>(widgetType),
+      'configJson': serializer.toJson<String?>(configJson),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  DashboardWidget copyWith({
+    int? id,
+    int? dashboardId,
+    int? position,
+    DashboardWidgetType? widgetType,
+    Value<String?> configJson = const Value.absent(),
+    DateTime? createdAt,
+  }) => DashboardWidget(
+    id: id ?? this.id,
+    dashboardId: dashboardId ?? this.dashboardId,
+    position: position ?? this.position,
+    widgetType: widgetType ?? this.widgetType,
+    configJson: configJson.present ? configJson.value : this.configJson,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  DashboardWidget copyWithCompanion(DashboardWidgetsCompanion data) {
+    return DashboardWidget(
+      id: data.id.present ? data.id.value : this.id,
+      dashboardId: data.dashboardId.present
+          ? data.dashboardId.value
+          : this.dashboardId,
+      position: data.position.present ? data.position.value : this.position,
+      widgetType: data.widgetType.present
+          ? data.widgetType.value
+          : this.widgetType,
+      configJson: data.configJson.present
+          ? data.configJson.value
+          : this.configJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DashboardWidget(')
+          ..write('id: $id, ')
+          ..write('dashboardId: $dashboardId, ')
+          ..write('position: $position, ')
+          ..write('widgetType: $widgetType, ')
+          ..write('configJson: $configJson, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, dashboardId, position, widgetType, configJson, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DashboardWidget &&
+          other.id == this.id &&
+          other.dashboardId == this.dashboardId &&
+          other.position == this.position &&
+          other.widgetType == this.widgetType &&
+          other.configJson == this.configJson &&
+          other.createdAt == this.createdAt);
+}
+
+class DashboardWidgetsCompanion extends UpdateCompanion<DashboardWidget> {
+  final Value<int> id;
+  final Value<int> dashboardId;
+  final Value<int> position;
+  final Value<DashboardWidgetType> widgetType;
+  final Value<String?> configJson;
+  final Value<DateTime> createdAt;
+  const DashboardWidgetsCompanion({
+    this.id = const Value.absent(),
+    this.dashboardId = const Value.absent(),
+    this.position = const Value.absent(),
+    this.widgetType = const Value.absent(),
+    this.configJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  DashboardWidgetsCompanion.insert({
+    this.id = const Value.absent(),
+    required int dashboardId,
+    required int position,
+    required DashboardWidgetType widgetType,
+    this.configJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : dashboardId = Value(dashboardId),
+       position = Value(position),
+       widgetType = Value(widgetType);
+  static Insertable<DashboardWidget> custom({
+    Expression<int>? id,
+    Expression<int>? dashboardId,
+    Expression<int>? position,
+    Expression<String>? widgetType,
+    Expression<String>? configJson,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (dashboardId != null) 'dashboard_id': dashboardId,
+      if (position != null) 'position': position,
+      if (widgetType != null) 'widget_type': widgetType,
+      if (configJson != null) 'config_json': configJson,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  DashboardWidgetsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? dashboardId,
+    Value<int>? position,
+    Value<DashboardWidgetType>? widgetType,
+    Value<String?>? configJson,
+    Value<DateTime>? createdAt,
+  }) {
+    return DashboardWidgetsCompanion(
+      id: id ?? this.id,
+      dashboardId: dashboardId ?? this.dashboardId,
+      position: position ?? this.position,
+      widgetType: widgetType ?? this.widgetType,
+      configJson: configJson ?? this.configJson,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (dashboardId.present) {
+      map['dashboard_id'] = Variable<int>(dashboardId.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (widgetType.present) {
+      map['widget_type'] = Variable<String>(
+        $DashboardWidgetsTable.$converterwidgetType.toSql(widgetType.value),
+      );
+    }
+    if (configJson.present) {
+      map['config_json'] = Variable<String>(configJson.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DashboardWidgetsCompanion(')
+          ..write('id: $id, ')
+          ..write('dashboardId: $dashboardId, ')
+          ..write('position: $position, ')
+          ..write('widgetType: $widgetType, ')
+          ..write('configJson: $configJson, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6428,6 +7396,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SynopticBindingsTable synopticBindings = $SynopticBindingsTable(
     this,
   );
+  late final $DashboardsTable dashboards = $DashboardsTable(this);
+  late final $DashboardWidgetsTable dashboardWidgets = $DashboardWidgetsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6444,6 +7416,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     cachedObjectsSummary,
     synoptics,
     synopticBindings,
+    dashboards,
+    dashboardWidgets,
   ];
 }
 
@@ -6965,6 +7939,27 @@ final class $$ConnectionsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$DashboardsTable, List<Dashboard>>
+  _dashboardsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.dashboards,
+    aliasName: $_aliasNameGenerator(
+      db.connections.id,
+      db.dashboards.connectionId,
+    ),
+  );
+
+  $$DashboardsTableProcessedTableManager get dashboardsRefs {
+    final manager = $$DashboardsTableTableManager(
+      $_db,
+      $_db.dashboards,
+    ).filter((f) => f.connectionId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_dashboardsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ConnectionsTableFilterComposer
@@ -7216,6 +8211,31 @@ class $$ConnectionsTableFilterComposer
           }) => $$CachedObjectsSummaryTableFilterComposer(
             $db: $db,
             $table: $db.cachedObjectsSummary,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> dashboardsRefs(
+    Expression<bool> Function($$DashboardsTableFilterComposer f) f,
+  ) {
+    final $$DashboardsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.dashboards,
+      getReferencedColumn: (t) => t.connectionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DashboardsTableFilterComposer(
+            $db: $db,
+            $table: $db.dashboards,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -7574,6 +8594,31 @@ class $$ConnectionsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> dashboardsRefs<T extends Object>(
+    Expression<T> Function($$DashboardsTableAnnotationComposer a) f,
+  ) {
+    final $$DashboardsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.dashboards,
+      getReferencedColumn: (t) => t.connectionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DashboardsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dashboards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ConnectionsTableTableManager
@@ -7597,6 +8642,7 @@ class $$ConnectionsTableTableManager
             bool cachedDeviceInfoRefs,
             bool cachedTrendLogMappingRefs,
             bool cachedObjectsSummaryRefs,
+            bool dashboardsRefs,
           })
         > {
   $$ConnectionsTableTableManager(_$AppDatabase db, $ConnectionsTable table)
@@ -7699,6 +8745,7 @@ class $$ConnectionsTableTableManager
                 cachedDeviceInfoRefs = false,
                 cachedTrendLogMappingRefs = false,
                 cachedObjectsSummaryRefs = false,
+                dashboardsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -7709,6 +8756,7 @@ class $$ConnectionsTableTableManager
                     if (cachedDeviceInfoRefs) db.cachedDeviceInfo,
                     if (cachedTrendLogMappingRefs) db.cachedTrendLogMapping,
                     if (cachedObjectsSummaryRefs) db.cachedObjectsSummary,
+                    if (dashboardsRefs) db.dashboards,
                   ],
                   addJoins:
                       <
@@ -7872,6 +8920,27 @@ class $$ConnectionsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (dashboardsRefs)
+                        await $_getPrefetchedData<
+                          Connection,
+                          $ConnectionsTable,
+                          Dashboard
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ConnectionsTableReferences
+                              ._dashboardsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ConnectionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dashboardsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.connectionId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -7900,6 +8969,7 @@ typedef $$ConnectionsTableProcessedTableManager =
         bool cachedDeviceInfoRefs,
         bool cachedTrendLogMappingRefs,
         bool cachedObjectsSummaryRefs,
+        bool dashboardsRefs,
       })
     >;
 typedef $$FavoritesTableCreateCompanionBuilder =
@@ -11781,6 +12851,826 @@ typedef $$SynopticBindingsTableProcessedTableManager =
       SynopticBinding,
       PrefetchHooks Function({bool synopticId})
     >;
+typedef $$DashboardsTableCreateCompanionBuilder =
+    DashboardsCompanion Function({
+      Value<int> id,
+      required String name,
+      Value<int?> connectionId,
+      Value<int> columns,
+      Value<int> rows,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+typedef $$DashboardsTableUpdateCompanionBuilder =
+    DashboardsCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<int?> connectionId,
+      Value<int> columns,
+      Value<int> rows,
+      Value<int> sortOrder,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+    });
+
+final class $$DashboardsTableReferences
+    extends BaseReferences<_$AppDatabase, $DashboardsTable, Dashboard> {
+  $$DashboardsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ConnectionsTable _connectionIdTable(_$AppDatabase db) =>
+      db.connections.createAlias(
+        $_aliasNameGenerator(db.dashboards.connectionId, db.connections.id),
+      );
+
+  $$ConnectionsTableProcessedTableManager? get connectionId {
+    final $_column = $_itemColumn<int>('connection_id');
+    if ($_column == null) return null;
+    final manager = $$ConnectionsTableTableManager(
+      $_db,
+      $_db.connections,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_connectionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$DashboardWidgetsTable, List<DashboardWidget>>
+  _dashboardWidgetsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.dashboardWidgets,
+    aliasName: $_aliasNameGenerator(
+      db.dashboards.id,
+      db.dashboardWidgets.dashboardId,
+    ),
+  );
+
+  $$DashboardWidgetsTableProcessedTableManager get dashboardWidgetsRefs {
+    final manager = $$DashboardWidgetsTableTableManager(
+      $_db,
+      $_db.dashboardWidgets,
+    ).filter((f) => f.dashboardId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _dashboardWidgetsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$DashboardsTableFilterComposer
+    extends Composer<_$AppDatabase, $DashboardsTable> {
+  $$DashboardsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get columns => $composableBuilder(
+    column: $table.columns,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get rows => $composableBuilder(
+    column: $table.rows,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ConnectionsTableFilterComposer get connectionId {
+    final $$ConnectionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.connectionId,
+      referencedTable: $db.connections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConnectionsTableFilterComposer(
+            $db: $db,
+            $table: $db.connections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> dashboardWidgetsRefs(
+    Expression<bool> Function($$DashboardWidgetsTableFilterComposer f) f,
+  ) {
+    final $$DashboardWidgetsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.dashboardWidgets,
+      getReferencedColumn: (t) => t.dashboardId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DashboardWidgetsTableFilterComposer(
+            $db: $db,
+            $table: $db.dashboardWidgets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$DashboardsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DashboardsTable> {
+  $$DashboardsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get columns => $composableBuilder(
+    column: $table.columns,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get rows => $composableBuilder(
+    column: $table.rows,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ConnectionsTableOrderingComposer get connectionId {
+    final $$ConnectionsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.connectionId,
+      referencedTable: $db.connections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConnectionsTableOrderingComposer(
+            $db: $db,
+            $table: $db.connections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DashboardsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DashboardsTable> {
+  $$DashboardsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get columns =>
+      $composableBuilder(column: $table.columns, builder: (column) => column);
+
+  GeneratedColumn<int> get rows =>
+      $composableBuilder(column: $table.rows, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$ConnectionsTableAnnotationComposer get connectionId {
+    final $$ConnectionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.connectionId,
+      referencedTable: $db.connections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConnectionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.connections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> dashboardWidgetsRefs<T extends Object>(
+    Expression<T> Function($$DashboardWidgetsTableAnnotationComposer a) f,
+  ) {
+    final $$DashboardWidgetsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.dashboardWidgets,
+      getReferencedColumn: (t) => t.dashboardId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DashboardWidgetsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dashboardWidgets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$DashboardsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DashboardsTable,
+          Dashboard,
+          $$DashboardsTableFilterComposer,
+          $$DashboardsTableOrderingComposer,
+          $$DashboardsTableAnnotationComposer,
+          $$DashboardsTableCreateCompanionBuilder,
+          $$DashboardsTableUpdateCompanionBuilder,
+          (Dashboard, $$DashboardsTableReferences),
+          Dashboard,
+          PrefetchHooks Function({bool connectionId, bool dashboardWidgetsRefs})
+        > {
+  $$DashboardsTableTableManager(_$AppDatabase db, $DashboardsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DashboardsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DashboardsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DashboardsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int?> connectionId = const Value.absent(),
+                Value<int> columns = const Value.absent(),
+                Value<int> rows = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => DashboardsCompanion(
+                id: id,
+                name: name,
+                connectionId: connectionId,
+                columns: columns,
+                rows: rows,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                Value<int?> connectionId = const Value.absent(),
+                Value<int> columns = const Value.absent(),
+                Value<int> rows = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => DashboardsCompanion.insert(
+                id: id,
+                name: name,
+                connectionId: connectionId,
+                columns: columns,
+                rows: rows,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DashboardsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({connectionId = false, dashboardWidgetsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (dashboardWidgetsRefs) db.dashboardWidgets,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (connectionId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.connectionId,
+                                    referencedTable: $$DashboardsTableReferences
+                                        ._connectionIdTable(db),
+                                    referencedColumn:
+                                        $$DashboardsTableReferences
+                                            ._connectionIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (dashboardWidgetsRefs)
+                        await $_getPrefetchedData<
+                          Dashboard,
+                          $DashboardsTable,
+                          DashboardWidget
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DashboardsTableReferences
+                              ._dashboardWidgetsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DashboardsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).dashboardWidgetsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.dashboardId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$DashboardsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DashboardsTable,
+      Dashboard,
+      $$DashboardsTableFilterComposer,
+      $$DashboardsTableOrderingComposer,
+      $$DashboardsTableAnnotationComposer,
+      $$DashboardsTableCreateCompanionBuilder,
+      $$DashboardsTableUpdateCompanionBuilder,
+      (Dashboard, $$DashboardsTableReferences),
+      Dashboard,
+      PrefetchHooks Function({bool connectionId, bool dashboardWidgetsRefs})
+    >;
+typedef $$DashboardWidgetsTableCreateCompanionBuilder =
+    DashboardWidgetsCompanion Function({
+      Value<int> id,
+      required int dashboardId,
+      required int position,
+      required DashboardWidgetType widgetType,
+      Value<String?> configJson,
+      Value<DateTime> createdAt,
+    });
+typedef $$DashboardWidgetsTableUpdateCompanionBuilder =
+    DashboardWidgetsCompanion Function({
+      Value<int> id,
+      Value<int> dashboardId,
+      Value<int> position,
+      Value<DashboardWidgetType> widgetType,
+      Value<String?> configJson,
+      Value<DateTime> createdAt,
+    });
+
+final class $$DashboardWidgetsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $DashboardWidgetsTable, DashboardWidget> {
+  $$DashboardWidgetsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DashboardsTable _dashboardIdTable(_$AppDatabase db) =>
+      db.dashboards.createAlias(
+        $_aliasNameGenerator(db.dashboardWidgets.dashboardId, db.dashboards.id),
+      );
+
+  $$DashboardsTableProcessedTableManager get dashboardId {
+    final $_column = $_itemColumn<int>('dashboard_id')!;
+
+    final manager = $$DashboardsTableTableManager(
+      $_db,
+      $_db.dashboards,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_dashboardIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DashboardWidgetsTableFilterComposer
+    extends Composer<_$AppDatabase, $DashboardWidgetsTable> {
+  $$DashboardWidgetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<
+    DashboardWidgetType,
+    DashboardWidgetType,
+    String
+  >
+  get widgetType => $composableBuilder(
+    column: $table.widgetType,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get configJson => $composableBuilder(
+    column: $table.configJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DashboardsTableFilterComposer get dashboardId {
+    final $$DashboardsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.dashboardId,
+      referencedTable: $db.dashboards,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DashboardsTableFilterComposer(
+            $db: $db,
+            $table: $db.dashboards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DashboardWidgetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DashboardWidgetsTable> {
+  $$DashboardWidgetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get widgetType => $composableBuilder(
+    column: $table.widgetType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get configJson => $composableBuilder(
+    column: $table.configJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DashboardsTableOrderingComposer get dashboardId {
+    final $$DashboardsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.dashboardId,
+      referencedTable: $db.dashboards,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DashboardsTableOrderingComposer(
+            $db: $db,
+            $table: $db.dashboards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DashboardWidgetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DashboardWidgetsTable> {
+  $$DashboardWidgetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DashboardWidgetType, String>
+  get widgetType => $composableBuilder(
+    column: $table.widgetType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get configJson => $composableBuilder(
+    column: $table.configJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$DashboardsTableAnnotationComposer get dashboardId {
+    final $$DashboardsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.dashboardId,
+      referencedTable: $db.dashboards,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DashboardsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.dashboards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DashboardWidgetsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DashboardWidgetsTable,
+          DashboardWidget,
+          $$DashboardWidgetsTableFilterComposer,
+          $$DashboardWidgetsTableOrderingComposer,
+          $$DashboardWidgetsTableAnnotationComposer,
+          $$DashboardWidgetsTableCreateCompanionBuilder,
+          $$DashboardWidgetsTableUpdateCompanionBuilder,
+          (DashboardWidget, $$DashboardWidgetsTableReferences),
+          DashboardWidget,
+          PrefetchHooks Function({bool dashboardId})
+        > {
+  $$DashboardWidgetsTableTableManager(
+    _$AppDatabase db,
+    $DashboardWidgetsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DashboardWidgetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DashboardWidgetsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DashboardWidgetsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> dashboardId = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<DashboardWidgetType> widgetType = const Value.absent(),
+                Value<String?> configJson = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => DashboardWidgetsCompanion(
+                id: id,
+                dashboardId: dashboardId,
+                position: position,
+                widgetType: widgetType,
+                configJson: configJson,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int dashboardId,
+                required int position,
+                required DashboardWidgetType widgetType,
+                Value<String?> configJson = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => DashboardWidgetsCompanion.insert(
+                id: id,
+                dashboardId: dashboardId,
+                position: position,
+                widgetType: widgetType,
+                configJson: configJson,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$DashboardWidgetsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({dashboardId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (dashboardId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.dashboardId,
+                                referencedTable:
+                                    $$DashboardWidgetsTableReferences
+                                        ._dashboardIdTable(db),
+                                referencedColumn:
+                                    $$DashboardWidgetsTableReferences
+                                        ._dashboardIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DashboardWidgetsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DashboardWidgetsTable,
+      DashboardWidget,
+      $$DashboardWidgetsTableFilterComposer,
+      $$DashboardWidgetsTableOrderingComposer,
+      $$DashboardWidgetsTableAnnotationComposer,
+      $$DashboardWidgetsTableCreateCompanionBuilder,
+      $$DashboardWidgetsTableUpdateCompanionBuilder,
+      (DashboardWidget, $$DashboardWidgetsTableReferences),
+      DashboardWidget,
+      PrefetchHooks Function({bool dashboardId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -11810,4 +13700,8 @@ class $AppDatabaseManager {
       $$SynopticsTableTableManager(_db, _db.synoptics);
   $$SynopticBindingsTableTableManager get synopticBindings =>
       $$SynopticBindingsTableTableManager(_db, _db.synopticBindings);
+  $$DashboardsTableTableManager get dashboards =>
+      $$DashboardsTableTableManager(_db, _db.dashboards);
+  $$DashboardWidgetsTableTableManager get dashboardWidgets =>
+      $$DashboardWidgetsTableTableManager(_db, _db.dashboardWidgets);
 }

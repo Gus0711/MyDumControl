@@ -3,11 +3,11 @@ class AppConstants {
   AppConstants._();
 
   // Application
-  static const String appName = 'MyDumControl';
+  static const String appName = 'MyGlobalDC';
   static const String appVersion = '1.0.0';
 
   // Base de données
-  static const String databaseName = 'mydumcontrol.db';
+  static const String databaseName = 'myglobaldc.db';
   static const int databaseVersion = 1;
 
   // Stockage sécurisé

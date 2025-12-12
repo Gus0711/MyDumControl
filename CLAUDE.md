@@ -3,9 +3,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MyDumControl is a Flutter cross-platform application for managing ECLYPSE building automation controllers from Distech Controls. It supports both API V1 (legacy controllers) and API V2 (ECLYPSE 400, 600 series, APEX).
+MyGlobalDC is a Flutter cross-platform application for managing ECLYPSE building automation controllers from Distech Controls. It supports both API V1 (legacy controllers) and API V2 (ECLYPSE 400, 600 series, APEX).
 
-**Current State**: Early stage - boilerplate Flutter app with comprehensive architectural planning in `plan_init.md` (French). Implementation not yet started.
+**Current State**: Active development - core features implemented including connections, points browsing, trend logs, schedules, favorites, and dashboards.
 
 ## Build Commands
 
@@ -100,3 +100,50 @@ Flutter Web cannot directly connect to controllers (CORS). Requires Node.js prox
 ## Platform Targets
 
 Android, iOS, Linux, macOS, Windows, Web (all configurations initialized)
+
+## Dashboard & Multi-Curves Feature
+
+### Overview
+The dashboard feature allows users to create customizable dashboards with widgets displaying trend log data.
+
+### Key Files
+- `lib/presentation/screens/dashboard/dashboard_list_screen.dart` - List of dashboards
+- `lib/presentation/screens/dashboard/dashboard_screen.dart` - Dashboard view with grid
+- `lib/presentation/screens/dashboard/widgets/dashboard_widget_card.dart` - Widget card with title bar
+- `lib/presentation/widgets/multi_curve_chart.dart` - Multi-curve chart widget
+- `lib/presentation/widgets/curve_selection_dialog.dart` - Dialog to select trend logs
+- `lib/application/providers/dashboard_provider.dart` - State management + widget configs
+- `lib/application/providers/multi_curve_provider.dart` - Multi-curve data loading
+- `lib/data/database/tables/dashboard_tables.dart` - Database tables (Dashboards, DashboardWidgets)
+
+### Widget Types
+- `singleTrendChart` - Single trend log history graph
+- `multiCurveChart` - Compare 2-8 trend logs on same chart
+- `statsCard` - Min/max/average statistics card
+
+### Widget Configuration Classes
+Located in `dashboard_provider.dart`:
+- `SingleChartWidgetConfig` - trendLogInstance, title, pointName, units, colorTheme
+- `MultiCurveWidgetConfig` - trendLogInstances[], title, curveNames{}, curveUnits{}
+- `StatsWidgetConfig` - trendLogInstance, title, pointName, units, showMin/Max/Avg
+
+Each config has:
+- `toJson()` / `fromJson()` for serialization
+- `displayTitle` getter for fallback title logic
+
+### Database Schema (v11)
+```sql
+Dashboards: id, name, connectionId (nullable), columns, rows, sortOrder, createdAt, updatedAt
+DashboardWidgets: id, dashboardId (FK), position, widgetType (enum), configJson, createdAt
+```
+
+### Key Patterns
+- **Title bar on widgets**: `_WidgetHeader` in dashboard_widget_card.dart displays title + edit/delete buttons
+- **Editable titles**: Click on title to edit, stored in config's `title` field
+- **showHeader parameter**: `MultiCurveChart` has `showHeader: false` when embedded in dashboard to avoid duplicate title
+- **Point name lookup**: Use `point.type.apiName` (dash format like `analog-input`) not `.name` (camelCase) when matching against `trendLogMappingProvider` keys
+
+### Provider Flow for Multi-Curves
+1. `MultiCurveChart` initializes `multiCurveViewerProvider(chartId)` with instances
+2. Provider calls `trendLogViewerProvider(instance)` for each curve to load data
+3. Data combined in `MultiCurveViewerState.data` with curve colors from `curveColorThemes`

@@ -5,6 +5,7 @@ import '../../../application/providers/points_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
+import '../../widgets/gradient_app_bar.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Écran listant les points forcés (overrides)
@@ -35,8 +36,8 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
     final overriddenPoints = state.overriddenPoints;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
+      appBar: GradientAppBar(
+        titleWidget: Row(
           children: [
             Text(l10n.overrides),
             if (overriddenPoints.isNotEmpty) ...[
@@ -44,15 +45,15 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.purple.shade100,
+                  color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   '${overriddenPoints.length}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Colors.purple.shade700,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -235,7 +236,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
         ),
       ),
       title: Text(
-        point.objectName,
+        point.displayName,
         style: const TextStyle(fontWeight: FontWeight.w500),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

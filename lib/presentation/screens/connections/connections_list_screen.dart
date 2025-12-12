@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mydumcontrol/l10n/app_localizations.dart';
+import 'package:myglobaldc/l10n/app_localizations.dart';
 import '../../../application/providers/connection_providers.dart';
 import '../../../application/providers/folder_providers.dart';
 import '../../../application/providers/super_favorites_provider.dart';
@@ -10,6 +10,7 @@ import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
+import '../../widgets/gradient_app_bar.dart';
 
 /// Écran de liste des connexions sauvegardées organisées par dossiers
 class ConnectionsListScreen extends ConsumerStatefulWidget {
@@ -36,8 +37,8 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     final connectionsByFolderAsync = ref.watch(connectionsByFolderProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.connections),
+      appBar: GradientAppBar(
+        title: l10n.connections,
         actions: [
           IconButton(
             icon: const Icon(Icons.create_new_folder_outlined),
@@ -687,18 +688,22 @@ class _ConnectionCard extends ConsumerWidget {
               // En-tête de la connexion
               Row(
                 children: [
-                  // Icône
+                  // Logo
                   Container(
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
+                      color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(
-                      Icons.dns,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 22,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset(
+                        'assets/images/logov2_no_back.png',
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),

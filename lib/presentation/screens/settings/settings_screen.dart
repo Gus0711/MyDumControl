@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart' if (dart.library.html) 'package:file_picker/file_picker.dart';
 import '../../../application/providers/settings_provider.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/gradient_app_bar.dart';
 
 /// Écran des paramètres de l'application
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -25,8 +26,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.settings),
+      appBar: GradientAppBar(
+        title: l10n.settings,
       ),
       body: ListView(
         children: [
