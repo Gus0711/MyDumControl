@@ -4,6 +4,7 @@ import '../../../../application/providers/schedule_provider.dart';
 import '../../../../domain/models/schedule.dart';
 import 'schedule_dialogs.dart';
 import 'schedule_colors.dart';
+import '../../../../l10n/app_localizations.dart';
 
 /// Widget d'édition des créneaux d'un jour
 class DayTransitionsEditor extends ConsumerWidget {
@@ -69,12 +70,13 @@ class DayTransitionsEditor extends ConsumerWidget {
     ColorScheme colorScheme,
     ScheduleEditState editState,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Icon(Icons.calendar_today, size: 18, color: colorScheme.primary),
         const SizedBox(width: 8),
         Text(
-          day.displayName,
+          weekDayName(l10n, day),
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -86,12 +88,12 @@ class DayTransitionsEditor extends ConsumerWidget {
           // Bouton copier
           IconButton(
             icon: const Icon(Icons.content_copy, size: 20),
-            tooltip: 'Copier ce jour',
+            tooltip: l10n.scheduleCopyDay,
             onPressed: () {
               ref.read(scheduleEditProvider.notifier).copyDay(day);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('${day.displayName} copié'),
+                  content: Text(l10n.scheduleDayCopied(weekDayName(l10n, day))),
                   duration: const Duration(seconds: 2),
                 ),
               );
@@ -102,7 +104,7 @@ class DayTransitionsEditor extends ConsumerWidget {
           if (editState.clipboardSourceDay != null)
             IconButton(
               icon: const Icon(Icons.content_paste, size: 20),
-              tooltip: 'Coller depuis ${editState.clipboardSourceDay!.shortName}',
+              tooltip: l10n.schedulePasteFrom(weekDayShortName(l10n, editState.clipboardSourceDay!)),
               onPressed: () {
                 ref.read(scheduleEditProvider.notifier).pasteDay(day);
               },
@@ -111,24 +113,24 @@ class DayTransitionsEditor extends ConsumerWidget {
           // Menu plus d'actions
           PopupMenuButton<DayAction>(
             icon: const Icon(Icons.more_vert, size: 20),
-            tooltip: 'Plus d\'actions',
+            tooltip: l10n.scheduleMoreActions,
             onSelected: (action) => _handleDayAction(context, ref, action, editState),
             itemBuilder: (context) => [
               if (editState.clipboardSourceDay != null) ...[
                 PopupMenuItem(
                   value: DayAction.pasteToWorkDays,
-                  child: const ListTile(
-                    leading: Icon(Icons.work_outline),
-                    title: Text('Coller sur jours ouvrés'),
+                  child: ListTile(
+                    leading: const Icon(Icons.work_outline),
+                    title: Text(l10n.schedulePasteToWorkDays),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                   ),
                 ),
                 PopupMenuItem(
                   value: DayAction.pasteToAll,
-                  child: const ListTile(
-                    leading: Icon(Icons.calendar_month),
-                    title: Text('Coller sur tous les jours'),
+                  child: ListTile(
+                    leading: const Icon(Icons.calendar_month),
+                    title: Text(l10n.schedulePasteToAllDays),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                   ),
@@ -139,7 +141,7 @@ class DayTransitionsEditor extends ConsumerWidget {
                 value: DayAction.clear,
                 child: ListTile(
                   leading: Icon(Icons.delete_outline, color: colorScheme.error),
-                  title: Text('Effacer ce jour', style: TextStyle(color: colorScheme.error)),
+                  title: Text(l10n.scheduleClearDay, style: TextStyle(color: colorScheme.error)),
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                 ),
@@ -151,7 +153,7 @@ class DayTransitionsEditor extends ConsumerWidget {
         // Bouton fermer
         IconButton(
           icon: const Icon(Icons.close, size: 20),
-          tooltip: 'Fermer',
+          tooltip: l10n.close,
           onPressed: () {
             ref.read(scheduleEditProvider.notifier).selectDay(day);
             // Toggle off selection
@@ -171,6 +173,7 @@ class DayTransitionsEditor extends ConsumerWidget {
     ThemeData theme,
     ColorScheme colorScheme,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Center(
@@ -183,7 +186,7 @@ class DayTransitionsEditor extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Aucune transition',
+              l10n.scheduleNoTransition,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: colorScheme.outline,
               ),
@@ -191,7 +194,7 @@ class DayTransitionsEditor extends ConsumerWidget {
             if (isEditing) ...[
               const SizedBox(height: 4),
               Text(
-                'Appuyez sur + pour ajouter',
+                l10n.scheduleTapPlusToAdd,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colorScheme.outline,
                 ),
@@ -235,7 +238,7 @@ class DayTransitionsEditor extends ConsumerWidget {
       child: OutlinedButton.icon(
         onPressed: () => _showAddSlotDialog(context, ref),
         icon: const Icon(Icons.add),
-        label: const Text('Ajouter un créneau'),
+        label: Text(AppLocalizations.of(context)!.scheduleAddSlot),
       ),
     );
   }
@@ -245,7 +248,7 @@ class DayTransitionsEditor extends ConsumerWidget {
       context: context,
       builder: (context) => TimeSlotDialog(
         schedule: schedule,
-        title: 'Nouveau créneau',
+        title: AppLocalizations.of(context)!.scheduleNewSlot,
       ),
     );
 
@@ -262,12 +265,13 @@ class DayTransitionsEditor extends ConsumerWidget {
     ScheduleEditState editState,
   ) {
     final notifier = ref.read(scheduleEditProvider.notifier);
+    final l10n = AppLocalizations.of(context)!;
 
     switch (action) {
       case DayAction.copy:
         notifier.copyDay(day);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${day.displayName} copié')),
+          SnackBar(content: Text(l10n.scheduleDayCopied(weekDayName(l10n, day)))),
         );
         break;
       case DayAction.paste:
@@ -276,13 +280,13 @@ class DayTransitionsEditor extends ConsumerWidget {
       case DayAction.pasteToWorkDays:
         notifier.pasteDayToWorkDays();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Collé sur les jours ouvrés')),
+          SnackBar(content: Text(l10n.schedulePastedToWorkDays)),
         );
         break;
       case DayAction.pasteToAll:
         notifier.pasteDayToAllDays();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Collé sur tous les jours')),
+          SnackBar(content: Text(l10n.schedulePastedToAllDays)),
         );
         break;
       case DayAction.clear:
@@ -312,6 +316,7 @@ class _TimeSlotTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final stateText = schedule.getStateText(slot.value);
     final color = _getColorForValue(slot.value, colorScheme);
 
@@ -346,7 +351,7 @@ class _TimeSlotTile extends ConsumerWidget {
           ),
           child: slot.isAllDay
               ? Text(
-                  'Journée',
+                  l10n.scheduleFullDay,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w500,
                   ),
@@ -396,7 +401,7 @@ class _TimeSlotTile extends ConsumerWidget {
         trailing: isEditing
             ? IconButton(
                 icon: const Icon(Icons.edit, size: 20),
-                tooltip: 'Modifier',
+                tooltip: l10n.edit,
                 onPressed: () => _showEditDialog(context, ref),
               )
             : null,
@@ -411,7 +416,7 @@ class _TimeSlotTile extends ConsumerWidget {
       builder: (context) => TimeSlotDialog(
         schedule: schedule,
         existingSlot: slot,
-        title: 'Modifier le créneau',
+        title: AppLocalizations.of(context)!.scheduleEditSlot,
       ),
     );
 

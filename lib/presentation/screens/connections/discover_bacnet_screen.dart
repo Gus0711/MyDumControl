@@ -210,6 +210,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
   }
 
   void _showConflictSnackbar(DeviceIdConflict conflict) {
+    final l10n = AppLocalizations.of(context)!;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: Colors.orange[700],
@@ -219,7 +220,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Conflit Device ID ${conflict.deviceId}',
+                l10n.discoverDeviceIdConflictWithId(conflict.deviceId.toString()),
                 style: const TextStyle(color: Colors.white),
               ),
             ),
@@ -227,7 +228,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
         ),
         duration: const Duration(seconds: 4),
         action: SnackBarAction(
-          label: 'Détails',
+          label: l10n.details,
           textColor: Colors.white,
           onPressed: _showConflictsDialog,
         ),

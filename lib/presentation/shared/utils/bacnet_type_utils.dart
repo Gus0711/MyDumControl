@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Utilitaires partagés pour les types BACnet
 /// Élimine la duplication de code entre les différents écrans
@@ -36,6 +37,40 @@ class BacnetTypeUtils {
         return Icons.format_list_numbered;
       default:
         return Icons.device_unknown;
+    }
+  }
+
+  /// Returns the localized display name of a BACnet object type
+  static String getTypeDisplayName(AppLocalizations l10n, BacnetObjectType type) {
+    switch (type) {
+      case BacnetObjectType.analogInput:
+        return l10n.bacnetTypeAnalogInput;
+      case BacnetObjectType.analogOutput:
+        return l10n.bacnetTypeAnalogOutput;
+      case BacnetObjectType.analogValue:
+        return l10n.bacnetTypeAnalogValue;
+      case BacnetObjectType.binaryInput:
+        return l10n.bacnetTypeBinaryInput;
+      case BacnetObjectType.binaryOutput:
+        return l10n.bacnetTypeBinaryOutput;
+      case BacnetObjectType.binaryValue:
+        return l10n.bacnetTypeBinaryValue;
+      case BacnetObjectType.multiStateInput:
+        return l10n.bacnetTypeMultiStateInput;
+      case BacnetObjectType.multiStateOutput:
+        return l10n.bacnetTypeMultiStateOutput;
+      case BacnetObjectType.multiStateValue:
+        return l10n.bacnetTypeMultiStateValue;
+      case BacnetObjectType.schedule:
+        return l10n.bacnetTypeSchedule;
+      case BacnetObjectType.calendar:
+        return l10n.bacnetTypeCalendar;
+      case BacnetObjectType.trendLog:
+        return l10n.bacnetTypeTrendLog;
+      case BacnetObjectType.notificationClass:
+        return l10n.bacnetTypeNotificationClass;
+      case BacnetObjectType.device:
+        return l10n.bacnetTypeDevice;
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:myglobaldc/l10n/app_localizations.dart';
 import 'routes.dart';
 import 'page_transitions.dart';
 import '../../presentation/screens/splash/splash_screen.dart';
@@ -294,24 +295,25 @@ class AppRouter {
       ),
     ],
     errorBuilder: (context, state) =>
-        _RouteErrorScreen(message: 'Page non trouvée: ${state.uri.path}'),
+        _RouteErrorScreen(message: (l10n) => l10n.routerPageNotFound(state.uri.path)),
   );
 
   /// Page shown when a route parameter is not a valid integer id
   static Page<void> _invalidRoutePage(GoRouterState state, String rawId) => MaterialPage<void>(
         key: state.pageKey,
-        child: _RouteErrorScreen(message: 'Identifiant invalide : "$rawId"'),
+        child: _RouteErrorScreen(message: (l10n) => l10n.routerInvalidId(rawId)),
       );
 }
 
 /// Error screen for unknown routes or invalid route parameters
 class _RouteErrorScreen extends StatelessWidget {
-  final String message;
+  final String Function(AppLocalizations l10n) message;
 
   const _RouteErrorScreen({required this.message});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Center(
         child: Column(
@@ -319,11 +321,11 @@ class _RouteErrorScreen extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center),
+            Text(message(l10n), textAlign: TextAlign.center),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => context.go(Routes.connections),
-              child: const Text('Retour aux connexions'),
+              child: Text(l10n.backToConnections),
             ),
           ],
         ),

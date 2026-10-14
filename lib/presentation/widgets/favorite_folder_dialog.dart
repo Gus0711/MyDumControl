@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/database/app_database.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Liste des couleurs disponibles pour les dossiers
 const folderColors = [
@@ -115,9 +116,10 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.folder != null;
     final selectedColorParsed = _parseColor(_selectedColor);
+    final l10n = AppLocalizations.of(context)!;
 
     return AlertDialog(
-      title: Text(isEditing ? 'Modifier le dossier' : 'Nouveau dossier'),
+      title: Text(isEditing ? l10n.widgetEditFolder : l10n.newFolder),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -127,7 +129,7 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
             TextField(
               controller: _nameController,
               decoration: InputDecoration(
-                labelText: 'Nom du dossier',
+                labelText: l10n.widgetFolderName,
                 prefixIcon: Icon(
                   _getIconData(_selectedIcon),
                   color: selectedColorParsed,
@@ -141,7 +143,7 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
 
             // Sélection de couleur
             Text(
-              'Couleur',
+              l10n.widgetColor,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -185,7 +187,7 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
 
             // Sélection d'icône
             Text(
-              'Icône',
+              l10n.widgetIcon,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -226,7 +228,7 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         ElevatedButton(
           onPressed: _nameController.text.trim().isEmpty
@@ -241,7 +243,7 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
                     ),
                   );
                 },
-          child: Text(isEditing ? 'Modifier' : 'Créer'),
+          child: Text(isEditing ? l10n.edit : l10n.create),
         ),
       ],
     );

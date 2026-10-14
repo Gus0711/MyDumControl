@@ -133,7 +133,7 @@ class DeviceInfoScreen extends ConsumerWidget {
                 const Icon(Icons.link, color: AppColors.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Connexion',
+                  l10n.connection,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -141,13 +141,13 @@ class DeviceInfoScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
-            _buildInfoRow(context, 'Protocole', protocol),
-            _buildInfoRow(context, 'Hôte', url),
-            _buildInfoRow(context, 'Utilisateur', connection.username),
+            _buildInfoRow(context, l10n.deviceInfoProtocol, protocol),
+            _buildInfoRow(context, l10n.host, url),
+            _buildInfoRow(context, l10n.deviceInfoUser, connection.username),
             if (connection.lastConnectedAt != null)
               _buildInfoRow(
                 context,
-                'Dernière connexion',
+                l10n.deviceInfoLastConnection,
                 _formatDateTime(connection.lastConnectedAt),
               ),
           ],
@@ -172,7 +172,7 @@ class DeviceInfoScreen extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Réseau',
+                    AppLocalizations.of(context)!.deviceInfoNetwork,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -183,7 +183,7 @@ class DeviceInfoScreen extends ConsumerWidget {
                     builder: (context) {
                       final isDark = Theme.of(context).brightness == Brightness.dark;
                       return Text(
-                        '${activeInterfaces.length} interface${activeInterfaces.length > 1 ? 's' : ''}',
+                        AppLocalizations.of(context)!.deviceInfoInterfacesCount(activeInterfaces.length),
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -210,6 +210,7 @@ class DeviceInfoScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isDisabled = !iface.enabled;
     final textColor = isDisabled ? Colors.grey.shade400 : null;
+    final l10n = AppLocalizations.of(context)!;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,7 +260,7 @@ class DeviceInfoScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      'Désactivé',
+                      AppLocalizations.of(context)!.disabled,
                       style: TextStyle(
                         fontSize: 10,
                         color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -294,15 +295,15 @@ class DeviceInfoScreen extends ConsumerWidget {
 
         // Infos IP
         if (iface.ipAddress != null)
-          _buildNetworkInfoRow(context, 'Adresse IP', iface.ipAddress!, disabled: isDisabled),
+          _buildNetworkInfoRow(context, l10n.deviceInfoIpAddress, iface.ipAddress!, disabled: isDisabled),
         if (iface.subnetMask != null)
-          _buildNetworkInfoRow(context, 'Masque', iface.subnetMask!, disabled: isDisabled),
+          _buildNetworkInfoRow(context, l10n.deviceInfoSubnetMask, iface.subnetMask!, disabled: isDisabled),
         if (iface.gateway != null && iface.gateway!.isNotEmpty)
-          _buildNetworkInfoRow(context, 'Passerelle', iface.gateway!, disabled: isDisabled),
+          _buildNetworkInfoRow(context, l10n.deviceInfoGateway, iface.gateway!, disabled: isDisabled),
         if (iface.dnsPrimary != null && iface.dnsPrimary!.isNotEmpty)
-          _buildNetworkInfoRow(context, 'DNS primaire', iface.dnsPrimary!, disabled: isDisabled),
+          _buildNetworkInfoRow(context, l10n.deviceInfoPrimaryDns, iface.dnsPrimary!, disabled: isDisabled),
         if (iface.macAddress != null)
-          _buildNetworkInfoRow(context, 'Adresse MAC', iface.macAddress!, isMac: true, disabled: isDisabled),
+          _buildNetworkInfoRow(context, l10n.deviceInfoMacAddress, iface.macAddress!, isMac: true, disabled: isDisabled),
       ],
     );
   }
@@ -344,12 +345,12 @@ class DeviceInfoScreen extends ConsumerWidget {
                     Clipboard.setData(ClipboardData(text: value));
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('$label copié'),
+                        content: Text(AppLocalizations.of(context)!.deviceInfoCopied(label)),
                         duration: const Duration(seconds: 1),
                       ),
                     );
                   },
-            tooltip: 'Copier',
+            tooltip: AppLocalizations.of(context)!.copy,
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -377,7 +378,7 @@ class DeviceInfoScreen extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Objets BACnet',
+                    l10n.deviceInfoBacnetObjects,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -395,15 +396,15 @@ class DeviceInfoScreen extends ConsumerWidget {
             if (summary != null) ...[
               Row(
                 children: [
-                  Expanded(child: _buildSummaryTile(context, 'Entrées', summary.totalInputs, Icons.input, Colors.blue)),
-                  Expanded(child: _buildSummaryTile(context, 'Sorties', summary.totalOutputs, Icons.output, Colors.orange)),
+                  Expanded(child: _buildSummaryTile(context, l10n.categoryInputs, summary.totalInputs, Icons.input, Colors.blue)),
+                  Expanded(child: _buildSummaryTile(context, l10n.categoryOutputs, summary.totalOutputs, Icons.output, Colors.orange)),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: _buildSummaryTile(context, 'Valeurs', summary.totalValues, Icons.tag, Colors.green)),
-                  Expanded(child: _buildSummaryTile(context, 'Horaires', summary.schedules, Icons.schedule, Colors.purple)),
+                  Expanded(child: _buildSummaryTile(context, l10n.categoryVariables, summary.totalValues, Icons.tag, Colors.green)),
+                  Expanded(child: _buildSummaryTile(context, l10n.schedules, summary.schedules, Icons.schedule, Colors.purple)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -413,7 +414,7 @@ class DeviceInfoScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'Total: ${summary.total} objets',
+                    l10n.deviceInfoTotalObjects(summary.total),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: AppColors.primary,
@@ -422,8 +423,8 @@ class DeviceInfoScreen extends ConsumerWidget {
                 ],
               ),
             ] else if (!isLoading)
-              const Center(
-                child: Text('Aucune donnée disponible'),
+              Center(
+                child: Text(l10n.deviceInfoNoDataAvailable),
               ),
           ],
         ),
@@ -471,6 +472,7 @@ class DeviceInfoScreen extends ConsumerWidget {
   }
 
   Widget _buildTechnicalCard(BuildContext context, dynamic device) {
+    final l10n = AppLocalizations.of(context)!;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -482,7 +484,7 @@ class DeviceInfoScreen extends ConsumerWidget {
                 const Icon(Icons.info_outline, color: AppColors.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Informations techniques',
+                  l10n.deviceInfoTechnical,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -490,10 +492,10 @@ class DeviceInfoScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
-            if (device.modelName != null) _buildInfoRow(context, 'Modèle', device.modelName!),
-            if (device.modelType != null) _buildInfoRow(context, 'Type', device.modelType!),
-            if (device.softwareVersion != null) _buildInfoRow(context, 'Version', device.softwareVersion!),
-            if (device.hostName != null) _buildInfoRow(context, 'Nom d\'hôte', device.hostName!),
+            if (device.modelName != null) _buildInfoRow(context, l10n.model, device.modelName!),
+            if (device.modelType != null) _buildInfoRow(context, l10n.type, device.modelType!),
+            if (device.softwareVersion != null) _buildInfoRow(context, l10n.version, device.softwareVersion!),
+            if (device.hostName != null) _buildInfoRow(context, l10n.deviceInfoHostName, device.hostName!),
             if (device.hostId != null) _buildInfoRow(context, 'Host ID', device.hostId!),
           ],
         ),

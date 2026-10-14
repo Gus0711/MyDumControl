@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../domain/models/schedule.dart';
 import 'schedule_colors.dart';
+import '../../../../l10n/app_localizations.dart';
 
 /// Vue hebdomadaire du planning avec timeline visuelle
 class WeeklyScheduleView extends StatefulWidget {
@@ -139,7 +140,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               width: dayLabelWidth,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
-                day.shortName,
+                weekDayShortName(AppLocalizations.of(context)!, day),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   color: isWeekend ? colorScheme.outline : null,
@@ -173,6 +174,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
     ThemeData theme,
     ColorScheme colorScheme,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final daySchedule = widget.schedule.weeklySchedule.getDay(day);
     final transitions = daySchedule.sortedTransitions;
 
@@ -193,7 +195,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               Icon(Icons.calendar_today, size: 18, color: colorScheme.primary),
               const SizedBox(width: 8),
               Text(
-                day.displayName,
+                weekDayName(l10n, day),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -202,7 +204,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               TextButton.icon(
                 onPressed: () => setState(() => _selectedDay = null),
                 icon: const Icon(Icons.close, size: 18),
-                label: const Text('Fermer'),
+                label: Text(l10n.close),
               ),
             ],
           ),
@@ -212,7 +214,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                'Aucune transition programmée',
+                l10n.scheduleNoScheduledTransition,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: colorScheme.outline,
                   fontStyle: FontStyle.italic,

@@ -6,6 +6,7 @@ import '../../../application/providers/points_provider.dart';
 import '../../../data/database/app_database.dart';
 import '../../../data/database/tables/synoptic_bindings_table.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Écran d'édition des liaisons d'un synoptique
 class SynopticEditorScreen extends ConsumerStatefulWidget {
@@ -36,20 +37,21 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final synopticAsync = ref.watch(synopticByIdProvider(widget.synopticId));
     final bindingsAsync = ref.watch(synopticBindingsProvider(widget.synopticId));
 
     return Scaffold(
       appBar: AppBar(
         title: synopticAsync.when(
-          data: (synoptic) => Text('Éditer: ${synoptic?.name ?? 'Synoptique'}'),
-          loading: () => const Text('Chargement...'),
-          error: (_, __) => const Text('Erreur'),
+          data: (synoptic) => Text(l10n.synopticEditTitle(synoptic?.name ?? l10n.synopticDefaultName)),
+          loading: () => Text(l10n.loading),
+          error: (_, __) => Text(l10n.error),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.help_outline),
-            tooltip: 'Aide',
+            tooltip: l10n.synopticHelp,
             onPressed: () => _showHelp(context),
           ),
         ],
@@ -57,7 +59,7 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
       body: synopticAsync.when(
         data: (synoptic) {
           if (synoptic == null) {
-            return const Center(child: Text('Synoptique non trouvé'));
+            return Center(child: Text(l10n.synopticNotFound));
           }
 
           // Trouver les éléments disponibles pour ce SVG
@@ -92,7 +94,7 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         child: Text(
-                          'Aperçu du synoptique',
+                          l10n.synopticPreview,
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
                       ),
@@ -131,7 +133,7 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
                           const Icon(Icons.link, size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            'Éléments configurables',
+                            l10n.synopticConfigurableElements,
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                         ],
@@ -147,7 +149,7 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
                           bindings,
                         ),
                         loading: () => const Center(child: CircularProgressIndicator()),
-                        error: (e, _) => Center(child: Text('Erreur: $e')),
+                        error: (e, _) => Center(child: Text(l10n.errorWithMessage(e.toString()))),
                       ),
                     ),
                   ],
@@ -157,7 +159,7 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Erreur: $error')),
+        error: (error, _) => Center(child: Text(l10n.errorWithMessage(error.toString()))),
       ),
     );
   }
@@ -169,6 +171,7 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
   ) {
     // Créer une map des bindings par elementId
     final bindingsMap = {for (final b in bindings) b.svgElementId: b};
+    final l10n = AppLocalizations.of(context)!;
 
     if (elementIds.isEmpty) {
       return Center(
@@ -179,8 +182,8 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
             children: [
               Icon(Icons.info_outline, size: 48, color: Colors.grey.shade400),
               const SizedBox(height: 16),
-              const Text(
-                'Aucun élément configurable détecté',
+              Text(
+                l10n.synopticNoConfigurableElements,
                 textAlign: TextAlign.center,
               ),
             ],
@@ -226,35 +229,28 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
   }
 
   void _showHelp(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.help_outline),
-            SizedBox(width: 8),
-            Text('Comment configurer'),
+            const Icon(Icons.help_outline),
+            const SizedBox(width: 8),
+            Text(l10n.synopticHowToConfigure),
           ],
         ),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '1. Sélectionnez un élément dans la liste\n'
-              '2. Choisissez le point BACnet à associer\n'
-              '3. Configurez le type de liaison:\n'
-              '   • Valeur: affiche la valeur du point\n'
-              '   • Couleur: change la couleur selon l\'état\n'
-              '   • Animation: active/désactive une animation\n'
-              '4. Personnalisez le format si nécessaire',
-            ),
+            Text(l10n.synopticHelpSteps),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Compris'),
+            child: Text(l10n.understood),
           ),
         ],
       ),
@@ -281,7 +277,7 @@ class _ElementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasBinding = binding != null;
-    final typeInfo = _getElementTypeInfo(elementId);
+    final typeInfo = _getElementTypeInfo(AppLocalizations.of(context)!, elementId);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Couleurs adaptées au thème
@@ -373,15 +369,15 @@ class _ElementCard extends StatelessWidget {
     );
   }
 
-  _ElementTypeInfo _getElementTypeInfo(String elementId) {
+  _ElementTypeInfo _getElementTypeInfo(AppLocalizations l10n, String elementId) {
     if (elementId.startsWith('val_')) {
-      return _ElementTypeInfo(Icons.numbers, 'Valeur numérique');
+      return _ElementTypeInfo(Icons.numbers, l10n.synopticNumericValue);
     } else if (elementId.startsWith('ind_')) {
-      return _ElementTypeInfo(Icons.circle, 'Indicateur d\'état');
+      return _ElementTypeInfo(Icons.circle, l10n.synopticStateIndicator);
     } else if (elementId.startsWith('anim_')) {
-      return _ElementTypeInfo(Icons.animation, 'Animation');
+      return _ElementTypeInfo(Icons.animation, l10n.synopticAnimation);
     }
-    return _ElementTypeInfo(Icons.extension, 'Élément');
+    return _ElementTypeInfo(Icons.extension, l10n.synopticElement);
   }
 }
 
@@ -455,6 +451,7 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final pointsState = ref.watch(pointsProvider);
     final filteredPoints = pointsState.points.where((p) {
       if (_searchQuery.isEmpty) return true;
@@ -504,7 +501,7 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Configurer la liaison',
+                            l10n.synopticConfigureBinding,
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           Text(
@@ -521,7 +518,7 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   if (widget.existingBinding != null)
                     IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
-                      tooltip: 'Supprimer la liaison',
+                      tooltip: l10n.synopticDeleteBinding,
                       onPressed: _deleteBinding,
                     ),
                 ],
@@ -536,9 +533,9 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   // Type de liaison
-                  const Text(
-                    'Type de liaison',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                  Text(
+                    l10n.synopticBindingType,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   SegmentedButton<BindingType>(
@@ -546,21 +543,21 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                     onSelectionChanged: (set) {
                       setState(() => _bindingType = set.first);
                     },
-                    segments: const [
+                    segments: [
                       ButtonSegment(
                         value: BindingType.value,
-                        icon: Icon(Icons.numbers),
-                        label: Text('Valeur'),
+                        icon: const Icon(Icons.numbers),
+                        label: Text(l10n.value),
                       ),
                       ButtonSegment(
                         value: BindingType.color,
-                        icon: Icon(Icons.palette),
-                        label: Text('Couleur'),
+                        icon: const Icon(Icons.palette),
+                        label: Text(l10n.synopticColor),
                       ),
                       ButtonSegment(
                         value: BindingType.animation,
-                        icon: Icon(Icons.animation),
-                        label: Text('Animation'),
+                        icon: const Icon(Icons.animation),
+                        label: Text(l10n.synopticAnimation),
                       ),
                     ],
                   ),
@@ -569,25 +566,25 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
 
                   // Configuration selon le type
                   if (_bindingType == BindingType.value) ...[
-                    const Text(
-                      'Format d\'affichage',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                    Text(
+                      l10n.synopticDisplayFormat,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _formatController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Ex: {value}°C ou {value}%',
-                        helperText: 'Utilisez {value} pour la valeur du point',
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        hintText: l10n.synopticFormatHint('{value}'),
+                        helperText: l10n.synopticFormatHelper('{value}'),
                       ),
                     ),
                   ],
 
                   if (_bindingType == BindingType.color) ...[
-                    const Text(
-                      'Couleurs',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                    Text(
+                      l10n.synopticColors,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -636,9 +633,9 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   ],
 
                   if (_bindingType == BindingType.animation) ...[
-                    const Text(
-                      'Configuration Animation',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                    Text(
+                      l10n.synopticAnimationConfig,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -661,7 +658,7 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'Animation ON/OFF',
+                                l10n.synopticAnimationOnOff,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w500,
                                   color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
@@ -671,8 +668,7 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'L\'animation sera visible quand la valeur du point est > seuil (actif), '
-                            'et masquée sinon.',
+                            l10n.synopticAnimationExplanation,
                             style: TextStyle(
                               fontSize: 12,
                               color: isDark ? Colors.blue.shade200 : Colors.blue.shade600,
@@ -686,17 +682,17 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   // Seuil pour couleur et animation
                   if (_bindingType == BindingType.color || _bindingType == BindingType.animation) ...[
                     const SizedBox(height: 16),
-                    const Text(
-                      'Seuil ON/OFF',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                    Text(
+                      l10n.synopticThreshold,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _thresholdController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
                         hintText: '0.5',
-                        helperText: 'Valeur > seuil = ON, sinon OFF (pour booléen: 0.5)',
+                        helperText: l10n.synopticThresholdHelper,
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     ),
@@ -705,18 +701,18 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   const SizedBox(height: 24),
 
                   // Sélection du point
-                  const Text(
-                    'Point BACnet',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                  Text(
+                    l10n.synopticBacnetPoint,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
 
                   // Recherche
                   TextField(
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Rechercher un point...',
-                      prefixIcon: Icon(Icons.search),
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      hintText: l10n.searchPoint,
+                      prefixIcon: const Icon(Icons.search),
                     ),
                     onChanged: (value) => setState(() => _searchQuery = value),
                   ),
@@ -727,10 +723,10 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   if (pointsState.isLoading)
                     const Center(child: CircularProgressIndicator())
                   else if (filteredPoints.isEmpty)
-                    const Center(
+                    Center(
                       child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('Aucun point trouvé'),
+                        padding: const EdgeInsets.all(24),
+                        child: Text(l10n.synopticNoPointFound),
                       ),
                     )
                   else
@@ -787,14 +783,14 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Annuler'),
+                      child: Text(l10n.cancel),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
                       onPressed: _canSave() ? _saveBinding : null,
-                      child: const Text('Enregistrer'),
+                      child: Text(l10n.save),
                     ),
                   ),
                 ],
@@ -851,20 +847,21 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
   }
 
   Future<void> _deleteBinding() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer la liaison ?'),
-        content: const Text('Cette action est irréversible.'),
+        title: Text(l10n.synopticDeleteBindingTitle),
+        content: Text(l10n.synopticIrreversible),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Supprimer'),
+            child: Text(l10n.delete),
           ),
         ],
       ),

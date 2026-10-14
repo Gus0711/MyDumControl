@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/providers/favorite_folders_provider.dart';
 import '../../data/database/app_database.dart';
+import '../../l10n/app_localizations.dart';
 import 'favorite_folder_dialog.dart';
 
 /// Dialog pour assigner un favori à plusieurs dossiers
@@ -66,9 +67,10 @@ class _AssignFoldersDialogState extends ConsumerState<AssignFoldersDialog> {
   @override
   Widget build(BuildContext context) {
     final foldersAsync = ref.watch(favoriteFoldersProvider);
+    final l10n = AppLocalizations.of(context)!;
 
     return AlertDialog(
-      title: const Text('Assigner aux dossiers'),
+      title: Text(l10n.assignToFoldersDialog),
       content: SizedBox(
         width: 300,
         child: Column(
@@ -113,14 +115,14 @@ class _AssignFoldersDialogState extends ConsumerState<AssignFoldersDialog> {
                         Icon(Icons.folder_off, size: 48, color: Colors.grey.shade400),
                         const SizedBox(height: 8),
                         Text(
-                          'Aucun dossier',
+                          l10n.widgetNoFolder,
                           style: TextStyle(color: Colors.grey.shade600),
                         ),
                         const SizedBox(height: 16),
                         OutlinedButton.icon(
                           onPressed: () => _createNewFolder(context),
                           icon: const Icon(Icons.create_new_folder),
-                          label: const Text('Créer un dossier'),
+                          label: Text(l10n.widgetCreateFolder),
                         ),
                       ],
                     ),
@@ -158,7 +160,7 @@ class _AssignFoldersDialogState extends ConsumerState<AssignFoldersDialog> {
                         const Divider(),
                         ListTile(
                           leading: const Icon(Icons.create_new_folder),
-                          title: const Text('Nouveau dossier...'),
+                          title: Text(l10n.widgetNewFolderEllipsis),
                           dense: true,
                           onTap: () => _createNewFolder(context),
                         ),
@@ -176,7 +178,7 @@ class _AssignFoldersDialogState extends ConsumerState<AssignFoldersDialog> {
               error: (error, _) => Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Text('Erreur: $error'),
+                  child: Text(l10n.errorWithMessage(error.toString())),
                 ),
               ),
             ),
@@ -186,11 +188,11 @@ class _AssignFoldersDialogState extends ConsumerState<AssignFoldersDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         ElevatedButton(
           onPressed: () => Navigator.pop(context, _selectedFolderIds.toList()),
-          child: const Text('Appliquer'),
+          child: Text(l10n.apply),
         ),
       ],
     );

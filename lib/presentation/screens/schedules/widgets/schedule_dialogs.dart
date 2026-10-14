@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../../../../domain/models/schedule.dart';
+import '../../../../l10n/app_localizations.dart';
+import 'schedule_colors.dart';
 
 /// Formats minutes since midnight as HH:mm ('24:00' for end of day).
 String formatMinutesOfDay(int minutes) {
@@ -17,13 +19,13 @@ String formatMinutesOfDay(int minutes) {
 class TimeSlotDialog extends StatefulWidget {
   final Schedule schedule;
   final TimeSlot? existingSlot;
-  final String title;
+  final String? title;
 
   const TimeSlotDialog({
     super.key,
     required this.schedule,
     this.existingSlot,
-    this.title = 'Nouveau créneau',
+    this.title,
   });
 
   @override
@@ -58,6 +60,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final possibleValues = widget.schedule.possibleValues
@@ -65,7 +68,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
         .toList();
 
     return AlertDialog(
-      title: Text(widget.title),
+      title: Text(widget.title ?? l10n.scheduleNewSlot),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -73,7 +76,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
           children: [
             // Option "Toute la journée"
             SwitchListTile(
-              title: const Text('Toute la journée'),
+              title: Text(l10n.scheduleAllDay),
               subtitle: const Text('00:00 - 24:00'),
               value: _isAllDay,
               contentPadding: EdgeInsets.zero,
@@ -102,7 +105,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
                   children: [
                     // Heure de début
                     Text(
-                      'Heure de début',
+                      l10n.scheduleStartTime,
                       style: theme.textTheme.labelLarge,
                     ),
                     const SizedBox(height: 8),
@@ -112,7 +115,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
 
                     // Heure de fin
                     Text(
-                      'Heure de fin',
+                      l10n.scheduleEndTime,
                       style: theme.textTheme.labelLarge,
                     ),
                     const SizedBox(height: 8),
@@ -126,7 +129,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
 
             // Sélecteur d'état
             Text(
-              'État',
+              l10n.state,
               style: theme.textTheme.labelLarge,
             ),
             const SizedBox(height: 8),
@@ -159,11 +162,11 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: _canSave() ? _save : null,
-          child: const Text('Valider'),
+          child: Text(l10n.validate),
         ),
       ],
     );
@@ -253,6 +256,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
   }
 
   Widget _buildDurationInfo(ThemeData theme, ColorScheme colorScheme) {
+    final l10n = AppLocalizations.of(context)!;
     final duration = _endMinutes - _startMinutes;
 
     final isValid = duration > 0;
@@ -261,13 +265,13 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
 
     String durationText;
     if (!isValid) {
-      durationText = 'L\'heure de fin doit être après l\'heure de début';
+      durationText = l10n.scheduleEndAfterStartError;
     } else if (hours == 0) {
-      durationText = 'Durée: ${minutes}min';
+      durationText = l10n.scheduleDuration('${minutes}min');
     } else if (minutes == 0) {
-      durationText = 'Durée: ${hours}h';
+      durationText = l10n.scheduleDuration('${hours}h');
     } else {
-      durationText = 'Durée: ${hours}h${minutes.toString().padLeft(2, '0')}';
+      durationText = l10n.scheduleDuration('${hours}h${minutes.toString().padLeft(2, '0')}');
     }
 
     return Container(
@@ -394,11 +398,12 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return AlertDialog(
-      title: const Text('Sélectionner l\'heure'),
+      title: Text(l10n.scheduleSelectTime),
       content: SizedBox(
         width: 280,
         child: Column(
@@ -526,7 +531,7 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    'Minuit (fin de journée)',
+                    l10n.scheduleMidnightEndOfDay,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onTertiaryContainer,
                       fontWeight: FontWeight.w500,
@@ -540,11 +545,11 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_totalMinutes),
-          child: const Text('OK'),
+          child: Text(l10n.ok),
         ),
       ],
     );
@@ -668,13 +673,13 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
 class TransitionDialog extends StatefulWidget {
   final Schedule schedule;
   final ScheduleTransition? existingTransition;
-  final String title;
+  final String? title;
 
   const TransitionDialog({
     super.key,
     required this.schedule,
     this.existingTransition,
-    this.title = 'Nouvelle transition',
+    this.title,
   });
 
   @override
@@ -712,19 +717,20 @@ class _TransitionDialogState extends State<TransitionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final possibleValues = widget.schedule.possibleValues;
 
     return AlertDialog(
-      title: Text(widget.title),
+      title: Text(widget.title ?? l10n.scheduleNewTransition),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Sélecteur d'heure
           Text(
-            'Heure',
+            l10n.scheduleTime,
             style: theme.textTheme.labelLarge,
           ),
           const SizedBox(height: 8),
@@ -770,7 +776,7 @@ class _TransitionDialogState extends State<TransitionDialog> {
 
           // Sélecteur de valeur
           Text(
-            'État',
+            l10n.state,
             style: theme.textTheme.labelLarge,
           ),
           const SizedBox(height: 8),
@@ -797,7 +803,7 @@ class _TransitionDialogState extends State<TransitionDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () {
@@ -807,7 +813,7 @@ class _TransitionDialogState extends State<TransitionDialog> {
             );
             Navigator.of(context).pop(transition);
           },
-          child: const Text('Valider'),
+          child: Text(l10n.validate),
         ),
       ],
     );
@@ -831,34 +837,37 @@ class DayActionsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
     return AlertDialog(
-      title: Text(day.displayName),
+      title: Text(weekDayName(l10n, day)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (hasTransitions)
             ListTile(
               leading: const Icon(Icons.content_copy),
-              title: const Text('Copier ce jour'),
+              title: Text(l10n.scheduleCopyDay),
               onTap: () => Navigator.of(context).pop(DayAction.copy),
             ),
           if (hasClipboard) ...[
             ListTile(
               leading: const Icon(Icons.content_paste),
-              title: Text('Coller ici (depuis ${clipboardSource?.shortName})'),
+              title: Text(l10n.schedulePasteHereFrom(
+                clipboardSource != null ? weekDayShortName(l10n, clipboardSource!) : '',
+              )),
               onTap: () => Navigator.of(context).pop(DayAction.paste),
             ),
             ListTile(
               leading: const Icon(Icons.work_outline),
-              title: const Text('Coller sur jours ouvrés'),
-              subtitle: const Text('Lun-Ven'),
+              title: Text(l10n.schedulePasteToWorkDays),
+              subtitle: Text(l10n.scheduleWorkDaysRange),
               onTap: () => Navigator.of(context).pop(DayAction.pasteToWorkDays),
             ),
             ListTile(
               leading: const Icon(Icons.calendar_month),
-              title: const Text('Coller sur tous les jours'),
+              title: Text(l10n.schedulePasteToAllDays),
               onTap: () => Navigator.of(context).pop(DayAction.pasteToAll),
             ),
           ],
@@ -866,7 +875,7 @@ class DayActionsDialog extends StatelessWidget {
             ListTile(
               leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
               title: Text(
-                'Effacer ce jour',
+                l10n.scheduleClearDay,
                 style: TextStyle(color: theme.colorScheme.error),
               ),
               onTap: () => Navigator.of(context).pop(DayAction.clear),
@@ -876,7 +885,7 @@ class DayActionsDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
       ],
     );
@@ -903,20 +912,21 @@ class SaveConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       icon: const Icon(Icons.save_outlined),
-      title: const Text('Sauvegarder le planning ?'),
-      content: const Text(
-        'Les modifications seront envoyées à l\'automate et prendront effet immédiatement.',
+      title: Text(l10n.scheduleSaveConfirmTitle),
+      content: Text(
+        l10n.scheduleSaveConfirmMessage,
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Sauvegarder'),
+          child: Text(l10n.saveChanges),
         ),
       ],
     );
@@ -929,23 +939,24 @@ class DiscardChangesDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       icon: Icon(Icons.warning_amber, color: Theme.of(context).colorScheme.error),
-      title: const Text('Annuler les modifications ?'),
-      content: const Text(
-        'Toutes les modifications non sauvegardées seront perdues.',
+      title: Text(l10n.scheduleDiscardConfirmTitle),
+      content: Text(
+        l10n.scheduleDiscardConfirmMessage,
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Continuer l\'édition'),
+          child: Text(l10n.scheduleContinueEditing),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: FilledButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
       ],
     );
@@ -965,23 +976,24 @@ class DeleteTransitionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-      title: const Text('Supprimer cette transition ?'),
+      title: Text(l10n.scheduleDeleteTransitionTitle),
       content: Text(
-        'Transition à ${transition.formattedTime} → $stateText',
+        l10n.transitionAt(stateText, transition.formattedTime),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: FilledButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
-          child: const Text('Supprimer'),
+          child: Text(l10n.delete),
         ),
       ],
     );
@@ -1001,27 +1013,28 @@ class DeleteSlotDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final timeText = slot.isAllDay
-        ? 'Toute la journée'
+        ? l10n.scheduleAllDay
         : '${slot.formattedStart} - ${slot.formattedEnd}';
 
     return AlertDialog(
       icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-      title: const Text('Supprimer ce créneau ?'),
+      title: Text(l10n.scheduleDeleteSlotTitle),
       content: Text(
-        '$timeText : $stateText',
+        l10n.timeState(stateText, timeText),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: FilledButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
-          child: const Text('Supprimer'),
+          child: Text(l10n.delete),
         ),
       ],
     );

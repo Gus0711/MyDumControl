@@ -6,6 +6,7 @@ import '../../../application/providers/dashboard_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Écran listant tous les dashboards de la connexion active
 class DashboardListScreen extends ConsumerStatefulWidget {
@@ -38,14 +39,15 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
   @override
   Widget build(BuildContext context) {
     final dashboardsAsync = ref.watch(dashboardsProvider);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: GradientAppBar(
-        title: 'Tableaux de bord',
+        title: l10n.dashboards,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            tooltip: 'Créer un dashboard',
+            tooltip: l10n.createDashboard,
             onPressed: () => _showCreateDialog(context),
           ),
         ],
@@ -65,7 +67,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
             ? FloatingActionButton.extended(
                 onPressed: () => _showCreateDialog(context),
                 icon: const Icon(Icons.add),
-                label: const Text('Nouveau'),
+                label: Text(l10n.dashboardNewShort),
               )
             : null,
         orElse: () => null,
@@ -74,6 +76,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
@@ -88,14 +91,14 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
             ),
             const SizedBox(height: 24),
             Text(
-              'Aucun tableau de bord',
+              l10n.noDashboard,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Créez votre premier tableau de bord pour visualiser\nplusieurs graphiques sur une seule page.',
+              l10n.dashboardEmptyHint,
               textAlign: TextAlign.center,
               style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
             ),
@@ -103,7 +106,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
             ElevatedButton.icon(
               onPressed: () => _showCreateDialog(context),
               icon: const Icon(Icons.add),
-              label: const Text('Créer un tableau de bord'),
+              label: Text(l10n.createDashboard),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               ),
@@ -139,6 +142,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
   }
 
   Widget _buildErrorState(BuildContext context, Object error) {
+    final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Padding(
@@ -149,7 +153,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
             Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
             const SizedBox(height: 16),
             Text(
-              'Erreur de chargement',
+              l10n.loadingError,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
@@ -162,7 +166,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
             ElevatedButton.icon(
               onPressed: () => ref.invalidate(dashboardsProvider),
               icon: const Icon(Icons.refresh),
-              label: const Text('Réessayer'),
+              label: Text(l10n.retry),
             ),
           ],
         ),
@@ -212,22 +216,21 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
   }
 
   Future<void> _showDeleteConfirmation(BuildContext context, Dashboard dashboard) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer le tableau de bord ?'),
-        content: Text(
-          'Le tableau de bord "${dashboard.name}" et tous ses widgets seront supprimés définitivement.',
-        ),
+        title: Text(l10n.deleteDashboardConfirm),
+        content: Text(l10n.deleteDashboardMessage(dashboard.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Supprimer'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -263,6 +266,7 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final animation = CurvedAnimation(
       parent: animationController,
       curve: Interval(
@@ -332,7 +336,7 @@ class _DashboardCard extends StatelessWidget {
                         builder: (context) {
                           final isDark = Theme.of(context).brightness == Brightness.dark;
                           return Text(
-                            'Grille ${dashboard.columns}x${dashboard.rows}',
+                            l10n.dashboardGridSize(dashboard.columns, dashboard.rows),
                             style: TextStyle(
                               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                               fontSize: 13,
@@ -357,19 +361,19 @@ class _DashboardCard extends StatelessWidget {
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'edit',
                       child: ListTile(
-                        leading: Icon(Icons.edit),
-                        title: Text('Modifier'),
+                        leading: const Icon(Icons.edit),
+                        title: Text(l10n.edit),
                         contentPadding: EdgeInsets.zero,
                       ),
                     ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'delete',
                       child: ListTile(
-                        leading: Icon(Icons.delete, color: Colors.red),
-                        title: Text('Supprimer', style: TextStyle(color: Colors.red)),
+                        leading: const Icon(Icons.delete, color: Colors.red),
+                        title: Text(l10n.delete, style: const TextStyle(color: Colors.red)),
                         contentPadding: EdgeInsets.zero,
                       ),
                     ),
@@ -451,8 +455,9 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: Text(_isEditing ? 'Modifier le tableau de bord' : 'Nouveau tableau de bord'),
+      title: Text(_isEditing ? l10n.editDashboard : l10n.newDashboard),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -461,10 +466,10 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
             // Nom
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Nom',
-                hintText: 'Ex: Chauffage, Ventilation...',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.name,
+                hintText: l10n.dashboardNameHint,
+                border: const OutlineInputBorder(),
               ),
               autofocus: true,
               textCapitalization: TextCapitalization.sentences,
@@ -474,7 +479,7 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
 
             // Grille
             Text(
-              'Disposition de la grille',
+              l10n.dashboardGridLayout,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -484,7 +489,7 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
             // Colonnes
             Row(
               children: [
-                const Expanded(child: Text('Colonnes')),
+                Expanded(child: Text(l10n.dashboardColumns)),
                 _buildCounter(
                   value: _columns,
                   onDecrement: _columns > 1 ? () => setState(() => _columns--) : null,
@@ -497,7 +502,7 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
             // Lignes
             Row(
               children: [
-                const Expanded(child: Text('Lignes')),
+                Expanded(child: Text(l10n.dashboardRows)),
                 _buildCounter(
                   value: _rows,
                   onDecrement: _rows > 1 ? () => setState(() => _rows--) : null,
@@ -549,7 +554,7 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
                 builder: (context) {
                   final isDark = Theme.of(context).brightness == Brightness.dark;
                   return Text(
-                    '${_columns * _rows} widgets',
+                    l10n.widgets(_columns * _rows),
                     style: TextStyle(
                       color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                       fontSize: 12,
@@ -564,7 +569,7 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         ElevatedButton(
           onPressed: _nameController.text.trim().isNotEmpty
@@ -577,7 +582,7 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
                   });
                 }
               : null,
-          child: Text(_isEditing ? 'Enregistrer' : 'Créer'),
+          child: Text(_isEditing ? l10n.save : l10n.create),
         ),
       ],
     );

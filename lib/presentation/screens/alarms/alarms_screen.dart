@@ -70,7 +70,7 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
                     else
                       const SizedBox(width: 18),
                     const SizedBox(width: 8),
-                    Text(option.displayName),
+                    Text(_sortOptionLabel(l10n, option)),
                   ],
                 ),
               );
@@ -233,6 +233,21 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
 }
 
 /// Tile pour afficher une alarme
+String _sortOptionLabel(AppLocalizations l10n, AlarmSortOption option) {
+  switch (option) {
+    case AlarmSortOption.nameAsc:
+      return l10n.sortNameAsc;
+    case AlarmSortOption.nameDesc:
+      return l10n.sortNameDesc;
+    case AlarmSortOption.typeAsc:
+      return l10n.sortType;
+    case AlarmSortOption.timestampDesc:
+      return l10n.alarmsSortNewest;
+    case AlarmSortOption.timestampAsc:
+      return l10n.alarmsSortOldest;
+  }
+}
+
 class _AlarmTile extends StatelessWidget {
   final BacnetObject alarm;
 
@@ -362,7 +377,7 @@ class _AlarmTile extends StatelessWidget {
                     Icon(Icons.access_time, size: 16, color: isDark ? Colors.grey.shade400 : Colors.grey.shade500),
                     const SizedBox(width: 4),
                     Text(
-                      _formatTimestamp(alarm.alarmTimestamp!),
+                      _formatTimestamp(AppLocalizations.of(context)!, alarm.alarmTimestamp!),
                       style: TextStyle(
                         fontSize: 12,
                         color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
@@ -378,7 +393,7 @@ class _AlarmTile extends StatelessWidget {
     );
   }
 
-  String _formatTimestamp(DateTime timestamp) {
+  String _formatTimestamp(AppLocalizations l10n, DateTime timestamp) {
     final now = DateTime.now();
     final diff = now.difference(timestamp);
 
@@ -392,11 +407,11 @@ class _AlarmTile extends StatelessWidget {
 
     // Ajouter une indication relative
     if (diff.inMinutes < 60) {
-      dateStr += ' (il y a ${diff.inMinutes} min)';
+      dateStr += ' (${l10n.agoMinutes(diff.inMinutes)})';
     } else if (diff.inHours < 24) {
-      dateStr += ' (il y a ${diff.inHours} h)';
+      dateStr += ' (${l10n.agoHours(diff.inHours)})';
     } else if (diff.inDays < 7) {
-      dateStr += ' (il y a ${diff.inDays} jour${diff.inDays > 1 ? 's' : ''})';
+      dateStr += ' (${l10n.agoDays(diff.inDays)})';
     }
 
     return dateStr;

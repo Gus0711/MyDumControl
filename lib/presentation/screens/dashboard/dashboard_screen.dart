@@ -10,6 +10,7 @@ import '../../widgets/gradient_app_bar.dart';
 import '../../widgets/curve_selection_dialog.dart';
 import 'widgets/dashboard_widget_card.dart';
 import 'widgets/add_widget_dialog.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Écran affichant un dashboard avec sa grille de widgets
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -26,16 +27,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final dashboardAsync = ref.watch(watchDashboardByIdProvider(widget.dashboardId));
     final widgetsAsync = ref.watch(dashboardWidgetsProvider(widget.dashboardId));
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: dashboardAsync.when(
         data: (dashboard) => GradientAppBar(
-          title: dashboard?.name ?? 'Dashboard',
+          title: dashboard?.name ?? l10n.dashboard,
           actions: [
             // Rafraîchir
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: 'Rafraîchir',
+              tooltip: l10n.refresh,
               onPressed: () {
                 ref.invalidate(dashboardWidgetsProvider(widget.dashboardId));
               },
@@ -53,19 +55,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'settings',
                   child: ListTile(
-                    leading: Icon(Icons.settings),
-                    title: Text('Paramètres'),
+                    leading: const Icon(Icons.settings),
+                    title: Text(l10n.settings),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'delete',
                   child: ListTile(
-                    leading: Icon(Icons.delete, color: Colors.red),
-                    title: Text('Supprimer', style: TextStyle(color: Colors.red)),
+                    leading: const Icon(Icons.delete, color: Colors.red),
+                    title: Text(l10n.delete, style: const TextStyle(color: Colors.red)),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
@@ -73,23 +75,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ],
         ),
-        loading: () => const GradientAppBar(title: 'Chargement...'),
-        error: (_, __) => const GradientAppBar(title: 'Erreur'),
+        loading: () => GradientAppBar(title: l10n.loading),
+        error: (_, __) => GradientAppBar(title: l10n.error),
       ),
       body: dashboardAsync.when(
         data: (dashboard) {
           if (dashboard == null) {
-            return const Center(child: Text('Dashboard introuvable'));
+            return Center(child: Text(l10n.dashboardNotFound));
           }
 
           return widgetsAsync.when(
             data: (widgets) => _buildGrid(context, dashboard, widgets),
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(child: Text('Erreur: $error')),
+            error: (error, _) => Center(child: Text(l10n.errorWithMessage('$error'))),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Erreur: $error')),
+        error: (error, _) => Center(child: Text(l10n.errorWithMessage('$error'))),
       ),
     );
   }
@@ -206,6 +208,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         child: Builder(
           builder: (context) {
+            final l10n = AppLocalizations.of(context)!;
             final isDark = Theme.of(context).brightness == Brightness.dark;
             return Center(
               child: Column(
@@ -218,7 +221,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Ajouter',
+                    l10n.add,
                     style: TextStyle(
                       color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                       fontWeight: FontWeight.w500,
@@ -368,20 +371,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _deleteWidget(DashboardWidget widgetData) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer le widget ?'),
-        content: const Text('Ce widget sera supprimé du tableau de bord.'),
+        title: Text(l10n.dashboardDeleteWidgetConfirm),
+        content: Text(l10n.dashboardDeleteWidgetMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Supprimer'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -413,17 +417,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
 
     final controller = TextEditingController(text: currentTitle);
+    final l10n = AppLocalizations.of(context)!;
 
     final newTitle = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Modifier le titre'),
+        title: Text(l10n.dashboardEditTitle),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Titre',
-            hintText: 'Laisser vide pour le titre par défaut',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.dashboardTitleLabel,
+            hintText: l10n.dashboardTitleHint,
+            border: const OutlineInputBorder(),
           ),
           autofocus: true,
           textCapitalization: TextCapitalization.sentences,
@@ -431,11 +436,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Enregistrer'),
+            child: Text(l10n.save),
           ),
         ],
       ),
@@ -502,26 +507,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final nameController = TextEditingController(text: dashboard.name);
     int columns = dashboard.columns;
     int rows = dashboard.rows;
+    final l10n = AppLocalizations.of(context)!;
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Paramètres du dashboard'),
+          title: Text(l10n.dashboardSettingsTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nom',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: l10n.name,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 16),
               Row(
                 children: [
-                  const Text('Colonnes: '),
+                  Text(l10n.dashboardColumnsWithColon),
                   IconButton(
                     icon: const Icon(Icons.remove),
                     onPressed: columns > 1
@@ -539,7 +545,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               Row(
                 children: [
-                  const Text('Lignes: '),
+                  Text(l10n.dashboardRowsWithColon),
                   IconButton(
                     icon: const Icon(Icons.remove),
                     onPressed: rows > 1 ? () => setDialogState(() => rows--) : null,
@@ -556,7 +562,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Annuler'),
+              child: Text(l10n.cancel),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop({
@@ -564,7 +570,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 'columns': columns,
                 'rows': rows,
               }),
-              child: const Text('Enregistrer'),
+              child: Text(l10n.save),
             ),
           ],
         ),
@@ -583,22 +589,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer le tableau de bord ?'),
-        content: const Text(
-          'Ce tableau de bord et tous ses widgets seront supprimés définitivement.',
-        ),
+        title: Text(l10n.deleteDashboardConfirm),
+        content: Text(l10n.dashboardDeletePermanentMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Supprimer'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -648,19 +653,20 @@ class _TrendLogSelectionDialogState extends State<_TrendLogSelectionDialog> {
       return tl.pointKey.toLowerCase().contains(searchLower) ||
           (tl.pointName?.toLowerCase().contains(searchLower) ?? false);
     }).toList();
+    final l10n = AppLocalizations.of(context)!;
 
     return AlertDialog(
-      title: const Text('Sélectionner un trend log'),
+      title: Text(l10n.selectTrendLog),
       content: SizedBox(
         width: 400,
         height: 400,
         child: Column(
           children: [
             TextField(
-              decoration: const InputDecoration(
-                hintText: 'Rechercher...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: l10n.dashboardSearchHint,
+                prefixIcon: const Icon(Icons.search),
+                border: const OutlineInputBorder(),
                 isDense: true,
               ),
               onChanged: (value) => setState(() => _search = value),
@@ -693,11 +699,11 @@ class _TrendLogSelectionDialogState extends State<_TrendLogSelectionDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         ElevatedButton(
           onPressed: _selected != null ? () => Navigator.of(context).pop(_selected) : null,
-          child: const Text('Valider'),
+          child: Text(l10n.validate),
         ),
       ],
     );

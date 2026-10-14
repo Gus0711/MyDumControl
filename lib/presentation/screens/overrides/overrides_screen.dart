@@ -177,7 +177,7 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
               Icon(BacnetTypeUtils.getTypeIcon(type), color: BacnetTypeUtils.getTypeColor(type), size: 20),
               const SizedBox(width: 8),
               Text(
-                type.displayName,
+                BacnetTypeUtils.getTypeDisplayName(AppLocalizations.of(context)!, type),
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),

@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../application/providers/multi_curve_provider.dart';
 import '../../application/providers/trend_log_provider.dart';
 import '../../domain/models/multi_curve_chart.dart';
+import '../../l10n/app_localizations.dart';
 import 'chart_downsample.dart';
 import 'trend_log_viewer.dart';
 
@@ -170,6 +171,7 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
   }
 
   Widget _buildHeader(BuildContext context, MultiCurveViewerState state) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -181,7 +183,7 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Comparaison (${state.curveCount} courbes)',
+              l10n.chartComparisonTitle(state.curveCount),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -198,13 +200,13 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
             if (state.canAddCurve && widget.onAddCurve != null)
               IconButton(
                 icon: const Icon(Icons.add),
-                tooltip: 'Ajouter une courbe',
+                tooltip: l10n.chartAddCurve,
                 onPressed: widget.onAddCurve,
               ),
             // Bouton rafraîchir
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: 'Rafraîchir',
+              tooltip: l10n.refresh,
               onPressed: () => ref
                   .read(multiCurveViewerProvider(widget.chartId).notifier)
                   .refresh(),
@@ -213,7 +215,7 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
             if (widget.onExpandToFullscreen != null)
               IconButton(
                 icon: const Icon(Icons.fullscreen),
-                tooltip: 'Plein écran',
+                tooltip: l10n.trendFullscreen,
                 onPressed: widget.onExpandToFullscreen,
               ),
           ],
@@ -250,7 +252,7 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
     final error = state.error ??
         (state.curveErrors.isEmpty
             ? null
-            : '${state.curveErrors.length} courbe(s) non chargée(s)');
+            : AppLocalizations.of(context)!.chartCurvesNotLoaded(state.curveErrors.length));
     if (error == null) return chart;
 
     return Column(
@@ -410,7 +412,7 @@ class _MultiCurvePeriodSelector extends ConsumerWidget {
             .map((period) => Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
-                    label: Text(period.label),
+                    label: Text(trendPeriodLabel(AppLocalizations.of(context)!, period)),
                     selected: state.selectedPeriod == period,
                     onSelected: state.isLoading
                         ? null
@@ -470,11 +472,11 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
         .toList();
 
     if (visibleCurves.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
-          'Aucune courbe visible\nTouchez la légende pour afficher',
+          AppLocalizations.of(context)!.chartNoVisibleCurve,
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey),
+          style: const TextStyle(color: Colors.grey),
         ),
       );
     }
@@ -482,7 +484,7 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
     // Calculer les limites X
     final allSpots = visibleCurves.expand((c) => c.spots).toList();
     if (allSpots.isEmpty) {
-      return const Center(child: Text('Aucune donnée'));
+      return Center(child: Text(AppLocalizations.of(context)!.noData));
     }
 
     final minX = allSpots.map((s) => s.x).reduce(math.min);
@@ -716,6 +718,7 @@ class _MultiCurveStatistics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final visibleCurves = data.visibleCurves;
     if (visibleCurves.isEmpty) return const SizedBox.shrink();
 
@@ -729,7 +732,7 @@ class _MultiCurveStatistics extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _StatColumn(
-            label: 'Min',
+            label: l10n.statisticsMin,
             values: visibleCurves
                 .map((c) => (
                       name: c.name,
@@ -739,7 +742,7 @@ class _MultiCurveStatistics extends StatelessWidget {
                 .toList(),
           ),
           _StatColumn(
-            label: 'Max',
+            label: l10n.statisticsMax,
             values: visibleCurves
                 .map((c) => (
                       name: c.name,
@@ -749,7 +752,7 @@ class _MultiCurveStatistics extends StatelessWidget {
                 .toList(),
           ),
           _StatColumn(
-            label: 'Moy',
+            label: l10n.statisticsAvg,
             values: visibleCurves
                 .map((c) => (
                       name: c.name,
@@ -873,7 +876,7 @@ class _ErrorState extends ConsumerWidget {
               onPressed: () =>
                   ref.read(multiCurveViewerProvider(chartId).notifier).refresh(),
               icon: const Icon(Icons.refresh),
-              label: const Text('Réessayer'),
+              label: Text(AppLocalizations.of(context)!.retry),
             ),
           ],
         ),
@@ -896,7 +899,7 @@ class _EmptyState extends StatelessWidget {
             Icon(Icons.multiline_chart, size: 48, color: Colors.grey.shade400),
             const SizedBox(height: 16),
             Text(
-              'Aucune courbe sélectionnée\nAjoutez des trend logs à comparer',
+              AppLocalizations.of(context)!.chartNoCurveSelected,
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade600),
             ),

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../application/providers/trend_log_provider.dart';
 import '../../domain/models/trend_log.dart';
+import '../../l10n/app_localizations.dart';
 import 'chart_downsample.dart';
 
 // =============================================================================
@@ -186,6 +187,48 @@ class ChartColorTheme {
   }
 }
 
+/// Localized display name of a color theme
+String chartColorThemeLabel(AppLocalizations l10n, ChartColorTheme theme) {
+  switch (theme.name) {
+    case 'blue':
+      return l10n.trendColorBlue;
+    case 'green':
+      return l10n.trendColorGreen;
+    case 'orange':
+      return l10n.trendColorOrange;
+    case 'purple':
+      return l10n.trendColorPurple;
+    case 'red':
+      return l10n.trendColorRed;
+    case 'cyan':
+      return l10n.trendColorCyan;
+    case 'teal':
+      return l10n.trendColorTeal;
+    case 'indigo':
+      return l10n.trendColorIndigo;
+    default:
+      return theme.displayName;
+  }
+}
+
+/// Localized label of a trend period
+String trendPeriodLabel(AppLocalizations l10n, TrendPeriod period) {
+  switch (period) {
+    case TrendPeriod.hour:
+      return l10n.trendPeriodHour;
+    case TrendPeriod.day:
+      return l10n.trendPeriodDay;
+    case TrendPeriod.week:
+      return l10n.trendPeriodWeek;
+    case TrendPeriod.month:
+      return l10n.trendPeriodMonth;
+    case TrendPeriod.all:
+      return l10n.trendPeriodAll;
+    case TrendPeriod.custom:
+      return l10n.trendPeriodCustom;
+  }
+}
+
 /// Widget sélecteur de thème de couleur
 class _ColorThemeSelector extends StatelessWidget {
   final ChartColorTheme selectedTheme;
@@ -200,11 +243,12 @@ class _ColorThemeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (compact) {
       return PopupMenuButton<ChartColorTheme>(
         initialValue: selectedTheme,
         onSelected: onThemeChanged,
-        tooltip: 'Changer la couleur',
+        tooltip: l10n.trendChangeColor,
         icon: Container(
           width: 24,
           height: 24,
@@ -235,7 +279,7 @@ class _ColorThemeSelector extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Text(theme.displayName),
+                      Text(chartColorThemeLabel(l10n, theme)),
                       if (theme.name == selectedTheme.name) ...[
                         const Spacer(),
                         Icon(Icons.check, color: theme.primaryColor, size: 18),
@@ -483,8 +527,9 @@ class _AnnotationsMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return PopupMenuButton<String>(
-      tooltip: 'Annotations',
+      tooltip: l10n.trendAnnotations,
       icon: Icon(
         Icons.edit_note,
         color: _hasAnyAnnotation ? colorTheme.primaryColor : null,
@@ -519,36 +564,36 @@ class _AnnotationsMenu extends StatelessWidget {
       itemBuilder: (context) => [
         _buildMenuItem(
           'markers',
-          'Marqueurs Min/Max',
+          l10n.trendMinMaxMarkers,
           Icons.push_pin,
           annotations.showMinMaxMarkers,
         ),
         _buildMenuItem(
           'average',
-          'Ligne moyenne',
+          l10n.trendAverageLine,
           Icons.horizontal_rule,
           annotations.showAverageLine,
         ),
         _buildMenuItem(
           'minLine',
-          'Ligne minimum',
+          l10n.trendMinLine,
           Icons.arrow_downward,
           annotations.showMinLine,
         ),
         _buildMenuItem(
           'maxLine',
-          'Ligne maximum',
+          l10n.trendMaxLine,
           Icons.arrow_upward,
           annotations.showMaxLine,
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'reset',
           child: Row(
             children: [
-              Icon(Icons.clear_all, size: 20),
-              SizedBox(width: 12),
-              Text('Tout masquer'),
+              const Icon(Icons.clear_all, size: 20),
+              const SizedBox(width: 12),
+              Text(l10n.trendHideAll),
             ],
           ),
         ),
@@ -611,7 +656,7 @@ class _PeriodSelector extends ConsumerWidget {
             .map((period) => Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
-                    label: Text(period.label),
+                    label: Text(trendPeriodLabel(AppLocalizations.of(context)!, period)),
                     selected: state.selectedPeriod == period,
                     onSelected: state.isLoading
                         ? null
@@ -639,6 +684,7 @@ class _StatisticsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final valueRecords = data.records.where((r) => r.isValueRecord).length;
     final theme = colorTheme ?? ChartColorTheme.blue;
 
@@ -663,27 +709,27 @@ class _StatisticsBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _StatItem(
-            label: 'Points',
+            label: l10n.statisticsPoints,
             value: valueRecords.toString(),
             color: theme.primaryColor,
           ),
           if (data.minValue != null)
             _StatItem(
-              label: 'Min',
+              label: l10n.statisticsMin,
               value: _formatValue(data.minValue!),
               color: theme.primaryColor,
               icon: Icons.arrow_downward,
             ),
           if (data.maxValue != null)
             _StatItem(
-              label: 'Max',
+              label: l10n.statisticsMax,
               value: _formatValue(data.maxValue!),
               color: theme.primaryColor,
               icon: Icons.arrow_upward,
             ),
           if (data.avgValue != null)
             _StatItem(
-              label: 'Moy',
+              label: l10n.statisticsAvg,
               value: _formatValue(data.avgValue!),
               color: theme.primaryColor,
               icon: Icons.horizontal_rule,
@@ -806,7 +852,7 @@ class _ErrorState extends ConsumerWidget {
                   .read(trendLogViewerProvider(trendLogInstance).notifier)
                   .loadData(),
               icon: const Icon(Icons.refresh),
-              label: const Text('Réessayer'),
+              label: Text(AppLocalizations.of(context)!.retry),
             ),
           ],
         ),
@@ -831,7 +877,7 @@ class _EmptyState extends StatelessWidget {
             Icon(Icons.show_chart, size: 48, color: isDark ? Colors.grey.shade500 : Colors.grey.shade400),
             const SizedBox(height: 16),
             Text(
-              'Aucune donnée pour cette période',
+              AppLocalizations.of(context)!.trendNoDataForPeriod,
               style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
             ),
           ],
@@ -855,6 +901,7 @@ class _DataTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     var valueRecords = data.records.where((r) => r.isValueRecord).toList();
 
     // Trier par timestamp décroissant
@@ -870,10 +917,10 @@ class _DataTable extends StatelessWidget {
       headingRowHeight: fixedHeight != null ? 40 : 48,
       dataRowMinHeight: fixedHeight != null ? 36 : 40,
       dataRowMaxHeight: fixedHeight != null ? 36 : 40,
-      columns: const [
-        DataColumn(label: Text('Date/Heure')),
-        DataColumn(label: Text('Valeur'), numeric: true),
-        DataColumn(label: Text('Status')),
+      columns: [
+        DataColumn(label: Text(l10n.trendDateTime)),
+        DataColumn(label: Text(l10n.value), numeric: true),
+        DataColumn(label: Text(l10n.status)),
       ],
       rows: valueRecords.map((record) => _buildRow(record)).toList(),
     );
@@ -978,6 +1025,7 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
   }
 
   Widget _buildHeader(BuildContext context, TrendLogViewerState state) {
+    final l10n = AppLocalizations.of(context)!;
     final hasData = state.data != null && state.data!.records.isNotEmpty;
 
     return Row(
@@ -986,7 +1034,7 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Historique',
+            l10n.trendHistory,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -1001,23 +1049,23 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
         if (hasData)
           IconButton(
             icon: const Icon(Icons.fullscreen),
-            tooltip: 'Plein écran',
+            tooltip: l10n.trendFullscreen,
             onPressed: () => _openFullscreen(context, state),
           ),
         IconButton(
           icon: Icon(_showTable ? Icons.show_chart : Icons.table_chart),
-          tooltip: _showTable ? 'Voir graphique' : 'Voir tableau',
+          tooltip: _showTable ? l10n.trendShowChart : l10n.trendShowTable,
           onPressed: () => setState(() => _showTable = !_showTable),
         ),
         if (hasData)
           IconButton(
             icon: const Icon(Icons.download),
-            tooltip: 'Exporter CSV',
+            tooltip: l10n.trendExportCsv,
             onPressed: () => _exportCsv(state.data!),
           ),
         IconButton(
           icon: const Icon(Icons.refresh),
-          tooltip: 'Rafraîchir',
+          tooltip: l10n.refresh,
           onPressed: state.isLoading
               ? null
               : () => ref
@@ -1095,6 +1143,7 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
   Future<void> _exportCsv(TrendLogData data) async {
     final valueRecords = data.records.where((r) => r.isValueRecord).toList();
     if (valueRecords.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
 
     valueRecords.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
@@ -1118,14 +1167,14 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
       if (mounted) {
         await Share.shareXFiles(
           [XFile(file.path)],
-          subject: 'Export historique ${widget.pointName ?? 'Trend Log ${widget.trendLogInstance}'}',
+          subject: l10n.trendExportSubject(widget.pointName ?? 'Trend Log ${widget.trendLogInstance}'),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur lors de l\'export: $e'),
+            content: Text(l10n.exportError(e.toString())),
             backgroundColor: Colors.red,
           ),
         );
@@ -1200,10 +1249,11 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
   Widget build(BuildContext context) {
     final state = ref.watch(trendLogViewerProvider(widget.trendLogInstance));
     final data = state.data ?? widget.initialData;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.pointName ?? 'Historique'),
+        title: Text(widget.pointName ?? l10n.trendHistory),
         actions: [
           // Menu annotations (seulement si graphique visible)
           if (!_showTable)
@@ -1220,17 +1270,17 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
           ),
           IconButton(
             icon: Icon(_isLandscape ? Icons.screen_lock_portrait : Icons.screen_lock_landscape),
-            tooltip: _isLandscape ? 'Mode portrait' : 'Mode paysage',
+            tooltip: _isLandscape ? l10n.trendPortraitMode : l10n.trendLandscapeMode,
             onPressed: _toggleOrientation,
           ),
           IconButton(
             icon: Icon(_showTable ? Icons.show_chart : Icons.table_chart),
-            tooltip: _showTable ? 'Voir graphique' : 'Voir tableau',
+            tooltip: _showTable ? l10n.trendShowChart : l10n.trendShowTable,
             onPressed: () => setState(() => _showTable = !_showTable),
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Rafraîchir',
+            tooltip: l10n.refresh,
             onPressed: state.isLoading
                 ? null
                 : () => ref
@@ -1312,7 +1362,7 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
       final isDark = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Text(
-          'Aucune donnée numérique',
+          AppLocalizations.of(context)!.trendNoNumericData,
           style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
         ),
       );
@@ -1511,7 +1561,7 @@ class _TrendChartState extends State<_TrendChart> {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Text(
-          'Aucune donnée à afficher',
+          AppLocalizations.of(context)!.trendNoDataToDisplay,
           style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
         ),
       );
@@ -1608,12 +1658,13 @@ class _TrendChartState extends State<_TrendChart> {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       return Center(
         child: Text(
-          'Données invalides',
+          AppLocalizations.of(context)!.trendInvalidData,
           style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
         ),
       );
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final yRange = maxY - minY;
     final xRange = maxX - minX;
 
@@ -1642,7 +1693,7 @@ class _TrendChartState extends State<_TrendChart> {
             fontSize: 10,
             fontWeight: FontWeight.bold,
           ),
-          labelResolver: (line) => 'Moy: ${_formatValue(line.y)}',
+          labelResolver: (line) => l10n.trendAvgLineLabel(_formatValue(line.y)),
         ),
       ));
     }
@@ -2043,7 +2094,7 @@ class _ZoomControls extends StatelessWidget {
               icon: Icons.fit_screen,
               onTap: onReset,
               colorTheme: colorTheme,
-              tooltip: 'Réinitialiser',
+              tooltip: AppLocalizations.of(context)!.reset,
             ),
           ],
         ],
@@ -2158,7 +2209,7 @@ class EmbeddedTrendChart extends ConsumerWidget {
             Icon(Icons.error_outline, color: Colors.red.shade300, size: 32),
             const SizedBox(height: 8),
             Text(
-              'Erreur de chargement',
+              AppLocalizations.of(context)!.loadingError,
               style: TextStyle(color: Colors.red.shade600, fontSize: 12),
             ),
           ],
@@ -2179,7 +2230,7 @@ class EmbeddedTrendChart extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Aucune donnée',
+              AppLocalizations.of(context)!.noData,
               style: TextStyle(
                 color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 fontSize: 12,
@@ -2192,7 +2243,7 @@ class EmbeddedTrendChart extends ConsumerWidget {
 
     final chartData = _ChartData.fromRecords(state.data!.records);
     if (chartData == null) {
-      return const Center(child: Text('Aucune donnée numérique'));
+      return Center(child: Text(AppLocalizations.of(context)!.trendNoNumericData));
     }
 
     // Widget qui s'adapte à l'espace disponible

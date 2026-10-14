@@ -4,6 +4,7 @@ import '../../../../application/providers/schedule_provider.dart';
 import '../../../../domain/models/schedule.dart';
 import 'schedule_colors.dart';
 import 'schedule_dialogs.dart';
+import '../../../../l10n/app_localizations.dart';
 
 /// Vue semaine compacte avec tous les jours en colonnes verticales
 /// Style Google Agenda - affiche les 7 jours côte à côte
@@ -42,6 +43,7 @@ class VerticalDayScheduleView extends ConsumerWidget {
 
   void _showDayActionsMenu(BuildContext context, WidgetRef ref, WeekDay day, WeekDay? clipboardSource) {
     final colorScheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
@@ -56,7 +58,7 @@ class VerticalDayScheduleView extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                day.displayName,
+                weekDayName(l10n, day),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -64,19 +66,19 @@ class VerticalDayScheduleView extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.content_copy),
-              title: const Text('Copier ce jour'),
+              title: Text(l10n.scheduleCopyDay),
               onTap: () {
                 ref.read(scheduleEditProvider.notifier).copyDay(day);
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${day.displayName} copié')),
+                  SnackBar(content: Text(l10n.scheduleDayCopied(weekDayName(l10n, day)))),
                 );
               },
             ),
             if (clipboardSource != null) ...[
               ListTile(
                 leading: const Icon(Icons.content_paste),
-                title: Text('Coller depuis ${clipboardSource.shortName}'),
+                title: Text(l10n.schedulePasteFrom(weekDayShortName(l10n, clipboardSource))),
                 onTap: () {
                   ref.read(scheduleEditProvider.notifier).pasteDay(day);
                   Navigator.pop(ctx);
@@ -84,7 +86,7 @@ class VerticalDayScheduleView extends ConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.work_outline),
-                title: const Text('Coller sur jours ouvrés'),
+                title: Text(l10n.schedulePasteToWorkDays),
                 onTap: () {
                   ref.read(scheduleEditProvider.notifier).pasteDayToWorkDays();
                   Navigator.pop(ctx);
@@ -92,7 +94,7 @@ class VerticalDayScheduleView extends ConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.calendar_view_week),
-                title: const Text('Coller sur tous les jours'),
+                title: Text(l10n.schedulePasteToAllDays),
                 onTap: () {
                   ref.read(scheduleEditProvider.notifier).pasteDayToAllDays();
                   Navigator.pop(ctx);
@@ -102,7 +104,7 @@ class VerticalDayScheduleView extends ConsumerWidget {
             const Divider(),
             ListTile(
               leading: Icon(Icons.delete_outline, color: colorScheme.error),
-              title: Text('Effacer ce jour', style: TextStyle(color: colorScheme.error)),
+              title: Text(l10n.scheduleClearDay, style: TextStyle(color: colorScheme.error)),
               onTap: () {
                 ref.read(scheduleEditProvider.notifier).clearDay(day);
                 Navigator.pop(ctx);
@@ -247,6 +249,7 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
   }
 
   Widget _buildDaysHeader(ThemeData theme, ColorScheme colorScheme) {
+    final l10n = AppLocalizations.of(context)!;
     final today = _getCurrentWeekDay();
 
     return Container(
@@ -294,7 +297,7 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            day.shortName.substring(0, 3),
+                            weekDayShortName(l10n, day),
                             style: theme.textTheme.labelSmall?.copyWith(
                               fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
                               color: isToday
@@ -612,6 +615,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -631,7 +635,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
                 Icon(Icons.edit_calendar, color: colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Modifier - ${widget.day.displayName}',
+                  l10n.scheduleEditDayTitle(weekDayName(l10n, widget.day)),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -654,7 +658,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
                   child: Column(
                     children: [
                       _buildTimeButton(
-                        label: 'Début',
+                        label: l10n.start,
                         time: formatMinutesOfDay(_startMinutes),
                         onTap: _selectStartTime,
                       ),
@@ -675,7 +679,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
                   child: Column(
                     children: [
                       _buildTimeButton(
-                        label: 'Fin',
+                        label: l10n.end,
                         time: formatMinutesOfDay(_endMinutes),
                         onTap: _selectEndTime,
                         highlight: _endMinutes >= 1440,
@@ -693,7 +697,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
             const SizedBox(height: 16),
 
             // Sélecteur d'état
-            Text('État', style: theme.textTheme.labelMedium),
+            Text(l10n.state, style: theme.textTheme.labelMedium),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -722,7 +726,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Annuler'),
+                    child: Text(l10n.cancel),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -736,7 +740,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
                       );
                       widget.onSave(newSlot);
                     },
-                    child: const Text('Enregistrer'),
+                    child: Text(l10n.save),
                   ),
                 ),
               ],
@@ -919,6 +923,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -938,7 +943,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
                 Icon(Icons.add_circle_outline, color: colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
-                  'Ajouter - ${widget.day.displayName}',
+                  l10n.scheduleAddDayTitle(weekDayName(l10n, widget.day)),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -956,7 +961,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
                   child: Column(
                     children: [
                       _buildTimeButton(
-                        label: 'Début',
+                        label: l10n.start,
                         time: formatMinutesOfDay(_startMinutes),
                         onTap: _selectStartTime,
                       ),
@@ -977,7 +982,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
                   child: Column(
                     children: [
                       _buildTimeButton(
-                        label: 'Fin',
+                        label: l10n.end,
                         time: formatMinutesOfDay(_endMinutes),
                         onTap: _selectEndTime,
                         highlight: _endMinutes >= 1440,
@@ -995,7 +1000,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
             const SizedBox(height: 16),
 
             // Sélecteur d'état
-            Text('État', style: theme.textTheme.labelMedium),
+            Text(l10n.state, style: theme.textTheme.labelMedium),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -1024,7 +1029,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Annuler'),
+                    child: Text(l10n.cancel),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1038,7 +1043,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
                       );
                       widget.onSave(newSlot);
                     },
-                    child: const Text('Ajouter'),
+                    child: Text(l10n.add),
                   ),
                 ),
               ],

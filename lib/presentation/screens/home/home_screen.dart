@@ -267,15 +267,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (showLoadingOverlay) {
       // Déterminer le message de statut
-      String statusMessage = 'Connexion en cours...';
+      String statusMessage = l10n.connecting;
       if (state.isConnecting) {
-        statusMessage = 'Connexion en cours...';
+        statusMessage = l10n.connecting;
       } else if (state.isLoadingDeviceInfo) {
-        statusMessage = 'Authentification...';
+        statusMessage = l10n.homeAuthenticating;
       } else if (state.isLoadingSummary) {
-        statusMessage = 'Récupération des données...';
+        statusMessage = l10n.homeFetchingData;
       } else if (isLoadingPoints) {
-        statusMessage = 'Chargement des points...';
+        statusMessage = l10n.loadingPoints;
       }
 
       // Skeleton loading avec message de statut
@@ -418,7 +418,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final menuItems = [
       _MenuItem(
         icon: Icons.star,
-        title: 'Favoris',
+        title: l10n.favorites,
         // Jaune/ambre si favoris présents, bleu sinon
         color: favoritesCount > 0 ? Colors.amber.shade600 : Colors.blue.shade600,
         route: Routes.favorites,
@@ -432,7 +432,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       _MenuItem(
         icon: Icons.bar_chart,
-        title: 'Dashboard',
+        title: l10n.dashboard,
         color: Colors.indigo.shade600,
         route: Routes.dashboards,
       ),
@@ -461,7 +461,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       _MenuItem(
         icon: hasEnvysion ? Icons.web : Icons.dashboard,
-        title: hasEnvysion ? l10n.synopticEnvysion : 'Synoptique',
+        title: hasEnvysion ? l10n.synopticEnvysion : l10n.homeSynoptic,
         color: Colors.teal.shade600,
         route: hasEnvysion ? null : Routes.synoptics,
         onTap: hasEnvysion ? _openEnvysionInBrowser : null,
@@ -613,9 +613,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           _buildDrawerItem(context, icon: Icons.home, title: l10n.home, route: Routes.home, isSelected: true),
-          _buildDrawerItem(context, icon: Icons.star, title: 'Favoris', route: Routes.favorites),
+          _buildDrawerItem(context, icon: Icons.star, title: l10n.favorites, route: Routes.favorites),
           _buildDrawerItem(context, icon: Icons.list_alt, title: l10n.points, route: Routes.points),
-          _buildDrawerItem(context, icon: Icons.bar_chart, title: 'Dashboard', route: Routes.dashboards),
+          _buildDrawerItem(context, icon: Icons.bar_chart, title: l10n.dashboard, route: Routes.dashboards),
           _buildDrawerItem(context, icon: Icons.calendar_month, title: l10n.schedules, route: Routes.schedules),
           _buildDrawerItem(context, icon: Icons.notifications_active, title: l10n.alarms, route: Routes.alarms),
           _buildDrawerItem(context, icon: Icons.lock, title: l10n.overrides, route: Routes.overrides),
@@ -626,7 +626,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 : Icons.dashboard,
             title: connection?.designerUrl != null && connection!.designerUrl!.isNotEmpty
                 ? l10n.synopticEnvysion
-                : 'Synoptique',
+                : l10n.homeSynoptic,
             route: connection?.designerUrl != null && connection!.designerUrl!.isNotEmpty
                 ? null
                 : Routes.synoptics,
@@ -1082,7 +1082,7 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
     }
 
     return Tooltip(
-      message: _buildTooltipMessage(),
+      message: _buildTooltipMessage(AppLocalizations.of(context)!),
       child: InkWell(
         onTap: () => _showTimeDialog(context),
         borderRadius: BorderRadius.circular(8),
@@ -1091,16 +1091,18 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
     );
   }
 
-  String _buildTooltipMessage() {
+  String _buildTooltipMessage(AppLocalizations l10n) {
     final buffer = StringBuffer();
-    buffer.writeln('Heure automate: ${controllerTime.formattedDateTime}');
-    buffer.write('Décalage: ${controllerTime.offsetDescription}');
+    buffer.writeln(l10n.homeControllerTimeTooltip(controllerTime.formattedDateTime));
+    buffer.write(l10n.homeTimeOffsetTooltip(controllerTime.offsetDescription));
     return buffer.toString();
   }
 
   void _showTimeDialog(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     bool isSyncing = false;
     String? syncResult;
+    bool syncSuccess = false;
 
     showDialog(
       context: context,
@@ -1121,18 +1123,18 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                         : Colors.blue,
               ),
               const SizedBox(width: 8),
-              const Text('Heure de l\'automate'),
+              Text(l10n.homeControllerTimeTitle),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildInfoRow('Date/Heure automate', controllerTime.formattedDateTime),
-              _buildInfoRow('Heure locale', _formatLocalTime()),
+              _buildInfoRow(l10n.homeControllerDateTime, controllerTime.formattedDateTime),
+              _buildInfoRow(l10n.homeLocalTime, _formatLocalTime()),
               const Divider(),
               _buildInfoRow(
-                'Décalage',
+                l10n.homeTimeOffset,
                 controllerTime.offsetDescription,
                 valueColor: controllerTime.hasCriticalOffset
                     ? Colors.red
@@ -1167,8 +1169,7 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'L\'heure de l\'automate est décalée. '
-                          'Les plannings peuvent ne pas s\'exécuter aux moments attendus.',
+                          l10n.homeTimeOffsetWarning,
                           style: TextStyle(
                             fontSize: 13,
                             color: controllerTime.hasCriticalOffset
@@ -1187,7 +1188,7 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: syncResult!.contains('succès')
+                    color: syncSuccess
                         ? Colors.green.shade50
                         : Colors.red.shade50,
                     borderRadius: BorderRadius.circular(8),
@@ -1195,11 +1196,11 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                   child: Row(
                     children: [
                       Icon(
-                        syncResult!.contains('succès')
+                        syncSuccess
                             ? Icons.check_circle
                             : Icons.error,
                         size: 18,
-                        color: syncResult!.contains('succès')
+                        color: syncSuccess
                             ? Colors.green.shade700
                             : Colors.red.shade700,
                       ),
@@ -1209,7 +1210,7 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                           syncResult!,
                           style: TextStyle(
                             fontSize: 13,
-                            color: syncResult!.contains('succès')
+                            color: syncSuccess
                                 ? Colors.green.shade800
                                 : Colors.red.shade800,
                           ),
@@ -1234,7 +1235,7 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'API V2 : utilisez l\'interface web EC-NetAX ou configurez le NTP pour synchroniser l\'heure.',
+                          l10n.homeSyncV2Info,
                           style: TextStyle(fontSize: 12, color: Colors.blue.shade800),
                         ),
                       ),
@@ -1261,9 +1262,10 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                           if (!dialogContext.mounted) return;
                           setDialogState(() {
                             isSyncing = false;
+                            syncSuccess = success;
                             syncResult = success
-                                ? 'Synchronisation réussie avec succès !'
-                                : 'Échec de la synchronisation.';
+                                ? l10n.homeSyncSuccess
+                                : l10n.homeSyncFailed;
                           });
 
                           // Fermer la popup après succès
@@ -1277,7 +1279,8 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                           if (!dialogContext.mounted) return;
                           setDialogState(() {
                             isSyncing = false;
-                            syncResult = 'Erreur: $e';
+                            syncSuccess = false;
+                            syncResult = l10n.errorWithMessage('$e');
                           });
                         }
                       },
@@ -1288,11 +1291,11 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.sync),
-                label: Text(isSyncing ? 'Synchronisation...' : 'Synchroniser'),
+                label: Text(isSyncing ? l10n.homeSyncing : l10n.homeSync),
               ),
             TextButton(
               onPressed: isSyncing ? null : () => Navigator.pop(dialogContext),
-              child: const Text('Fermer'),
+              child: Text(l10n.close),
             ),
           ],
         ),

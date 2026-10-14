@@ -4,6 +4,7 @@ import '../../application/providers/active_connection_provider.dart';
 import '../../application/providers/database_provider.dart';
 import '../../application/providers/favorites_provider.dart';
 import '../../domain/models/bacnet_object.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Id of the active connection only (does not change on refresh/state ticks).
 final _activeConnectionIdProvider = Provider<int?>((ref) {
@@ -48,7 +49,7 @@ class FavoriteButton extends ConsumerWidget {
   }
 
   Widget _buildButton(BuildContext context, WidgetRef ref, FavoriteState state) {
-    final (icon, color, tooltip) = _getIconData(state);
+    final (icon, color, tooltip) = _getIconData(AppLocalizations.of(context)!, state);
 
     return IconButton(
       icon: Icon(icon, color: color, size: size),
@@ -66,25 +67,25 @@ class FavoriteButton extends ConsumerWidget {
   }
 
   /// Retourne l'icône, la couleur et le tooltip selon l'état
-  (IconData, Color, String) _getIconData(FavoriteState state) {
+  (IconData, Color, String) _getIconData(AppLocalizations l10n, FavoriteState state) {
     switch (state) {
       case FavoriteState.none:
         return (
           Icons.star_border,
           Colors.grey,
-          'Ajouter aux favoris',
+          l10n.addToFavorites,
         );
       case FavoriteState.favorite:
         return (
           Icons.star,
           Colors.amber,
-          'Promouvoir en super favori',
+          l10n.widgetPromoteSuperFavorite,
         );
       case FavoriteState.superFavorite:
         return (
           Icons.auto_awesome,
           Colors.amber.shade600,
-          'Rétrograder en favori',
+          l10n.widgetDemoteToFavorite,
         );
     }
   }

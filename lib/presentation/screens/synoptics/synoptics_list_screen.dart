@@ -5,6 +5,7 @@ import '../../../application/providers/synoptics_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/database/app_database.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Écran de liste des synoptiques
 class SynopticsListScreen extends ConsumerWidget {
@@ -12,15 +13,16 @@ class SynopticsListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final synopticsAsync = ref.watch(synopticsProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Synoptiques'),
+        title: Text(l10n.synopticsTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            tooltip: 'Créer un synoptique',
+            tooltip: l10n.synopticCreate,
             onPressed: () => _showCreateDialog(context, ref),
           ),
         ],
@@ -39,11 +41,11 @@ class SynopticsListScreen extends ConsumerWidget {
             children: [
               Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
               const SizedBox(height: 16),
-              Text('Erreur: $error'),
+              Text(l10n.errorWithMessage(error.toString())),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => ref.invalidate(synopticsProvider),
-                child: const Text('Réessayer'),
+                child: Text(l10n.retry),
               ),
             ],
           ),
@@ -53,6 +55,7 @@ class SynopticsListScreen extends ConsumerWidget {
   }
 
   Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -66,14 +69,14 @@ class SynopticsListScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'Aucun synoptique',
+              l10n.synopticEmptyTitle,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     color: Colors.grey.shade600,
                   ),
             ),
             const SizedBox(height: 12),
             Text(
-              'Créez votre premier synoptique pour visualiser\nvos points sur un schéma graphique',
+              l10n.synopticEmptyHint,
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade500),
             ),
@@ -81,7 +84,7 @@ class SynopticsListScreen extends ConsumerWidget {
             ElevatedButton.icon(
               onPressed: () => _showCreateDialog(context, ref),
               icon: const Icon(Icons.add),
-              label: const Text('Créer un synoptique'),
+              label: Text(l10n.synopticCreate),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
@@ -120,18 +123,16 @@ class SynopticsListScreen extends ConsumerWidget {
   }
 
   void _confirmDelete(BuildContext context, WidgetRef ref, Synoptic synoptic) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer le synoptique ?'),
-        content: Text(
-          'Êtes-vous sûr de vouloir supprimer "${synoptic.name}" ?\n'
-          'Cette action est irréversible.',
-        ),
+        title: Text(l10n.synopticDeleteTitle),
+        content: Text(l10n.synopticDeleteMessage(synoptic.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () async {
@@ -139,7 +140,7 @@ class SynopticsListScreen extends ConsumerWidget {
               await ref.read(synopticsNotifierProvider.notifier).deleteSynoptic(synoptic.id);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Supprimer'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -163,6 +164,7 @@ class _SynopticCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final bindingsCount = ref.watch(bindingsCountProvider(synoptic.id));
 
     return Card(
@@ -220,7 +222,7 @@ class _SynopticCard extends ConsumerWidget {
                         const SizedBox(width: 4),
                         bindingsCount.when(
                           data: (count) => Text(
-                            '$count liaison${count > 1 ? 's' : ''}',
+                            l10n.synopticBindingsCount(count),
                             style: TextStyle(
                               color: Colors.grey.shade500,
                               fontSize: 12,
@@ -232,7 +234,7 @@ class _SynopticCard extends ConsumerWidget {
                             child: CircularProgressIndicator(strokeWidth: 1),
                           ),
                           error: (_, __) => Text(
-                            '-- liaisons',
+                            l10n.synopticBindingsUnknown,
                             style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                           ),
                         ),
@@ -245,7 +247,7 @@ class _SynopticCard extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              'Global',
+                              l10n.synopticGlobal,
                               style: TextStyle(
                                 color: Colors.green.shade700,
                                 fontSize: 10,
@@ -273,13 +275,13 @@ class _SynopticCard extends ConsumerWidget {
                   }
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(Icons.edit, size: 20),
-                        SizedBox(width: 12),
-                        Text('Éditer les liaisons'),
+                        const Icon(Icons.edit, size: 20),
+                        const SizedBox(width: 12),
+                        Text(l10n.synopticEditBindings),
                       ],
                     ),
                   ),
@@ -289,7 +291,7 @@ class _SynopticCard extends ConsumerWidget {
                       children: [
                         Icon(Icons.delete, size: 20, color: Colors.red),
                         const SizedBox(width: 12),
-                        const Text('Supprimer', style: TextStyle(color: Colors.red)),
+                        Text(l10n.delete, style: const TextStyle(color: Colors.red)),
                       ],
                     ),
                   ),
@@ -336,8 +338,9 @@ class _CreateSynopticDialogState extends ConsumerState<_CreateSynopticDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('Nouveau synoptique'),
+      title: Text(l10n.synopticNew),
       content: SizedBox(
         width: 400,
         child: Column(
@@ -345,9 +348,9 @@ class _CreateSynopticDialogState extends ConsumerState<_CreateSynopticDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Sélection du SVG
-            const Text(
-              'Modèle SVG',
-              style: TextStyle(fontWeight: FontWeight.w500),
+            Text(
+              l10n.synopticSvgModel,
+              style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<SvgAssetInfo>(
@@ -372,7 +375,7 @@ class _CreateSynopticDialogState extends ConsumerState<_CreateSynopticDialog> {
               ),
               const SizedBox(height: 4),
               Text(
-                '${_selectedAsset!.elementIds.length} éléments configurables',
+                l10n.synopticConfigurableElementsCount(_selectedAsset!.elementIds.length),
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
               ),
             ],
@@ -382,10 +385,10 @@ class _CreateSynopticDialogState extends ConsumerState<_CreateSynopticDialog> {
             // Nom
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Nom du synoptique',
-                hintText: 'Ex: Circuit Chauffage RDC',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.synopticNameLabel,
+                hintText: l10n.synopticNameHint,
+                border: const OutlineInputBorder(),
               ),
               textCapitalization: TextCapitalization.sentences,
             ),
@@ -395,9 +398,9 @@ class _CreateSynopticDialogState extends ConsumerState<_CreateSynopticDialog> {
             // Description
             TextField(
               controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description (optionnel)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.synopticDescriptionOptional,
+                border: const OutlineInputBorder(),
               ),
               maxLines: 2,
             ),
@@ -407,7 +410,7 @@ class _CreateSynopticDialogState extends ConsumerState<_CreateSynopticDialog> {
       actions: [
         TextButton(
           onPressed: _isCreating ? null : () => Navigator.pop(context),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
         ElevatedButton(
           onPressed: _isCreating || _selectedAsset == null || _nameController.text.trim().isEmpty
@@ -419,7 +422,7 @@ class _CreateSynopticDialogState extends ConsumerState<_CreateSynopticDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Créer'),
+              : Text(l10n.create),
         ),
       ],
     );

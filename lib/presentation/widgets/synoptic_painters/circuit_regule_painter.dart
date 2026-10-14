@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Données temps réel pour le circuit régulé
 class CircuitReguleData {
@@ -80,6 +81,7 @@ class _CircuitReguleWidgetState extends State<CircuitReguleWidget>
                 data: widget.data,
                 pumpRotation: _animController.value * 2 * math.pi,
                 isDark: Theme.of(context).brightness == Brightness.dark,
+                pumpLabel: AppLocalizations.of(context)!.widgetPumpLabel,
               ),
               child: _buildInteractiveOverlay(constraints),
             );
@@ -138,11 +140,13 @@ class _CircuitRegulePainter extends CustomPainter {
   final CircuitReguleData data;
   final double pumpRotation;
   final bool isDark;
+  final String pumpLabel;
 
   _CircuitRegulePainter({
     required this.data,
     required this.pumpRotation,
     required this.isDark,
+    required this.pumpLabel,
   });
 
   @override
@@ -266,7 +270,7 @@ class _CircuitRegulePainter extends CustomPainter {
     }
 
     // === LABELS ===
-    _drawLabel(canvas, Offset(w * 0.5, h * 0.52), 'POMPE', textColor, w);
+    _drawLabel(canvas, Offset(w * 0.5, h * 0.52), pumpLabel, textColor, w);
     _drawLabel(canvas, Offset(w * 0.25, h * 0.58), 'V3V', textColor, w);
   }
 
@@ -462,6 +466,7 @@ class _CircuitRegulePainter extends CustomPainter {
         oldDelegate.data.tempDepart != data.tempDepart ||
         oldDelegate.data.positionV3V != data.positionV3V ||
         oldDelegate.pumpRotation != pumpRotation ||
-        oldDelegate.isDark != isDark;
+        oldDelegate.isDark != isDark ||
+        oldDelegate.pumpLabel != pumpLabel;
   }
 }

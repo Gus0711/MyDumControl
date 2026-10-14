@@ -158,7 +158,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${result['name'] ?? result['host']} selectionne'),
+          content: Text(AppLocalizations.of(context)!.addConnSelected('${result['name'] ?? result['host']}')),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 2),
         ),
@@ -186,7 +186,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${result['name'] ?? result['host']} selectionne'),
+          content: Text(AppLocalizations.of(context)!.addConnSelected('${result['name'] ?? result['host']}')),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 2),
         ),
@@ -208,7 +208,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // Selecteur de type de connexion
-            _buildConnectionTypeSelector(),
+            _buildConnectionTypeSelector(l10n),
             const SizedBox(height: 24),
 
             // Bouton de decouverte (en premier!)
@@ -302,7 +302,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
               // HTTPS Switch (API Distech uniquement)
               SwitchListTile(
                 title: const Text('HTTPS'),
-                subtitle: const Text('Utiliser une connexion securisee'),
+                subtitle: Text(l10n.addConnUseSecure),
                 value: _useHttps,
                 onChanged: (value) {
                   setState(() {
@@ -523,12 +523,12 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     );
   }
 
-  Widget _buildConnectionTypeSelector() {
+  Widget _buildConnectionTypeSelector(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Type de connexion',
+          l10n.addConnConnectionType,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -717,7 +717,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(AppLocalizations.of(context)!.errorWithMessage('$e')),
             backgroundColor: Colors.red,
           ),
         );
@@ -767,7 +767,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.errorMessage ?? 'Echec de la connexion'),
+            content: Text(result.errorMessage ?? AppLocalizations.of(context)!.connectionFailed),
             backgroundColor: Colors.red,
           ),
         );
@@ -797,7 +797,9 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Connexion BACnet reussie! Device ID: ${result.deviceId ?? "non decouvert"}',
+              AppLocalizations.of(context)!.addConnBacnetSuccess(
+                result.deviceId?.toString() ?? AppLocalizations.of(context)!.addConnNotDiscovered,
+              ),
             ),
             backgroundColor: Colors.green,
           ),
@@ -805,7 +807,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.errorMessage ?? 'Echec de la connexion BACnet'),
+            content: Text(result.errorMessage ?? AppLocalizations.of(context)!.addConnBacnetFailed),
             backgroundColor: Colors.red,
           ),
         );
@@ -880,8 +882,8 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(widget.isEditing
-                ? 'Connexion modifiee'
-                : 'Connexion enregistree'),
+                ? AppLocalizations.of(context)!.addConnUpdated
+                : AppLocalizations.of(context)!.addConnSaved),
             backgroundColor: Colors.green,
           ),
         );
@@ -891,7 +893,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: $e'),
+            content: Text(AppLocalizations.of(context)!.errorWithMessage('$e')),
             backgroundColor: Colors.red,
           ),
         );

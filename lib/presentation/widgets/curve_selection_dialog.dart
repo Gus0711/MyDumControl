@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/providers/multi_curve_provider.dart';
 import '../../application/providers/points_provider.dart';
 import '../../domain/models/multi_curve_chart.dart';
+import '../../l10n/app_localizations.dart';
 import 'trend_log_viewer.dart';
 
 /// Dialogue pour sélectionner les trend logs à afficher dans un graphique multi-courbes
@@ -43,6 +44,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
   Widget build(BuildContext context) {
     final availableTrendLogs = ref.watch(availableTrendLogsProvider);
     final pointsState = ref.watch(pointsProvider);
+    final l10n = AppLocalizations.of(context)!;
 
     return Dialog(
       child: ConstrainedBox(
@@ -66,7 +68,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Sélectionner les courbes',
+                      l10n.chartSelectCurves,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -94,7 +96,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Sélectionnez ${widget.minCurves} à ${widget.maxCurves} trend logs à comparer',
+                        l10n.chartSelectCurvesHint(widget.minCurves, widget.maxCurves),
                         style: const TextStyle(fontSize: 13, color: Colors.blue),
                       ),
                     ),
@@ -122,7 +124,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '${_selectedInstances.length}/${widget.maxCurves} courbes',
+                      l10n.chartCurvesCount(_selectedInstances.length, widget.maxCurves),
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: _selectedInstances.length >= widget.minCurves
@@ -138,7 +140,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                           });
                         },
                         icon: const Icon(Icons.clear_all, size: 18),
-                        label: const Text('Tout désélectionner'),
+                        label: Text(l10n.deselectAll),
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.grey.shade600,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -153,7 +155,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
               // Recherche
               TextField(
                 decoration: InputDecoration(
-                  hintText: 'Rechercher un point...',
+                  hintText: l10n.searchPoint,
                   prefixIcon: const Icon(Icons.search),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -175,15 +177,15 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                 child: availableTrendLogs.when(
                   data: (trendLogs) {
                     if (trendLogs.isEmpty) {
-                      return const Center(
+                      return Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.show_chart, size: 48, color: Colors.grey),
-                            SizedBox(height: 16),
+                            const Icon(Icons.show_chart, size: 48, color: Colors.grey),
+                            const SizedBox(height: 16),
                             Text(
-                              'Aucun trend log disponible',
-                              style: TextStyle(color: Colors.grey),
+                              l10n.chartNoTrendLogAvailable,
+                              style: const TextStyle(color: Colors.grey),
                             ),
                           ],
                         ),
@@ -326,7 +328,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                             size: 48, color: Colors.red.shade300),
                         const SizedBox(height: 16),
                         Text(
-                          'Erreur: $error',
+                          l10n.errorWithMessage(error.toString()),
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.red.shade600),
                         ),
@@ -341,7 +343,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
               // Aperçu des sélections
               if (_selectedInstances.isNotEmpty) ...[
                 Text(
-                  'Courbes sélectionnées:',
+                  l10n.chartSelectedCurves,
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade600,
@@ -385,7 +387,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Annuler'),
+                    child: Text(l10n.cancel),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton.icon(
@@ -396,7 +398,7 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                           ))
                         : null,
                     icon: const Icon(Icons.check),
-                    label: Text('Valider (${_selectedInstances.length})'),
+                    label: Text(l10n.chartValidateCount(_selectedInstances.length)),
                   ),
                 ],
               ),

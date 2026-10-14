@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../application/providers/synoptics_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../data/database/tables/synoptic_bindings_table.dart';
 import '../../widgets/synoptic_painters/circuit_regule_painter.dart';
 
@@ -29,6 +30,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final synopticAsync = ref.watch(synopticByIdProvider(widget.synopticId));
     final bindingsAsync = ref.watch(synopticBindingsProvider(widget.synopticId));
     final liveState = ref.watch(synopticLiveProvider(widget.synopticId));
@@ -36,9 +38,9 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: synopticAsync.when(
-          data: (synoptic) => Text(synoptic?.name ?? 'Synoptique'),
-          loading: () => const Text('Chargement...'),
-          error: (_, __) => const Text('Erreur'),
+          data: (synoptic) => Text(synoptic?.name ?? l10n.synopticDefaultName),
+          loading: () => Text(l10n.loading),
+          error: (_, __) => Text(l10n.error),
         ),
         actions: [
           // Indicateur de chargement
@@ -56,7 +58,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
           // Bouton refresh
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Rafraîchir',
+            tooltip: l10n.refresh,
             onPressed: () {
               ref.read(synopticLiveProvider(widget.synopticId).notifier).forceRefresh();
             },
@@ -64,13 +66,13 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
           // Bouton éditer
           IconButton(
             icon: const Icon(Icons.edit),
-            tooltip: 'Éditer les liaisons',
+            tooltip: l10n.synopticEditBindings,
             onPressed: () => context.push(Routes.synopticEditPath(widget.synopticId)),
           ),
           // Bouton réinitialiser le zoom
           IconButton(
             icon: const Icon(Icons.fit_screen),
-            tooltip: 'Réinitialiser le zoom',
+            tooltip: l10n.synopticResetZoom,
             onPressed: () {
               _transformController.value = Matrix4.identity();
             },
@@ -80,7 +82,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
       body: synopticAsync.when(
         data: (synoptic) {
           if (synoptic == null) {
-            return const Center(child: Text('Synoptique non trouvé'));
+            return Center(child: Text(l10n.synopticNotFound));
           }
 
           return Column(
@@ -97,7 +99,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Erreur de mise à jour: ${liveState.error}',
+                          l10n.synopticUpdateError('${liveState.error}'),
                           style: TextStyle(color: Colors.orange.shade900, fontSize: 12),
                         ),
                       ),
@@ -121,7 +123,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
                         liveState,
                       ),
                       loading: () => const CircularProgressIndicator(),
-                      error: (e, _) => Text('Erreur: $e'),
+                      error: (e, _) => Text(l10n.errorWithMessage(e.toString())),
                     ),
                   ),
                 ),
@@ -133,7 +135,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Erreur: $error')),
+        error: (error, _) => Center(child: Text(l10n.errorWithMessage(error.toString()))),
       ),
     );
   }
@@ -217,6 +219,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
   }
 
   Widget _buildInfoBar(BuildContext context, SynopticLiveState liveState) {
+    final l10n = AppLocalizations.of(context)!;
     final bindingsCount = liveState.bindings.length;
     final pointsCount = liveState.pointValues.length;
 
@@ -231,19 +234,19 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
           Icon(Icons.link, size: 16, color: Colors.grey.shade600),
           const SizedBox(width: 4),
           Text(
-            '$bindingsCount liaison${bindingsCount > 1 ? 's' : ''}',
+            l10n.synopticBindingsCount(bindingsCount),
             style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
           ),
           const SizedBox(width: 16),
           Icon(Icons.sensors, size: 16, color: Colors.grey.shade600),
           const SizedBox(width: 4),
           Text(
-            '$pointsCount point${pointsCount > 1 ? 's' : ''} actif${pointsCount > 1 ? 's' : ''}',
+            l10n.synopticActivePointsCount(pointsCount),
             style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
           ),
           const Spacer(),
           Text(
-            'Pincez pour zoomer',
+            l10n.synopticPinchToZoom,
             style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
           ),
         ],
@@ -255,6 +258,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
     final liveState = ref.read(synopticLiveProvider(widget.synopticId));
     final value = liveState.pointValues[binding.pointRef];
     final config = BindingConfig.fromJson(binding.configJson);
+    final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
@@ -291,11 +295,11 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
               ],
             ),
             const Divider(height: 32),
-            _buildDetailRow('Élément SVG', binding.svgElementId),
-            _buildDetailRow('Type de liaison', _getBindingTypeName(binding.bindingType)),
-            _buildDetailRow('Valeur actuelle', config.formatValue(value)),
+            _buildDetailRow(l10n.synopticSvgElement, binding.svgElementId),
+            _buildDetailRow(l10n.synopticBindingType, _getBindingTypeName(l10n, binding.bindingType)),
+            _buildDetailRow(l10n.synopticCurrentValue, config.formatValue(value)),
             if (binding.bindingType == BindingType.color)
-              _buildDetailRow('État', config.isOn(value) ? 'ON' : 'OFF'),
+              _buildDetailRow(l10n.state, config.isOn(value) ? 'ON' : 'OFF'),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -306,7 +310,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
                   context.push(Routes.pointDetailPath(binding.pointRef));
                 },
                 icon: const Icon(Icons.open_in_new),
-                label: const Text('Voir le point'),
+                label: Text(l10n.synopticViewPoint),
               ),
             ),
           ],
@@ -350,14 +354,14 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
     }
   }
 
-  String _getBindingTypeName(BindingType type) {
+  String _getBindingTypeName(AppLocalizations l10n, BindingType type) {
     switch (type) {
       case BindingType.value:
-        return 'Valeur numérique';
+        return l10n.synopticNumericValue;
       case BindingType.color:
-        return 'Indicateur couleur';
+        return l10n.synopticColorIndicator;
       case BindingType.animation:
-        return 'Animation';
+        return l10n.synopticAnimation;
     }
   }
 }

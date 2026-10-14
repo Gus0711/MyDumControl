@@ -248,7 +248,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
             // Type et instance
             Text(
-              '${point.type.displayName} #${point.instance}',
+              '${BacnetTypeUtils.getTypeDisplayName(l10n, point.type)} #${point.instance}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.grey.shade600,
                   ),
@@ -1207,7 +1207,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
             _buildInfoRow(l10n.name, point.objectName),
             _buildDescriptionRow(context, point, l10n),
             _buildInfoRow(l10n.identifier, point.objectId),
-            _buildInfoRow(l10n.type, point.type.displayName),
+            _buildInfoRow(l10n.type, BacnetTypeUtils.getTypeDisplayName(l10n, point.type)),
             _buildInfoRow(l10n.instance, point.instance.toString()),
             if (point.units != null && point.units!.isNotEmpty)
               _buildInfoRow(l10n.unit, point.units!),

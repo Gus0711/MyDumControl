@@ -6,6 +6,7 @@ import '../../../../data/database/app_database.dart';
 import '../../../../data/database/tables/dashboard_tables.dart';
 import '../../../widgets/trend_log_viewer.dart';
 import '../../../widgets/multi_curve_chart.dart';
+import '../../../../l10n/app_localizations.dart';
 
 /// Carte affichant un widget de dashboard (graphique, stats, etc.)
 class DashboardWidgetCard extends ConsumerWidget {
@@ -24,7 +25,7 @@ class DashboardWidgetCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (title, icon) = _getTitleAndIcon();
+    final (title, icon) = _getTitleAndIcon(AppLocalizations.of(context)!);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -49,26 +50,28 @@ class DashboardWidgetCard extends ConsumerWidget {
   }
 
   /// Récupère le titre et l'icône selon le type et la config
-  (String, IconData) _getTitleAndIcon() {
+  (String, IconData) _getTitleAndIcon(AppLocalizations l10n) {
     switch (widget.widgetType) {
       case DashboardWidgetType.singleTrendChart:
         final config = SingleChartWidgetConfig.fromJsonString(widget.configJson);
         return (
-          config?.displayTitle ?? 'Graphique',
+          config?.displayTitle ?? l10n.dashboardChartDefault,
           Icons.show_chart,
         );
 
       case DashboardWidgetType.multiCurveChart:
         final config = MultiCurveWidgetConfig.fromJsonString(widget.configJson);
         return (
-          config?.displayTitle ?? 'Multi-courbes',
+          config == null
+              ? l10n.multiCurveChart
+              : config.title ?? l10n.dashboardComparisonTitle(config.trendLogInstances.length),
           Icons.multiline_chart,
         );
 
       case DashboardWidgetType.statsCard:
         final config = StatsWidgetConfig.fromJsonString(widget.configJson);
         return (
-          config?.displayTitle ?? 'Statistiques',
+          config?.displayTitle ?? l10n.statsCard,
           Icons.analytics,
         );
     }
@@ -89,7 +92,7 @@ class DashboardWidgetCard extends ConsumerWidget {
     final config = SingleChartWidgetConfig.fromJsonString(widget.configJson);
 
     if (config == null) {
-      return _buildUnconfigured(context, 'Graphique', Icons.show_chart);
+      return _buildUnconfigured(context, AppLocalizations.of(context)!.dashboardChartDefault, Icons.show_chart);
     }
 
     final state = ref.watch(trendLogViewerProvider(config.trendLogInstance));
@@ -109,7 +112,7 @@ class DashboardWidgetCard extends ConsumerWidget {
               onPressed: () => ref
                   .read(trendLogViewerProvider(config.trendLogInstance).notifier)
                   .loadData(),
-              child: const Text('Réessayer'),
+              child: Text(AppLocalizations.of(context)!.retry),
             ),
           ],
         ),
@@ -144,7 +147,7 @@ class DashboardWidgetCard extends ConsumerWidget {
               onPressed: () => ref
                   .read(trendLogViewerProvider(config.trendLogInstance).notifier)
                   .loadData(period: TrendPeriod.day),
-              child: const Text('Réessayer'),
+              child: Text(AppLocalizations.of(context)!.retry),
             ),
           ],
         ),
@@ -163,7 +166,7 @@ class DashboardWidgetCard extends ConsumerWidget {
     final config = MultiCurveWidgetConfig.fromJsonString(widget.configJson);
 
     if (config == null || config.trendLogInstances.isEmpty) {
-      return _buildUnconfigured(context, 'Multi-courbes', Icons.multiline_chart);
+      return _buildUnconfigured(context, AppLocalizations.of(context)!.multiCurveChart, Icons.multiline_chart);
     }
 
     final chartId = 'dashboard_widget_${widget.id}';
@@ -183,7 +186,7 @@ class DashboardWidgetCard extends ConsumerWidget {
     final config = StatsWidgetConfig.fromJsonString(widget.configJson);
 
     if (config == null) {
-      return _buildUnconfigured(context, 'Statistiques', Icons.analytics);
+      return _buildUnconfigured(context, AppLocalizations.of(context)!.statsCard, Icons.analytics);
     }
 
     final state = ref.watch(trendLogViewerProvider(config.trendLogInstance));
@@ -216,7 +219,7 @@ class DashboardWidgetCard extends ConsumerWidget {
           else if (state.data != null)
             _buildStatsContent(context, state.data!, config)
           else
-            const Center(child: Text('Aucune donnée')),
+            Center(child: Text(AppLocalizations.of(context)!.noData)),
         ],
       ),
     );
@@ -228,6 +231,7 @@ class DashboardWidgetCard extends ConsumerWidget {
     StatsWidgetConfig config,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return Wrap(
       spacing: 16,
@@ -235,7 +239,7 @@ class DashboardWidgetCard extends ConsumerWidget {
       children: [
         if (config.showMin && data.minValue != null)
           _StatChip(
-            label: 'Min',
+            label: l10n.statisticsMin,
             value: _formatValue(data.minValue!),
             unit: config.units,
             icon: Icons.arrow_downward,
@@ -243,7 +247,7 @@ class DashboardWidgetCard extends ConsumerWidget {
           ),
         if (config.showMax && data.maxValue != null)
           _StatChip(
-            label: 'Max',
+            label: l10n.statisticsMax,
             value: _formatValue(data.maxValue!),
             unit: config.units,
             icon: Icons.arrow_upward,
@@ -251,7 +255,7 @@ class DashboardWidgetCard extends ConsumerWidget {
           ),
         if (config.showAvg && data.avgValue != null)
           _StatChip(
-            label: 'Moy',
+            label: l10n.statisticsAvg,
             value: _formatValue(data.avgValue!),
             unit: config.units,
             icon: Icons.horizontal_rule,
@@ -282,7 +286,7 @@ class DashboardWidgetCard extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Non configuré',
+            AppLocalizations.of(context)!.dashboardNotConfigured,
             style: TextStyle(
               color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
               fontSize: 12,
@@ -365,12 +369,12 @@ class _WidgetHeader extends StatelessWidget {
           // Boutons d'action
           _HeaderActionButton(
             icon: Icons.edit,
-            tooltip: 'Configurer',
+            tooltip: AppLocalizations.of(context)!.dashboardConfigure,
             onTap: onConfigure,
           ),
           _HeaderActionButton(
             icon: Icons.delete_outline,
-            tooltip: 'Supprimer',
+            tooltip: AppLocalizations.of(context)!.delete,
             color: Colors.red,
             onTap: onDelete,
           ),

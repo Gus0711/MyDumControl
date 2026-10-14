@@ -55,7 +55,7 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
     } else {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Connection not found';
+          _errorMessage = AppLocalizations.of(context)!.envysionConnectionNotFound;
           _isLoading = false;
         });
       }
@@ -365,11 +365,11 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               if (!mounted || request.isForMainFrame != true) return;
               if (response.statusCode == 401) {
                 setState(() {
-                  _errorMessage = 'Authentification echouee (401)';
+                  _errorMessage = AppLocalizations.of(context)!.envysionAuthFailed;
                 });
               } else if (response.statusCode == 404) {
                 setState(() {
-                  _errorMessage = 'Page non trouvee (404)';
+                  _errorMessage = AppLocalizations.of(context)!.envysionPageNotFound;
                 });
               }
             },

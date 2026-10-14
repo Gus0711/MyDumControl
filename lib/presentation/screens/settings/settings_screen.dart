@@ -465,7 +465,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(this.context).showSnackBar(
-            SnackBar(content: Text('${l10n.error}: $e')),
+            SnackBar(content: Text(l10n.errorWithMessage('$e'))),
           );
         }
       } finally {

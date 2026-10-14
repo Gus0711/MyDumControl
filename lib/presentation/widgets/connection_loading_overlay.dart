@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import '../../l10n/app_localizations.dart';
 
 /// Widget d'overlay de chargement avec animation élégante
 /// Affiche une animation de connexion avec des étapes progressives
@@ -84,7 +85,7 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
 
             // Message principal
             Text(
-              widget.message ?? 'Connexion en cours',
+              widget.message ?? AppLocalizations.of(context)!.widgetConnecting,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: theme.colorScheme.primary,
@@ -242,11 +243,12 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
 
   Widget _buildProgressSteps(ThemeData theme) {
     // Étapes disponibles (4 au total)
+    final l10n = AppLocalizations.of(context)!;
     final allSteps = [
-      ('Connexion', Icons.wifi),
-      ('Auth', Icons.lock_open),
-      ('Données', Icons.cloud_download),
-      ('Points', Icons.list_alt),
+      (l10n.connection, Icons.wifi),
+      (l10n.widgetStepAuth, Icons.lock_open),
+      (l10n.data, Icons.cloud_download),
+      (l10n.points, Icons.list_alt),
     ];
 
     // Utiliser le nombre d'étapes demandé

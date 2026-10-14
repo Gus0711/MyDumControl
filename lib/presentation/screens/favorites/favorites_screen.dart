@@ -154,10 +154,10 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               data: (folders) => unassignedAsync.when(
                 data: (unassigned) => _buildContent(context, folders, unassigned),
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('${l10n.error}: $e')),
+                error: (e, _) => Center(child: Text(l10n.errorWithMessage('$e'))),
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('${l10n.error}: $e')),
+              error: (e, _) => Center(child: Text(l10n.errorWithMessage('$e'))),
             ),
       // Barre d'actions en bas quand sélection active
       bottomNavigationBar: _selectionMode && _selectedFavoriteIds.isNotEmpty

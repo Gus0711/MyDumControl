@@ -409,7 +409,7 @@ class _ScheduleDetailContentState extends State<_ScheduleDetailContent> {
                 _buildInfoChip(
                   context,
                   icon: Icons.tag,
-                  label: 'Instance ${widget.schedule.instance}',
+                  label: AppLocalizations.of(context)!.instanceLabel(widget.schedule.instance.toString()),
                 ),
               Builder(
                 builder: (context) {

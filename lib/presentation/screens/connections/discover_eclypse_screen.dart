@@ -141,7 +141,7 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Erreur mDNS',
+                l10n.discoverMdnsError,
                 style: theme.textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
@@ -182,7 +182,7 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Recherche des automates ECLYPSE sur le reseau...',
+              l10n.discoverSearchingEclypse,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -212,8 +212,7 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Aucun ECLYPSE n\'a ete trouve sur le reseau.\n'
-                'Verifiez que vous etes connecte au meme reseau que l\'automate.',
+                l10n.discoverNoEclypseFoundMessage,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,

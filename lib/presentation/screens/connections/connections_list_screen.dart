@@ -43,7 +43,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
           IconButton(
             icon: const Icon(Icons.create_new_folder_outlined),
             onPressed: () => _showAddFolderDialog(context, l10n),
-            tooltip: 'Nouveau dossier',
+            tooltip: l10n.newFolder,
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -85,7 +85,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
         children: [
           Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
           const SizedBox(height: 16),
-          Text('Erreur: $error'),
+          Text(l10n.errorWithMessage('$error')),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () {
@@ -129,7 +129,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
                   child: Text(
-                    'Sans dossier',
+                    l10n.noFolder,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                         ),
@@ -196,7 +196,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                             ),
                       ),
                       Text(
-                        '${connections.length} connexion${connections.length > 1 ? 's' : ''}',
+                        l10n.connectionsCount(connections.length),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                             ),
@@ -220,13 +220,13 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(Icons.edit, size: 20),
-                          SizedBox(width: 8),
-                          Text('Modifier'),
+                          const Icon(Icons.edit, size: 20),
+                          const SizedBox(width: 8),
+                          Text(l10n.edit),
                         ],
                       ),
                     ),
@@ -237,7 +237,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
                           Icon(Icons.delete, size: 20, color: Colors.red),
                           const SizedBox(width: 8),
                           Text(
-                            'Supprimer',
+                            l10n.delete,
                             style: TextStyle(color: Colors.red.shade400),
                           ),
                         ],
@@ -270,7 +270,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
           Padding(
             padding: const EdgeInsets.only(left: 56, bottom: 8),
             child: Text(
-              'Dossier vide',
+              l10n.connectionsEmptyFolder,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
                     fontStyle: FontStyle.italic,
@@ -309,15 +309,15 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Nouveau dossier'),
+          title: Text(l10n.newFolder),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nom du dossier',
-                  prefixIcon: Icon(Icons.folder),
+                decoration: InputDecoration(
+                  labelText: l10n.connectionsFolderName,
+                  prefixIcon: const Icon(Icons.folder),
                 ),
                 autofocus: true,
               ),
@@ -364,7 +364,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Créer'),
+              child: Text(l10n.create),
             ),
           ],
         ),
@@ -402,15 +402,15 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Modifier le dossier'),
+          title: Text(l10n.connectionsEditFolder),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nom du dossier',
-                  prefixIcon: Icon(Icons.folder),
+                decoration: InputDecoration(
+                  labelText: l10n.connectionsFolderName,
+                  prefixIcon: const Icon(Icons.folder),
                 ),
                 autofocus: true,
               ),
@@ -488,11 +488,8 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer le dossier'),
-        content: Text(
-          'Voulez-vous supprimer le dossier "${folder.name}" ?\n\n'
-          'Les connexions qu\'il contient seront déplacées à la racine.',
-        ),
+        title: Text(l10n.connectionsDeleteFolder),
+        content: Text(l10n.connectionsDeleteFolderMessage(folder.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -513,7 +510,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       _expandedFolders.remove(folder.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Dossier "${folder.name}" supprimé')),
+          SnackBar(content: Text(l10n.connectionsFolderDeleted(folder.name))),
         );
       }
     }
@@ -529,7 +526,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.deleteConfirmTitle),
-        content: Text('Voulez-vous supprimer "${connection.name}" ?'),
+        content: Text(l10n.connectionsDeleteConfirm(connection.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -548,7 +545,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       await ref.read(connectionRepositoryProvider).deleteConnection(connection.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Connexion "${connection.name}" supprimée')),
+          SnackBar(content: Text(l10n.connectionsDeleted(connection.name))),
         );
       }
     }
@@ -571,7 +568,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     final selectedFolderId = await showDialog<int?>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Déplacer vers'),
+        title: Text(l10n.connectionsMoveTo),
         content: SizedBox(
           width: 300,
           child: Column(
@@ -580,7 +577,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
               // Option racine
               ListTile(
                 leading: const Icon(Icons.home),
-                title: const Text('Sans dossier'),
+                title: Text(l10n.noFolder),
                 selected: connection.folderId == null,
                 onTap: () => Navigator.pop(context, -1), // -1 = racine
               ),
@@ -610,7 +607,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       await repository.moveConnectionToFolder(connection.id, newFolderId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Connexion déplacée')),
+          SnackBar(content: Text(l10n.connectionsMoved)),
         );
       }
     }
@@ -639,7 +636,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Ajoutez une connexion pour commencer',
+              l10n.connectionsAddToStart,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
                   ),
@@ -858,13 +855,13 @@ class _ConnectionCard extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'move',
                         child: Row(
                           children: [
-                            Icon(Icons.drive_file_move_outline, size: 20),
-                            SizedBox(width: 8),
-                            Text('Déplacer'),
+                            const Icon(Icons.drive_file_move_outline, size: 20),
+                            const SizedBox(width: 8),
+                            Text(l10n.connectionsMove),
                           ],
                         ),
                       ),
@@ -1189,7 +1186,7 @@ class _FolderRefreshButtonState extends ConsumerState<_FolderRefreshButton> {
           _startTimerIfNeeded();
         });
       },
-      tooltip: 'Rafraîchir tous les super favoris du dossier',
+      tooltip: AppLocalizations.of(context)!.connectionsRefreshFolderTooltip,
       visualDensity: VisualDensity.compact,
     );
   }
@@ -1296,7 +1293,7 @@ class _RefreshButtonState extends ConsumerState<_RefreshButton> {
           _startTimerIfNeeded();
         });
       },
-      tooltip: 'Rafraîchir les valeurs',
+      tooltip: AppLocalizations.of(context)!.connectionsRefreshValuesTooltip,
       visualDensity: VisualDensity.compact,
     );
   }

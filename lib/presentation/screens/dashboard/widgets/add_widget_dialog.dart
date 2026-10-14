@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../data/database/tables/dashboard_tables.dart';
+import '../../../../l10n/app_localizations.dart';
 
 /// Dialogue pour ajouter un nouveau widget au dashboard
 class AddWidgetDialog extends StatelessWidget {
@@ -8,8 +9,9 @@ class AddWidgetDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('Ajouter un widget'),
+      title: Text(l10n.addWidget),
       content: SizedBox(
         width: 350,
         child: Column(
@@ -17,8 +19,8 @@ class AddWidgetDialog extends StatelessWidget {
           children: [
             _WidgetTypeOption(
               icon: Icons.show_chart,
-              title: 'Graphique simple',
-              description: 'Affiche l\'historique d\'un seul point',
+              title: l10n.singleChart,
+              description: l10n.singleChartDescription,
               color: Colors.blue,
               onTap: () {
                 HapticFeedback.lightImpact();
@@ -31,8 +33,8 @@ class AddWidgetDialog extends StatelessWidget {
             const SizedBox(height: 12),
             _WidgetTypeOption(
               icon: Icons.multiline_chart,
-              title: 'Multi-courbes',
-              description: 'Compare plusieurs points sur un même graphique',
+              title: l10n.multiCurveChart,
+              description: l10n.multiCurveChartDescription,
               color: Colors.purple,
               onTap: () {
                 HapticFeedback.lightImpact();
@@ -45,8 +47,8 @@ class AddWidgetDialog extends StatelessWidget {
             const SizedBox(height: 12),
             _WidgetTypeOption(
               icon: Icons.analytics,
-              title: 'Statistiques',
-              description: 'Affiche min, max et moyenne d\'un point',
+              title: l10n.statsCard,
+              description: l10n.statsCardDescription,
               color: Colors.teal,
               onTap: () {
                 HapticFeedback.lightImpact();
@@ -62,7 +64,7 @@ class AddWidgetDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
       ],
     );

@@ -1,5 +1,46 @@
 import 'package:flutter/material.dart';
 import '../../../../domain/models/schedule.dart';
+import '../../../../l10n/app_localizations.dart';
+
+/// Localized full day name (e.g. "Lundi" / "Monday").
+String weekDayName(AppLocalizations l10n, WeekDay day) {
+  switch (day) {
+    case WeekDay.monday:
+      return l10n.monday;
+    case WeekDay.tuesday:
+      return l10n.tuesday;
+    case WeekDay.wednesday:
+      return l10n.wednesday;
+    case WeekDay.thursday:
+      return l10n.thursday;
+    case WeekDay.friday:
+      return l10n.friday;
+    case WeekDay.saturday:
+      return l10n.saturday;
+    case WeekDay.sunday:
+      return l10n.sunday;
+  }
+}
+
+/// Localized short day name (e.g. "Lun" / "Mon").
+String weekDayShortName(AppLocalizations l10n, WeekDay day) {
+  switch (day) {
+    case WeekDay.monday:
+      return l10n.scheduleDayShortMonday;
+    case WeekDay.tuesday:
+      return l10n.scheduleDayShortTuesday;
+    case WeekDay.wednesday:
+      return l10n.scheduleDayShortWednesday;
+    case WeekDay.thursday:
+      return l10n.scheduleDayShortThursday;
+    case WeekDay.friday:
+      return l10n.scheduleDayShortFriday;
+    case WeekDay.saturday:
+      return l10n.scheduleDayShortSaturday;
+    case WeekDay.sunday:
+      return l10n.scheduleDayShortSunday;
+  }
+}
 
 /// Utilitaire pour les couleurs des schedules
 class ScheduleColors {
