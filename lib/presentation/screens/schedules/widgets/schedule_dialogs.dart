@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../../../../domain/models/schedule.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../shared/utils/schedule_l10n.dart';
 import 'schedule_colors.dart';
 
 /// Formats minutes since midnight as HH:mm ('24:00' for end of day).
@@ -63,7 +64,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final possibleValues = widget.schedule.possibleValues
+    final possibleValues = widget.schedule.localizedPossibleValues(l10n)
         .where((pv) => pv.value != null) // Exclure "Auto" pour les créneaux
         .toList();
 
@@ -720,7 +721,7 @@ class _TransitionDialogState extends State<TransitionDialog> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final possibleValues = widget.schedule.possibleValues;
+    final possibleValues = widget.schedule.localizedPossibleValues(l10n);
 
     return AlertDialog(
       title: Text(widget.title ?? l10n.scheduleNewTransition),

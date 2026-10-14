@@ -5,6 +5,7 @@ import '../../../../domain/models/schedule.dart';
 import 'schedule_colors.dart';
 import 'schedule_dialogs.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../shared/utils/schedule_l10n.dart';
 
 /// Vue semaine compacte avec tous les jours en colonnes verticales
 /// Style Google Agenda - affiche les 7 jours côte à côte
@@ -444,7 +445,7 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
   }
 
   String _getShortStateText(dynamic value) {
-    final text = widget.schedule.getStateText(value);
+    final text = widget.schedule.localizedStateText(AppLocalizations.of(context)!, value);
     // Raccourcir le texte pour les petits blocs
     if (text.length > 6) {
       return '${text.substring(0, 5)}.';
@@ -702,7 +703,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: widget.schedule.possibleValues.map((pv) {
+              children: widget.schedule.localizedPossibleValues(AppLocalizations.of(context)!).map((pv) {
                 final isSelected = pv.value == _selectedValue;
                 final color = ScheduleColors.getColorForValue(
                   pv.value,
@@ -1005,7 +1006,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: widget.schedule.possibleValues.map((pv) {
+              children: widget.schedule.localizedPossibleValues(AppLocalizations.of(context)!).map((pv) {
                 final isSelected = pv.value == _selectedValue;
                 final color = ScheduleColors.getColorForValue(
                   pv.value,

@@ -142,6 +142,7 @@
   "enterValue": "Enter a value",
   "invalidValue": "Invalid value",
   "state": "State",
+  "scheduleStateN": "State {value}",
   "enterState": "Enter a state",
   "invalidStateMin1": "Invalid state (min: 1)",
   "selectedState": "Selected state: {state} ({value})",

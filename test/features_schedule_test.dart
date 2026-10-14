@@ -176,4 +176,26 @@ void main() {
       expect(container.read(scheduleEditProvider).hasChanges, isTrue);
     });
   });
+
+  test('getStateText uses the given fallback labels (French by default)', () {
+    final s = Schedule(
+      instance: 1,
+      objectName: 'S',
+      weeklySchedule: WeeklySchedule.empty(),
+      valueType: ScheduleValueType.enumerated,
+    );
+    expect(s.getStateText(null), 'Auto');
+    expect(s.getStateText(3), 'État 3');
+    final en = ScheduleStateLabels(
+      auto: 'Auto',
+      active: 'Active',
+      inactive: 'Inactive',
+      state: (v) => 'State $v',
+    );
+    expect(s.getStateText(3, en), 'State 3');
+    expect(s.possibleValuesWith(en).first.text, 'State 1');
+    final b = s.copyWith(valueType: ScheduleValueType.boolean);
+    expect(b.getStateText(true, en), 'Active');
+    expect(b.getStateText(false), 'Inactif');
+  });
 }

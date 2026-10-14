@@ -457,6 +457,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get state => 'State';
 
   @override
+  String scheduleStateN(int value) {
+    return 'State $value';
+  }
+
+  @override
   String get enterState => 'Enter a state';
 
   @override

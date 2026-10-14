@@ -668,9 +668,11 @@ class Schedule {
   /// Identifiant unique
   String get objectId => 'SCH:$instance';
 
-  /// Récupère le texte pour une valeur donnée
-  String getStateText(dynamic value) {
-    if (value == null) return 'Auto';
+  /// Récupère le texte pour une valeur donnée. [labels] gives the fallback
+  /// texts (French by default; the UI passes localized ones, see
+  /// `ScheduleL10n` in presentation/shared).
+  String getStateText(dynamic value, [ScheduleStateLabels labels = ScheduleStateLabels.fr]) {
+    if (value == null) return labels.auto;
 
     // Normaliser la valeur en int si possible
     int? intValue;
@@ -688,30 +690,35 @@ class Schedule {
       if (intValue == 1) {
         // Chercher le texte pour l'état actif (généralement index 1)
         final activeText = stateTexts.where((s) => s.index == 1).firstOrNull;
-        return activeText?.text ?? 'Actif';
+        return activeText?.text ?? labels.active;
       } else {
         // Chercher le texte pour l'état inactif (généralement index 0)
         final inactiveText = stateTexts.where((s) => s.index == 0).firstOrNull;
-        return inactiveText?.text ?? 'Inactif';
+        return inactiveText?.text ?? labels.inactive;
       }
     }
 
     // Pour les valeurs énumérées
     if (intValue != null) {
       final stateText = stateTexts.where((s) => s.index == intValue).firstOrNull;
-      return stateText?.text ?? 'État $intValue';
+      return stateText?.text ?? labels.state(intValue);
     }
 
     return value.toString();
   }
 
   /// Liste des valeurs possibles pour ce schedule
-  List<({dynamic value, String text})> get possibleValues {
+  List<({dynamic value, String text})> get possibleValues => possibleValuesWith();
+
+  /// [possibleValues] with the given fallback [labels].
+  List<({dynamic value, String text})> possibleValuesWith([
+    ScheduleStateLabels labels = ScheduleStateLabels.fr,
+  ]) {
     if (valueType == ScheduleValueType.boolean) {
       return [
-        (value: 1, text: getStateText(1)),
-        (value: 0, text: getStateText(0)),
-        (value: null, text: 'Auto'),
+        (value: 1, text: getStateText(1, labels)),
+        (value: 0, text: getStateText(0, labels)),
+        (value: null, text: labels.auto),
       ];
     }
 
@@ -738,10 +745,10 @@ class Schedule {
       final maxVal = usedValues.isEmpty ? 4 : usedValues.reduce((a, b) => a > b ? a : b);
       final startVal = minVal < 1 ? minVal : 1; // Si données utilisent 0, l'inclure
       for (int i = startVal; i <= maxVal; i++) {
-        values.add((value: i, text: 'État $i'));
+        values.add((value: i, text: labels.state(i)));
       }
     }
-    values.add((value: null, text: 'Auto'));
+    values.add((value: null, text: labels.auto));
     return values;
   }
 
@@ -769,6 +776,32 @@ class Schedule {
       weeklyScheduleReadable: weeklyScheduleReadable ?? this.weeklyScheduleReadable,
     );
   }
+}
+
+/// Fallback texts of [Schedule.getStateText] / [Schedule.possibleValuesWith]
+/// when the controller provides no state text.
+class ScheduleStateLabels {
+  final String auto;
+  final String active;
+  final String inactive;
+  final String Function(int value) state;
+
+  const ScheduleStateLabels({
+    required this.auto,
+    required this.active,
+    required this.inactive,
+    required this.state,
+  });
+
+  static String _frState(int value) => 'État $value';
+
+  /// Default (French) labels, for non-UI uses.
+  static const fr = ScheduleStateLabels(
+    auto: 'Auto',
+    active: 'Actif',
+    inactive: 'Inactif',
+    state: _frState,
+  );
 }
 
 /// Résumé d'un schedule (pour la liste)

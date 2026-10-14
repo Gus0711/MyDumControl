@@ -5,6 +5,7 @@ import '../../../../domain/models/schedule.dart';
 import 'schedule_dialogs.dart';
 import 'schedule_colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../shared/utils/schedule_l10n.dart';
 
 /// Widget d'édition des créneaux d'un jour
 class DayTransitionsEditor extends ConsumerWidget {
@@ -317,7 +318,7 @@ class _TimeSlotTile extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final stateText = schedule.getStateText(slot.value);
+    final stateText = schedule.localizedStateText(l10n, slot.value);
     final color = _getColorForValue(slot.value, colorScheme);
 
     return Dismissible(

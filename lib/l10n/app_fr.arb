@@ -148,6 +148,14 @@
   "enterValue": "Entrez une valeur",
   "invalidValue": "Valeur invalide",
   "state": "État",
+  "scheduleStateN": "État {value}",
+  "@scheduleStateN": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
   "enterState": "Entrez un état",
   "invalidStateMin1": "État invalide (min: 1)",
   "selectedState": "État sélectionné: {state} ({value})",

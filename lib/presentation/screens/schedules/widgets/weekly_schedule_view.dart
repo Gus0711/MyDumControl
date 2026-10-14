@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../domain/models/schedule.dart';
 import 'schedule_colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../shared/utils/schedule_l10n.dart';
 
 /// Vue hebdomadaire du planning avec timeline visuelle
 class WeeklyScheduleView extends StatefulWidget {
@@ -251,7 +252,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
     ThemeData theme,
     ColorScheme colorScheme,
   ) {
-    final stateText = widget.schedule.getStateText(transition.value);
+    final stateText = widget.schedule.localizedStateText(AppLocalizations.of(context)!, transition.value);
     final color = _getColorForValue(transition.value, colorScheme);
 
     return Padding(

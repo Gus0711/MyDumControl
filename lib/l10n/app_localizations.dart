@@ -950,6 +950,12 @@ abstract class AppLocalizations {
   /// **'État'**
   String get state;
 
+  /// No description provided for @scheduleStateN.
+  ///
+  /// In fr, this message translates to:
+  /// **'État {value}'**
+  String scheduleStateN(int value);
+
   /// No description provided for @enterState.
   ///
   /// In fr, this message translates to:

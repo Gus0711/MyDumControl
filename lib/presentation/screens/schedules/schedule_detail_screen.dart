@@ -7,6 +7,7 @@ import 'widgets/schedule_dialogs.dart';
 import 'widgets/schedule_colors.dart';
 import 'widgets/vertical_day_schedule_view.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../shared/utils/schedule_l10n.dart';
 
 /// Écran de détail d'un schedule avec vue hebdomadaire et mode édition
 class ScheduleDetailScreen extends ConsumerStatefulWidget {
@@ -464,7 +465,7 @@ class _ScheduleDetailContentState extends State<_ScheduleDetailContent> {
                     return _buildInfoChip(
                       context,
                       icon: Icons.play_arrow,
-                      label: l10n.currentState(widget.schedule.getStateText(widget.schedule.presentValue)),
+                      label: l10n.currentState(widget.schedule.localizedStateText(l10n, widget.schedule.presentValue)),
                       highlighted: true,
                     );
                   },
@@ -518,7 +519,7 @@ class _ScheduleDetailContentState extends State<_ScheduleDetailContent> {
 
   Widget _buildLegend(BuildContext context, ThemeData theme, ColorScheme colorScheme) {
     final l10n = AppLocalizations.of(context)!;
-    final possibleValues = widget.schedule.possibleValues;
+    final possibleValues = widget.schedule.localizedPossibleValues(l10n);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
