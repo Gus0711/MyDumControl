@@ -209,7 +209,7 @@ class BacnetObject {
         type == BacnetObjectType.binaryOutput ||
         type == BacnetObjectType.binaryValue) {
       // Valeurs binaires : utiliser activeText/inactiveText si disponibles
-      final isActive = _isBinaryValueActive(presentValue);
+      final isActive = isBinaryValueActive(presentValue);
 
       if (isActive) {
         return activeText ?? 'Actif';
@@ -283,7 +283,8 @@ class BacnetObject {
   }
 
   /// Vérifie si une valeur binaire est active
-  static bool _isBinaryValueActive(dynamic value) {
+  /// True if a binary present-value means "active" (1, true, 'active', 'on')
+  static bool isBinaryValueActive(dynamic value) {
     if (value == null) return false;
     if (value == true) return true;
     if (value == 1) return true;

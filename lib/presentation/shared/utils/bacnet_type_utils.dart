@@ -79,31 +79,7 @@ class BacnetTypeUtils {
   }
 
   /// Vérifie si une valeur binaire est active
-  static bool isBinaryActive(dynamic value) {
-    if (value == null) return false;
-    if (value == true) return true;
-    if (value == 1) return true;
-    if (value is String) {
-      final lower = value.toLowerCase();
-      return lower == 'active' || lower == 'true' || lower == '1' || lower == 'on';
-    }
-    return false;
-  }
-
-  /// Vérifie si un type BACnet est un type "point" (pas device, schedule, etc.)
-  static bool isPointType(BacnetObjectType type) {
-    return const [
-      BacnetObjectType.analogInput,
-      BacnetObjectType.analogOutput,
-      BacnetObjectType.analogValue,
-      BacnetObjectType.binaryInput,
-      BacnetObjectType.binaryOutput,
-      BacnetObjectType.binaryValue,
-      BacnetObjectType.multiStateInput,
-      BacnetObjectType.multiStateOutput,
-      BacnetObjectType.multiStateValue,
-    ].contains(type);
-  }
+  static bool isBinaryActive(dynamic value) => BacnetObject.isBinaryValueActive(value);
 
   /// Formate une valeur pour l'affichage
   static String formatValue(BacnetObject point) {

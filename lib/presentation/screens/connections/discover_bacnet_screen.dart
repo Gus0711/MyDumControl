@@ -9,6 +9,7 @@ import '../../../data/services/bacnet_service.dart';
 /// Resultat de decouverte BACnet
 class DiscoveredBacnetDevice {
   final String host;
+  final int port;
   final int deviceId;
   final String? deviceName;
   final String? vendorName;
@@ -18,6 +19,7 @@ class DiscoveredBacnetDevice {
 
   DiscoveredBacnetDevice({
     required this.host,
+    this.port = 47808,
     required this.deviceId,
     this.deviceName,
     this.vendorName,
@@ -28,6 +30,7 @@ class DiscoveredBacnetDevice {
 
   DiscoveredBacnetDevice copyWith({
     String? host,
+    int? port,
     int? deviceId,
     String? deviceName,
     String? vendorName,
@@ -37,6 +40,7 @@ class DiscoveredBacnetDevice {
   }) {
     return DiscoveredBacnetDevice(
       host: host ?? this.host,
+      port: port ?? this.port,
       deviceId: deviceId ?? this.deviceId,
       deviceName: deviceName ?? this.deviceName,
       vendorName: vendorName ?? this.vendorName,
@@ -62,6 +66,13 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
   String? _errorMessage;
   StreamSubscription<DeviceIdConflict>? _conflictSubscription;
 
+  /// Device details requests: one per (deviceId, address), at most
+  /// [_maxConcurrentDetails] in flight, the others wait in [_detailsQueue]
+  static const int _maxConcurrentDetails = 4;
+  final Set<String> _detailsRequested = {};
+  final List<({String host, int port, int deviceId})> _detailsQueue = [];
+  int _detailsInFlight = 0;
+
   @override
   void initState() {
     super.initState();
@@ -83,6 +94,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
 
     // Rebind le service sur la nouvelle interface
     await bacnetService.rebindToInterface(newInterface);
+    if (!mounted) return;
 
     // Mettre à jour le provider
     ref.read(selectedBacnetInterfaceProvider.notifier).state = newInterface;
@@ -93,12 +105,16 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
 
   /// Decouverte broadcast
   Future<void> _startBroadcastDiscovery() async {
+    // Une seule découverte à la fois (sinon deux abonnements au flux I-Am)
+    if (_isDiscovering || !mounted) return;
     setState(() {
       _isDiscovering = true;
       _discoveredDevices = [];
       _conflicts = [];
       _errorMessage = null;
     });
+    _detailsRequested.clear();
+    _detailsQueue.clear();
 
     try {
       final bacnetService = ref.read(bacnetServiceProvider);
@@ -107,8 +123,14 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
       _conflictSubscription?.cancel();
       _conflictSubscription = bacnetService.conflictStream.listen((conflict) {
         if (mounted) {
+          // Une seule entrée (et une seule alerte) par Device ID
+          final known = _conflicts.indexWhere((c) => c.deviceId == conflict.deviceId);
           setState(() {
-            _conflicts.add(conflict);
+            if (known != -1) {
+              _conflicts[known] = conflict;
+            } else {
+              _conflicts.add(conflict);
+            }
             // Mettre à jour le device concerné
             final index = _discoveredDevices.indexWhere((d) => d.deviceId == conflict.deviceId);
             if (index != -1) {
@@ -118,7 +140,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
               );
             }
           });
-          _showConflictSnackbar(conflict);
+          if (known == -1) _showConflictSnackbar(conflict);
         }
       });
 
@@ -131,6 +153,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
             if (existingIndex != -1) {
               _discoveredDevices[existingIndex] = _discoveredDevices[existingIndex].copyWith(
                 host: device.address.address,
+                port: device.port,
                 hasConflict: device.hasConflict,
                 conflictingHosts: device.hasConflict
                     ? [device.address.address, ...device.conflictingAddresses.map((a) => a.address)]
@@ -139,6 +162,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
             } else {
               _discoveredDevices.add(DiscoveredBacnetDevice(
                 host: device.address.address,
+                port: device.port,
                 deviceId: device.deviceId,
                 hasConflict: device.hasConflict,
                 conflictingHosts: device.hasConflict
@@ -147,8 +171,8 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
               ));
             }
           });
-          // Récupérer les détails immédiatement
-          _fetchDeviceDetails(bacnetService, device.address.address, 47808, device.deviceId);
+          // Récupérer les détails (une fois par device, via une file bornée)
+          _queueDeviceDetails(bacnetService, device.address.address, device.port, device.deviceId);
         }
       });
 
@@ -286,6 +310,23 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
     );
   }
 
+  void _queueDeviceDetails(BacnetService bacnetService, String host, int port, int deviceId) {
+    if (!_detailsRequested.add('$deviceId@$host')) return;
+    _detailsQueue.add((host: host, port: port, deviceId: deviceId));
+    _pumpDetailsQueue(bacnetService);
+  }
+
+  void _pumpDetailsQueue(BacnetService bacnetService) {
+    while (_detailsInFlight < _maxConcurrentDetails && _detailsQueue.isNotEmpty) {
+      final next = _detailsQueue.removeAt(0);
+      _detailsInFlight++;
+      _fetchDeviceDetails(bacnetService, next.host, next.port, next.deviceId).whenComplete(() {
+        _detailsInFlight--;
+        if (mounted) _pumpDetailsQueue(bacnetService);
+      });
+    }
+  }
+
   /// Recupere les details d'un device
   Future<void> _fetchDeviceDetails(BacnetService bacnetService, String host, int port, int deviceId) async {
     try {
@@ -317,7 +358,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
     context.pop({
       'name': device.deviceName ?? 'BACnet ${device.deviceId}',
       'host': device.host,
-      'port': 47808,
+      'port': device.port,
       'deviceId': device.deviceId,
     });
   }
