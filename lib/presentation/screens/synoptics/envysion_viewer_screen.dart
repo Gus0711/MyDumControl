@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../application/providers/connection_providers.dart';
 import '../../../data/database/app_database.dart';
+import '../../../data/services/certificate_pinning.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/gradient_app_bar.dart';
 
@@ -91,6 +92,31 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
     final port = space.port;
     if (port != null && port > 0 && port != connection.port) return false;
     return true;
+  }
+
+  /// TOFU check of an untrusted (self-signed) certificate: without a pinned
+  /// fingerprint, keep the historical behaviour (accept); otherwise accept
+  /// only the controller itself presenting the pinned certificate.
+  ServerTrustAuthResponseAction _serverTrustAction(URLProtectionSpace space) {
+    final pinned = _connection?.certificateFingerprint;
+    if (pinned == null || pinned.trim().isEmpty) {
+      return ServerTrustAuthResponseAction.PROCEED;
+    }
+    if (!_isChallengeFromController(space)) {
+      debugPrint('SSL Trust refused: ${space.host} is not the controller');
+      return ServerTrustAuthResponseAction.CANCEL;
+    }
+    final der = space.sslCertificate?.x509Certificate?.encoded;
+    if (der == null) {
+      debugPrint('SSL Trust refused: no certificate data');
+      return ServerTrustAuthResponseAction.CANCEL;
+    }
+    final presented = certificateFingerprintOfDer(der);
+    if (checkCertificate(pinned, presented) != CertificateCheck.match) {
+      debugPrint('SSL Trust refused: certificate fingerprint mismatch ($presented)');
+      return ServerTrustAuthResponseAction.CANCEL;
+    }
+    return ServerTrustAuthResponseAction.PROCEED;
   }
 
   String _getBasicAuthHeader() {
@@ -304,10 +330,10 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               });
             },
             onReceivedServerTrustAuthRequest: (controller, challenge) async {
-              // Accepter les certificats auto-signes (TOFU)
+              // Certificats auto-signes : verifies contre l'empreinte TOFU
               debugPrint('SSL Trust Request for: ${challenge.protectionSpace.host}');
               return ServerTrustAuthResponse(
-                action: ServerTrustAuthResponseAction.PROCEED,
+                action: _serverTrustAction(challenge.protectionSpace),
               );
             },
             onReceivedHttpAuthRequest: (controller, challenge) async {

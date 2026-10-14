@@ -688,6 +688,10 @@ class _ConnectionCard extends ConsumerWidget {
     final isRefreshing = superFavsState.isRefreshing(connection.id);
     final connectionInfo = superFavsState.getConnectionInfo(connection.id);
 
+    // Connexion importée sans son mot de passe : à ressaisir
+    final missingPassword = connection.connectionType != 'bacnet' &&
+        ref.watch(connectionHasPasswordProvider(connection.passwordKey)).valueOrNull == false;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: InkWell(
@@ -740,7 +744,9 @@ class _ConnectionCard extends ConsumerWidget {
                               ),
                         ),
                         // Badges : Modèle (depuis DB) + API version (toujours visibles)
-                        if (connection.modelName != null || connection.apiVersion != null) ...[
+                        if (connection.modelName != null ||
+                            connection.apiVersion != null ||
+                            missingPassword) ...[
                           const SizedBox(height: 4),
                           Wrap(
                             spacing: 4,
@@ -764,6 +770,33 @@ class _ConnectionCard extends ConsumerWidget {
                                       color: Colors.teal.shade800,
                                       fontWeight: FontWeight.w500,
                                     ),
+                                  ),
+                                ),
+                              // Badge mot de passe manquant
+                              if (missingPassword)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.key_off, size: 10, color: Colors.orange.shade900),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        l10n.passwordMissingBadge,
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          color: Colors.orange.shade900,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               // Badge API version
@@ -1211,7 +1244,6 @@ class _RefreshButtonState extends ConsumerState<_RefreshButton> {
     final state = ref.watch(superFavoritesProvider);
     final isRefreshing = state.isRefreshing(widget.connectionId);
     final secondsRemaining = state.secondsUntilRefresh(widget.connectionId);
-    final canRefresh = !isRefreshing && secondsRemaining == 0;
 
     // Démarrer le timer si nécessaire (après un refresh)
     if (secondsRemaining > 0 && _timer == null) {

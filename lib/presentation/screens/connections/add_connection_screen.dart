@@ -10,6 +10,7 @@ import '../../../application/providers/settings_provider.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/router/routes.dart';
+import '../../../data/services/certificate_pinning.dart';
 import '../../widgets/gradient_app_bar.dart';
 
 /// Types de connexion supportes
@@ -60,6 +61,22 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
   String? _detectedApiVersion;
   ConnectionType _connectionType = ConnectionType.distechApi;
 
+  /// Certificate fingerprint seen by the last successful HTTPS test, and the
+  /// endpoint (scheme/host/port) it was seen on.
+  String? _testedFingerprint;
+  String? _testedEndpoint;
+
+  /// Fingerprint pinned for the edited connection, and its endpoint.
+  String? _storedFingerprint;
+  String? _storedEndpoint;
+
+  String get _currentEndpoint =>
+      '${_useHttps ? 'https' : 'http'}://${_hostController.text.trim()}:${_portController.text.trim()}';
+
+  /// Fingerprint of the last test, if it was made on the current endpoint.
+  String? get _currentTestedFingerprint =>
+      _testedEndpoint == _currentEndpoint ? _testedFingerprint : null;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +96,9 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         _usernameController.text = connection.username;
         _useHttps = connection.useHttps;
         _detectedApiVersion = connection.apiVersion;
+        _storedFingerprint = connection.certificateFingerprint;
+        _storedEndpoint =
+            '${connection.useHttps ? 'https' : 'http'}://${connection.host}:${connection.port}';
         _connectionType = ConnectionType.fromValue(connection.connectionType);
         if (connection.bacnetDeviceId != null) {
           _bacnetDeviceIdController.text = connection.bacnetDeviceId.toString();
@@ -298,6 +318,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                 },
                 secondary: Icon(_useHttps ? Icons.lock : Icons.lock_open),
               ),
+              if (!_useHttps) _buildHttpWarning(l10n),
               const Divider(height: 32),
 
               // Nom d'utilisateur
@@ -420,6 +441,81 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                   ),
                 ),
               ],
+            ),
+            if (_connectionType == ConnectionType.distechApi &&
+                _currentTestedFingerprint != null) ...[
+              const SizedBox(height: 16),
+              _buildFingerprintCard(l10n, _currentTestedFingerprint!),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Non-blocking warning: with HTTP the password travels in clear text.
+  Widget _buildHttpWarning(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade700),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              l10n.httpCleartextWarning,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.orange.shade800,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shows the certificate fingerprint seen by the connection test.
+  Widget _buildFingerprintCard(AppLocalizations l10n, String fingerprint) {
+    final stored = _storedEndpoint == _currentEndpoint ? _storedFingerprint : null;
+    final differs = stored != null &&
+        checkCertificate(stored, fingerprint) == CertificateCheck.mismatch;
+    return Card(
+      color: differs ? Colors.orange.shade50 : null,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  differs ? Icons.gpp_maybe_outlined : Icons.verified_user_outlined,
+                  size: 18,
+                  color: differs ? Colors.orange.shade800 : Colors.green.shade700,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.certificateFingerprintLabel,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              fingerprint,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              differs
+                  ? l10n.certificateFingerprintDiffers
+                  : l10n.certificateFingerprintPinnedInfo,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: differs ? Colors.orange.shade900 : null,
+                  ),
             ),
           ],
         ),
@@ -657,6 +753,8 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       if (result.success) {
         setState(() {
           _detectedApiVersion = result.apiVersion;
+          _testedFingerprint = result.certificateFingerprint;
+          _testedEndpoint = _currentEndpoint;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -738,6 +836,11 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
               _designerUrlController.text.trim().isNotEmpty
           ? _designerUrlController.text.trim()
           : null;
+      // Certificate seen by a successful test on this endpoint (TOFU)
+      final certificateFingerprint =
+          _connectionType == ConnectionType.distechApi && _useHttps
+              ? _currentTestedFingerprint
+              : null;
 
       if (widget.isEditing) {
         await repository.updateConnection(
@@ -752,6 +855,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
           connectionType: _connectionType.value,
           bacnetDeviceId: bacnetDeviceId,
           designerUrl: designerUrl,
+          certificateFingerprint: certificateFingerprint,
         );
       } else {
         await repository.createConnection(
@@ -765,8 +869,12 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
           connectionType: _connectionType.value,
           bacnetDeviceId: bacnetDeviceId,
           designerUrl: designerUrl,
+          certificateFingerprint: certificateFingerprint,
         );
       }
+
+      // Password may have been entered again: refresh the list badges
+      ref.invalidate(connectionHasPasswordProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

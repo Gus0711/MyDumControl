@@ -10,6 +10,7 @@ import '../../../application/providers/favorites_provider.dart';
 import '../../../application/providers/alarms_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/services/api_exceptions.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../widgets/skeleton_loading.dart';
 import '../../widgets/gradient_app_bar.dart';
@@ -93,6 +94,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (pointsState.points.isEmpty && !pointsState.isLoading) {
           ref.read(pointsProvider.notifier).loadPoints();
         }
+      }
+      // Avertissement d'autorisation non bloquant (HTTP 403)
+      if (next.authWarning != null && next.authWarning != previous?.authWarning) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(next.authWarning!), backgroundColor: Colors.orange.shade800),
+        );
       }
       // Reset si déconnecté
       if (!next.isConnected) {
@@ -280,29 +287,110 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     if (state.error != null && !state.isConnected) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(state.error!, textAlign: TextAlign.center),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => context.go(Routes.connections),
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('Retour aux connexions'),
-            ),
-          ],
-        ),
-      );
+      return _buildConnectionError(context, l10n, state);
     }
 
     // Grille de menu style MyDC Control avec fond dégradé
     return _buildMenuGrid(context, l10n, state);
+  }
+
+  /// Connection failure view, with the action matching the typed cause.
+  Widget _buildConnectionError(BuildContext context, AppLocalizations l10n, ActiveConnectionState state) {
+    final failure = state.failure;
+    final connectionId = state.connection?.id;
+    String message = state.error!;
+    IconData icon = Icons.error_outline;
+    Widget? action;
+
+    if (failure is CertificateMismatchException) {
+      icon = Icons.gpp_maybe_outlined;
+      action = ElevatedButton.icon(
+        onPressed: () => _confirmTrustNewCertificate(context, l10n, failure),
+        icon: const Icon(Icons.verified_user_outlined),
+        label: Text(l10n.trustNewCertificate),
+      );
+    } else if (failure is ApiAuthException || failure is PasswordMissingException) {
+      icon = Icons.lock_outline;
+      if (failure is ApiAuthException) {
+        message = l10n.invalidCredentialsMessage('${failure.statusCode ?? '401/403'}');
+      }
+      if (connectionId != null) {
+        action = ElevatedButton.icon(
+          onPressed: () => context.push(Routes.editConnectionPath(connectionId.toString())),
+          icon: const Icon(Icons.edit),
+          label: Text(l10n.editConnection),
+        );
+      }
+    }
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 64, color: Colors.red.shade300),
+            const SizedBox(height: 16),
+            if (failure is CertificateMismatchException) ...[
+              Text(
+                l10n.certificateChangedTitle,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+            ],
+            SelectableText(message, textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            if (action != null) ...[
+              action,
+              const SizedBox(height: 12),
+            ],
+            OutlinedButton.icon(
+              onPressed: () => context.go(Routes.connections),
+              icon: const Icon(Icons.arrow_back),
+              label: Text(l10n.backToConnections),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Asks the user to confirm before trusting a changed certificate.
+  Future<void> _confirmTrustNewCertificate(
+    BuildContext context,
+    AppLocalizations l10n,
+    CertificateMismatchException failure,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+        title: Text(l10n.certificateChangedTitle),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            l10n.trustNewCertificateMessage(failure.expectedFingerprint, failure.receivedFingerprint),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.trust),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _initialLoadComplete = false;
+      _pointsLoadTriggered = false;
+      _pointsLoadFinished = false;
+    });
+    await ref.read(activeConnectionProvider.notifier).trustNewCertificate();
   }
 
   Widget _buildMenuGrid(BuildContext context, AppLocalizations l10n, ActiveConnectionState state) {
