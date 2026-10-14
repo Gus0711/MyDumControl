@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import '../../data/database/app_database.dart';
+import '../../data/services/api_client_factory.dart';
 import '../../data/services/api_service.dart';
+import 'api_provider.dart';
 import '../../domain/models/bacnet_object.dart';
-import 'connection_providers.dart';
 import 'database_provider.dart';
 import 'cache_provider.dart';
 import 'points_provider.dart';
@@ -26,6 +26,15 @@ class ActiveConnectionState {
   final bool isLoadingSummary;
   final String? error;
 
+  /// Typed cause of a failed API connection, for the UI to offer the right
+  /// action: [CertificateMismatchException] (trust the new certificate),
+  /// [ApiAuthException] (invalid credentials) or [PasswordMissingException]
+  /// (edit the connection). Reset like [error] by [copyWith].
+  final ApiException? failure;
+
+  /// Non-fatal authorization warning (HTTP 403 on some request).
+  final String? authWarning;
+
   /// Indique si les données viennent du cache
   final bool deviceInfoFromCache;
   final bool summaryFromCache;
@@ -45,6 +54,8 @@ class ActiveConnectionState {
     this.isLoadingDeviceInfo = false,
     this.isLoadingSummary = false,
     this.error,
+    this.failure,
+    this.authWarning,
     this.deviceInfoFromCache = false,
     this.summaryFromCache = false,
     this.isBacnetConnection = false,
@@ -66,6 +77,8 @@ class ActiveConnectionState {
     bool? isLoadingDeviceInfo,
     bool? isLoadingSummary,
     String? error,
+    ApiException? failure,
+    String? authWarning,
     bool? deviceInfoFromCache,
     bool? summaryFromCache,
     bool? isBacnetConnection,
@@ -82,6 +95,8 @@ class ActiveConnectionState {
       isLoadingDeviceInfo: isLoadingDeviceInfo ?? this.isLoadingDeviceInfo,
       isLoadingSummary: isLoadingSummary ?? this.isLoadingSummary,
       error: error,
+      failure: failure,
+      authWarning: authWarning ?? this.authWarning,
       deviceInfoFromCache: deviceInfoFromCache ?? this.deviceInfoFromCache,
       summaryFromCache: summaryFromCache ?? this.summaryFromCache,
       isBacnetConnection: isBacnetConnection ?? this.isBacnetConnection,
@@ -307,33 +322,25 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   Future<bool> _connectDistechApi(Connection connection, int token) async {
     _logger.i('_connectDistechApi: connecting to ${connection.host}:${connection.port}');
 
-    // Récupérer le mot de passe
-    final secureStorage = _ref.read(secureStorageProvider);
-    final password = await secureStorage.read(key: connection.passwordKey);
-    if (!_isCurrent(token)) return false;
-
-    if (password == null) {
+    // Construire le client (mot de passe, auth, version, timeouts, TOFU)
+    final factory = _ref.read(apiClientFactoryProvider);
+    final ApiClientConfig config;
+    try {
+      config = await factory.resolve(connection);
+    } on PasswordMissingException catch (e) {
+      if (!_isCurrent(token)) return false;
       _logger.e('_connectDistechApi: mot de passe introuvable');
-      state = state.copyWith(
-        isConnecting: false,
-        error: 'Mot de passe introuvable',
-      );
+      state = ActiveConnectionState(connection: connection, error: e.message, failure: e);
       return false;
     }
+    if (!_isCurrent(token)) return false;
 
-    // Construire l'URL et l'auth
-    final scheme = connection.useHttps ? 'https' : 'http';
-    final baseUrl = '$scheme://${connection.host}:${connection.port}';
-    final basicAuth = 'Basic ${base64Encode(utf8.encode('${connection.username}:$password'))}';
-    final apiVersion = connection.apiVersion ?? 'V2';
+    _logger.i('_connectDistechApi: baseUrl=${config.baseUrl}, apiVersion=${config.apiVersion}');
 
-    _logger.i('_connectDistechApi: baseUrl=$baseUrl, apiVersion=$apiVersion');
-
-    // Créer le client
-    final client = ConnectedApiClient(
-      baseUrl: baseUrl,
-      basicAuth: basicAuth,
-      apiVersion: apiVersion,
+    final client = factory.build(
+      config,
+      onAuthError: (e) => _onAuthError(e, connection, token),
+      onCertificateMismatch: (e) => _failConnection(e, connection, token),
     );
 
     // Not a BACnet connection: clear any previous native BACnet target
@@ -394,6 +401,46 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     _loadDataInBackground(client, connection.id, connection.name, token);
 
     return true;
+  }
+
+  /// Drops the current API connection after a fatal error (certificate
+  /// mismatch, invalid credentials): the home screen shows [failure].
+  void _failConnection(ApiException failure, Connection connection, int token) {
+    if (!_isCurrent(token)) return;
+    _logger.e('connection failed: $failure');
+    _connectionToken++;
+    state.client?.dispose();
+    _clearDataProviders();
+    state = ActiveConnectionState(
+      connection: connection,
+      error: failure.message,
+      failure: failure,
+    );
+  }
+
+  /// 401 during the initial load (device info not loaded yet): credentials
+  /// are wrong for the whole controller (Basic auth), the connection is
+  /// dropped. Otherwise (403, or a later 401 on a single request) a non-fatal
+  /// warning is shown and the connection is kept.
+  void _onAuthError(ApiAuthException e, Connection connection, int token) {
+    if (!_isCurrent(token)) return;
+    if (e.statusCode == 401 && state.isLoadingDeviceInfo) {
+      _failConnection(e, connection, token);
+    } else if (state.authWarning == null) {
+      state = state.copyWith(authWarning: '${e.message} (HTTP ${e.statusCode})');
+    }
+  }
+
+  /// Trusts the certificate now presented by the controller (after the user
+  /// confirmed it) and reconnects.
+  Future<bool> trustNewCertificate() async {
+    final failure = state.failure;
+    final connection = state.connection;
+    if (failure is! CertificateMismatchException || connection == null) return false;
+    final database = _ref.read(databaseProvider);
+    await database.updateCertificateFingerprint(connection.id, failure.receivedFingerprint);
+    if (!mounted) return false;
+    return connect(connection.id);
   }
 
   /// Charge les données en arrière-plan sans bloquer l'UI

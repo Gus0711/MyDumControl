@@ -1284,4 +1284,44 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get envysionLoadErrorMessage =>
       'Impossible de charger le synoptique Envysion. Vérifiez l\'URL et votre connexion.';
+
+  @override
+  String get certificateChangedTitle => 'Certificat de l\'automate modifié';
+
+  @override
+  String get trustNewCertificate => 'Faire confiance au nouveau certificat';
+
+  @override
+  String trustNewCertificateMessage(String expected, String received) {
+    return 'Le certificat présenté par l\'automate est différent de celui enregistré lors de la première connexion.\n\nCela peut venir d\'un renouvellement du certificat (mise à jour, réinitialisation de l\'automate) ou d\'une interception du trafic. Ne faites confiance au nouveau certificat que si vous êtes sûr qu\'il est légitime.\n\nEmpreinte attendue :\n$expected\n\nNouvelle empreinte :\n$received';
+  }
+
+  @override
+  String get trust => 'Faire confiance';
+
+  @override
+  String get backToConnections => 'Retour aux connexions';
+
+  @override
+  String get certificateFingerprintLabel => 'Empreinte du certificat (SHA-256)';
+
+  @override
+  String get certificateFingerprintDiffers =>
+      'Différente de l\'empreinte enregistrée : le certificat de l\'automate a changé.';
+
+  @override
+  String get certificateFingerprintPinnedInfo =>
+      'Elle sera enregistrée et vérifiée à chaque connexion.';
+
+  @override
+  String get httpCleartextWarning =>
+      'HTTP non chiffré : le mot de passe circule en clair sur le réseau. Préférez HTTPS si l\'automate le permet.';
+
+  @override
+  String get passwordMissingBadge => 'Mot de passe à ressaisir';
+
+  @override
+  String invalidCredentialsMessage(String status) {
+    return 'Identifiants invalides ($status). Vérifiez le nom d\'utilisateur et le mot de passe de la connexion.';
+  }
 }

@@ -226,8 +226,9 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Met à jour l'empreinte du certificat
-  Future<void> updateCertificateFingerprint(int id, String fingerprint) {
+  /// Met à jour l'empreinte du certificat (TOFU) ; null l'oublie (la
+  /// prochaine connexion HTTPS enregistrera le certificat présenté).
+  Future<void> updateCertificateFingerprint(int id, String? fingerprint) {
     return (update(connections)..where((c) => c.id.equals(id))).write(
       ConnectionsCompanion(
         certificateFingerprint: Value(fingerprint),

@@ -26,6 +26,17 @@ bool connectionTargetChanged(
       existing.bacnetDeviceId != bacnetDeviceId;
 }
 
+/// True if the pinned TLS certificate must be forgotten after an edit: it
+/// belongs to another endpoint (host, port or scheme changed).
+bool certificateEndpointChanged(
+  Connection existing, {
+  required String host,
+  required int port,
+  required bool useHttps,
+}) {
+  return existing.host != host || existing.port != port || existing.useHttps != useHttps;
+}
+
 /// Provider pour le stockage sécurisé des mots de passe
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage(
@@ -37,6 +48,14 @@ final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
 final connectionsStreamProvider = StreamProvider<List<Connection>>((ref) {
   final database = ref.watch(databaseProvider);
   return database.watchAllConnections();
+});
+
+/// True if a password is stored for the connection (keyed by its
+/// passwordKey). Used to flag connections imported without their secret.
+final connectionHasPasswordProvider =
+    FutureProvider.autoDispose.family<bool, String>((ref, passwordKey) async {
+  final password = await ref.watch(secureStorageProvider).read(key: passwordKey);
+  return password != null;
 });
 
 /// Provider pour les opérations sur les connexions
@@ -69,6 +88,7 @@ class ConnectionRepository {
     String connectionType = 'distech_api',
     int? bacnetDeviceId,
     String? designerUrl,
+    String? certificateFingerprint,
   }) async {
     // Générer une clé unique pour le mot de passe
     final passwordKey = generatePasswordKey();
@@ -89,6 +109,7 @@ class ConnectionRepository {
         connectionType: Value(connectionType),
         bacnetDeviceId: Value(bacnetDeviceId),
         designerUrl: Value(designerUrl),
+        certificateFingerprint: Value(certificateFingerprint),
       ),
     );
 
@@ -108,9 +129,22 @@ class ConnectionRepository {
     String? connectionType,
     int? bacnetDeviceId,
     String? designerUrl,
+    String? certificateFingerprint,
   }) async {
     final existing = await database.getConnectionById(id);
     if (existing == null) return;
+
+    // Pinned certificate (TOFU): forgotten when the endpoint changes, unless
+    // the caller provides the one seen by a connection test on the new one.
+    final endpointChanged = certificateEndpointChanged(
+      existing,
+      host: host,
+      port: port,
+      useHttps: useHttps,
+    );
+    final newFingerprint = endpointChanged
+        ? certificateFingerprint
+        : (existing.certificateFingerprint ?? certificateFingerprint);
 
     // Si un nouveau mot de passe est fourni, le mettre à jour
     if (password != null && password.isNotEmpty) {
@@ -138,6 +172,7 @@ class ConnectionRepository {
         connectionType: newType,
         bacnetDeviceId: Value(bacnetDeviceId),
         designerUrl: Value(designerUrl),
+        certificateFingerprint: Value(useHttps ? newFingerprint : null),
         updatedAt: DateTime.now(),
       ),
     );

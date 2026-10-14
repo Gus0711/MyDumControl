@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:logger/logger.dart';
@@ -9,6 +8,7 @@ import '../../domain/models/bacnet_object.dart';
 import '../../domain/models/schedule.dart';
 import 'api_exceptions.dart';
 import 'api_type_names.dart';
+import 'certificate_pinning.dart';
 
 export 'api_exceptions.dart';
 
@@ -34,10 +34,12 @@ class ApiService {
   late final Dio _dio;
   String? _lastCertificateFingerprint;
 
-  ApiService() {
+  /// [timeout] defaults to [ApiConstants.testConnectionTimeout].
+  ApiService({Duration? timeout}) {
+    final t = timeout ?? ApiConstants.testConnectionTimeout;
     _dio = Dio(BaseOptions(
-      connectTimeout: ApiConstants.testConnectionTimeout,
-      receiveTimeout: ApiConstants.testConnectionTimeout,
+      connectTimeout: t,
+      receiveTimeout: t,
       validateStatus: (status) => status != null && status < 500,
     ));
   }
@@ -61,14 +63,8 @@ class ApiService {
 
   /// SHA-256 fingerprint of a certificate (DER), formatted as `AA:BB:...`.
   /// Shared with [ConnectedApiClient] so both use the same format.
-  static String certificateFingerprintOf(X509Certificate cert) {
-    return sha256
-        .convert(cert.der)
-        .bytes
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join(':')
-        .toUpperCase();
-  }
+  static String certificateFingerprintOf(X509Certificate cert) =>
+      certificateFingerprintOfDer(cert.der);
 
   /// Teste la connexion à un automate et détecte la version de l'API
   Future<ConnectionTestResult> testConnection({
@@ -250,6 +246,16 @@ class ConnectedApiClient {
   /// [lastError] to tell an auth failure apart from "no data".
   final void Function(ApiAuthException error)? onAuthError;
 
+  /// Called when the presented certificate does not match
+  /// [expectedCertFingerprint] (the TLS handshake is then refused).
+  final void Function(CertificateMismatchException error)? onCertificateMismatch;
+
+  CertificateMismatchException? _certificateMismatch;
+
+  /// Set once the controller presented a certificate that does not match
+  /// [expectedCertFingerprint].
+  CertificateMismatchException? get certificateMismatch => _certificateMismatch;
+
   ApiException? _lastError;
   int? _lastStatusCode;
 
@@ -275,10 +281,14 @@ class ConnectedApiClient {
     this.expectedCertFingerprint,
     this.onCertificateSeen,
     this.onAuthError,
+    this.onCertificateMismatch,
+    Duration? connectTimeout,
+    Duration? receiveTimeout,
+    Duration? sendTimeout,
   }) : _dio = Dio(BaseOptions(
-          connectTimeout: ApiConstants.connectTimeout,
-          receiveTimeout: ApiConstants.receiveTimeout,
-          sendTimeout: ApiConstants.sendTimeout,
+          connectTimeout: connectTimeout ?? ApiConstants.connectTimeout,
+          receiveTimeout: receiveTimeout ?? ApiConstants.receiveTimeout,
+          sendTimeout: sendTimeout ?? ApiConstants.sendTimeout,
           validateStatus: (status) => status != null && status < 500,
         )) {
     // Configurer pour les certificats auto-signés
@@ -291,12 +301,19 @@ class ConnectedApiClient {
         final fingerprint = ApiService.certificateFingerprintOf(cert);
         onCertificateSeen?.call(fingerprint);
         final expected = expectedCertFingerprint;
-        if (expected == null) return true;
-        final ok = expected.toUpperCase() == fingerprint;
-        if (!ok) {
-          _logger.e('ConnectedApiClient: certificate fingerprint mismatch for $host');
+        if (checkCertificate(expected, fingerprint) != CertificateCheck.mismatch) {
+          return true;
         }
-        return ok;
+        _logger.e('ConnectedApiClient: certificate fingerprint mismatch for $host');
+        final mismatch = CertificateMismatchException(
+          expectedFingerprint: expected!,
+          receivedFingerprint: fingerprint,
+          host: host,
+        );
+        _certificateMismatch = mismatch;
+        _lastError = mismatch;
+        onCertificateMismatch?.call(mismatch);
+        return false;
       };
       return client;
     };
@@ -309,6 +326,8 @@ class ConnectedApiClient {
         final status = error.response?.statusCode;
         if (status != null) {
           _recordStatus(status, error.requestOptions.uri.toString());
+        } else if (_certificateMismatch != null) {
+          _lastError = _certificateMismatch;
         } else {
           _lastError = ApiException(
             error.message ?? 'Erreur réseau (${error.type.name})',

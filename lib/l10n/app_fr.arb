@@ -428,5 +428,19 @@
   "webViewNotSupportedMessage": "L'affichage intégré n'est pas disponible sur {platform}. Voulez-vous ouvrir dans le navigateur externe ?",
   "loadingEnvysion": "Chargement du synoptique...",
   "envysionLoadError": "Erreur de chargement",
-  "envysionLoadErrorMessage": "Impossible de charger le synoptique Envysion. Vérifiez l'URL et votre connexion."
+  "envysionLoadErrorMessage": "Impossible de charger le synoptique Envysion. Vérifiez l'URL et votre connexion.",
+
+  "certificateChangedTitle": "Certificat de l'automate modifié",
+  "trustNewCertificate": "Faire confiance au nouveau certificat",
+  "trustNewCertificateMessage": "Le certificat présenté par l'automate est différent de celui enregistré lors de la première connexion.\n\nCela peut venir d'un renouvellement du certificat (mise à jour, réinitialisation de l'automate) ou d'une interception du trafic. Ne faites confiance au nouveau certificat que si vous êtes sûr qu'il est légitime.\n\nEmpreinte attendue :\n{expected}\n\nNouvelle empreinte :\n{received}",
+  "@trustNewCertificateMessage": {"placeholders": {"expected": {"type": "String"}, "received": {"type": "String"}}},
+  "trust": "Faire confiance",
+  "backToConnections": "Retour aux connexions",
+  "certificateFingerprintLabel": "Empreinte du certificat (SHA-256)",
+  "certificateFingerprintDiffers": "Différente de l'empreinte enregistrée : le certificat de l'automate a changé.",
+  "certificateFingerprintPinnedInfo": "Elle sera enregistrée et vérifiée à chaque connexion.",
+  "httpCleartextWarning": "HTTP non chiffré : le mot de passe circule en clair sur le réseau. Préférez HTTPS si l'automate le permet.",
+  "passwordMissingBadge": "Mot de passe à ressaisir",
+  "invalidCredentialsMessage": "Identifiants invalides ({status}). Vérifiez le nom d'utilisateur et le mot de passe de la connexion.",
+  "@invalidCredentialsMessage": {"placeholders": {"status": {"type": "String"}}}
 }

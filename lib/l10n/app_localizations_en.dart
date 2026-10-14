@@ -1278,4 +1278,44 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get envysionLoadErrorMessage =>
       'Unable to load Envysion synoptic. Check the URL and your connection.';
+
+  @override
+  String get certificateChangedTitle => 'Controller certificate changed';
+
+  @override
+  String get trustNewCertificate => 'Trust the new certificate';
+
+  @override
+  String trustNewCertificateMessage(String expected, String received) {
+    return 'The certificate presented by the controller differs from the one saved on the first connection.\n\nThis may come from a certificate renewal (firmware update, controller reset) or from traffic interception. Only trust the new certificate if you are sure it is legitimate.\n\nExpected fingerprint:\n$expected\n\nNew fingerprint:\n$received';
+  }
+
+  @override
+  String get trust => 'Trust';
+
+  @override
+  String get backToConnections => 'Back to connections';
+
+  @override
+  String get certificateFingerprintLabel => 'Certificate fingerprint (SHA-256)';
+
+  @override
+  String get certificateFingerprintDiffers =>
+      'Differs from the saved fingerprint: the controller certificate changed.';
+
+  @override
+  String get certificateFingerprintPinnedInfo =>
+      'It will be saved and checked on every connection.';
+
+  @override
+  String get httpCleartextWarning =>
+      'Unencrypted HTTP: the password is sent in clear text on the network. Prefer HTTPS if the controller supports it.';
+
+  @override
+  String get passwordMissingBadge => 'Password required';
+
+  @override
+  String invalidCredentialsMessage(String status) {
+    return 'Invalid credentials ($status). Check the connection user name and password.';
+  }
 }

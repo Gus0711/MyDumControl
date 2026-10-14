@@ -1,13 +1,13 @@
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import '../../data/database/app_database.dart';
+import '../../data/services/api_client_factory.dart';
 import '../../data/services/api_service.dart';
 import '../../domain/models/bacnet_object.dart';
 import 'active_connection_provider.dart';
+import 'api_provider.dart';
 import 'bacnet_provider.dart';
 import 'bacnet_type_codes.dart';
-import 'connection_providers.dart';
 import 'database_provider.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
@@ -49,6 +49,14 @@ class SuperFavoriteWithValue {
     if (liveData == null) return '--';
     return liveData!.formattedValue;
   }
+}
+
+/// User-facing message for a super-favorites refresh failure.
+String superFavoriteFailureMessage(ApiException failure) {
+  if (failure is ApiAuthException) {
+    return 'Identifiants invalides (${failure.statusCode ?? '401/403'})';
+  }
+  return failure.message;
 }
 
 /// Durée minimale entre deux refresh (anti-spam)
@@ -307,12 +315,21 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     List<SuperFavoriteWithValue> superFavs,
   ) async {
     // Récupérer ou créer le ConnectedApiClient pour cette connexion
-    final apiClient = await _getApiClientForConnection(connection);
+    final ConnectedApiClient? apiClient;
+    try {
+      apiClient = await _getApiClientForConnection(connection);
+    } on PasswordMissingException catch (e) {
+      _logger.e('_refreshApiConnection: password not found for connection $connectionId - user needs to edit the connection on this device');
+      _setError(connectionId, e.message);
+      return;
+    }
     if (apiClient == null) {
       _logger.e('_refreshApiConnection: failed to create ApiClient for $connectionId');
       _setError(connectionId, 'Connectez-vous à cet automate');
       return;
     }
+    // Sticky error state: start from a clean slate to detect this refresh's failures
+    apiClient.clearLastError();
 
     // Collecter les pointRefs
     final pointRefs = superFavs.map((sf) => sf.favorite.pointRef).toList();
@@ -327,6 +344,16 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     final pointsResults = results[0] as Map<String, BacnetObject>;
     final deviceInfo = results[1] as DeviceInfo?;
     final controllerTime = results[2] as ControllerTime?;
+
+    // Auth / certificate failures: show the cause instead of "point not found"
+    final failure = apiClient.lastError;
+    if (failure is CertificateMismatchException || failure is ApiAuthException) {
+      if (!mounted) return;
+      _logger.w('_refreshApiConnection: $failure');
+      if (failure is CertificateMismatchException) _disposeCachedClient(connectionId);
+      _setError(connectionId, superFavoriteFailureMessage(failure!));
+      return;
+    }
 
     _logger.i('_refreshApiConnection: got ${pointsResults.length} points, deviceInfo=${deviceInfo?.modelName}, time=${controllerTime?.formattedTime}');
 
@@ -515,41 +542,29 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
       return activeState.client;
     }
 
-    // Récupérer le mot de passe depuis le secure storage (avec les bonnes options Android)
-    // Relu à chaque fois : un mot de passe modifié invalide le client en cache
-    final secureStorage = _ref.read(secureStorageProvider);
-    final password = await secureStorage.read(key: connection.passwordKey);
-    if (password == null) {
-      _logger.e('_getApiClientForConnection: password not found for connection $connectionId - user needs to reconnect on this device');
+    // Mot de passe relu à chaque fois : un mot de passe / hôte / certificat
+    // modifié invalide le client en cache (clé de config).
+    final factory = _ref.read(apiClientFactoryProvider);
+    final ApiClientConfig config;
+    try {
+      config = await factory.resolve(connection);
+    } on PasswordMissingException {
       _disposeCachedClient(connectionId);
-      return null;
+      rethrow;
     }
 
-    // Construire l'URL de base et l'auth
-    final protocol = connection.useHttps ? 'https' : 'http';
-    final baseUrl = '$protocol://${connection.host}:${connection.port}';
-    final basicAuth = 'Basic ${base64Encode(utf8.encode('${connection.username}:$password'))}';
-    final apiVersion = connection.apiVersion ?? 'V1';
-
-    // Vérifier le cache local (recréé si hôte/port/identifiants/version ont changé)
-    final fingerprint = '$baseUrl|$apiVersion|$basicAuth';
+    final cacheKey = config.cacheKey;
     final cached = _apiClients[connectionId];
     if (cached != null) {
-      if (_apiClientFingerprints[connectionId] == fingerprint) return cached;
+      if (_apiClientFingerprints[connectionId] == cacheKey) return cached;
       _logger.i('_getApiClientForConnection: connection $connectionId changed, recreating client');
       _disposeCachedClient(connectionId);
     }
 
     try {
-      // Créer le ConnectedApiClient
-      final apiClient = ConnectedApiClient(
-        baseUrl: baseUrl,
-        basicAuth: basicAuth,
-        apiVersion: apiVersion,
-      );
-
+      final apiClient = factory.build(config);
       _apiClients[connectionId] = apiClient;
-      _apiClientFingerprints[connectionId] = fingerprint;
+      _apiClientFingerprints[connectionId] = cacheKey;
       return apiClient;
     } catch (e) {
       _logger.e('_getApiClientForConnection error: $e');

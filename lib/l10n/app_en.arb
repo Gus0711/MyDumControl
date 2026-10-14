@@ -422,5 +422,19 @@
   "webViewNotSupportedMessage": "Embedded display is not available on {platform}. Do you want to open in external browser?",
   "loadingEnvysion": "Loading synoptic...",
   "envysionLoadError": "Loading error",
-  "envysionLoadErrorMessage": "Unable to load Envysion synoptic. Check the URL and your connection."
+  "envysionLoadErrorMessage": "Unable to load Envysion synoptic. Check the URL and your connection.",
+
+  "certificateChangedTitle": "Controller certificate changed",
+  "trustNewCertificate": "Trust the new certificate",
+  "trustNewCertificateMessage": "The certificate presented by the controller differs from the one saved on the first connection.\n\nThis may come from a certificate renewal (firmware update, controller reset) or from traffic interception. Only trust the new certificate if you are sure it is legitimate.\n\nExpected fingerprint:\n{expected}\n\nNew fingerprint:\n{received}",
+  "@trustNewCertificateMessage": {"placeholders": {"expected": {"type": "String"}, "received": {"type": "String"}}},
+  "trust": "Trust",
+  "backToConnections": "Back to connections",
+  "certificateFingerprintLabel": "Certificate fingerprint (SHA-256)",
+  "certificateFingerprintDiffers": "Differs from the saved fingerprint: the controller certificate changed.",
+  "certificateFingerprintPinnedInfo": "It will be saved and checked on every connection.",
+  "httpCleartextWarning": "Unencrypted HTTP: the password is sent in clear text on the network. Prefer HTTPS if the controller supports it.",
+  "passwordMissingBadge": "Password required",
+  "invalidCredentialsMessage": "Invalid credentials ({status}). Check the connection user name and password.",
+  "@invalidCredentialsMessage": {"placeholders": {"status": {"type": "String"}}}
 }

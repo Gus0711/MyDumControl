@@ -2431,6 +2431,72 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Impossible de charger le synoptique Envysion. Vérifiez l\'URL et votre connexion.'**
   String get envysionLoadErrorMessage;
+
+  /// No description provided for @certificateChangedTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Certificat de l\'automate modifié'**
+  String get certificateChangedTitle;
+
+  /// No description provided for @trustNewCertificate.
+  ///
+  /// In fr, this message translates to:
+  /// **'Faire confiance au nouveau certificat'**
+  String get trustNewCertificate;
+
+  /// No description provided for @trustNewCertificateMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le certificat présenté par l\'automate est différent de celui enregistré lors de la première connexion.\n\nCela peut venir d\'un renouvellement du certificat (mise à jour, réinitialisation de l\'automate) ou d\'une interception du trafic. Ne faites confiance au nouveau certificat que si vous êtes sûr qu\'il est légitime.\n\nEmpreinte attendue :\n{expected}\n\nNouvelle empreinte :\n{received}'**
+  String trustNewCertificateMessage(String expected, String received);
+
+  /// No description provided for @trust.
+  ///
+  /// In fr, this message translates to:
+  /// **'Faire confiance'**
+  String get trust;
+
+  /// No description provided for @backToConnections.
+  ///
+  /// In fr, this message translates to:
+  /// **'Retour aux connexions'**
+  String get backToConnections;
+
+  /// No description provided for @certificateFingerprintLabel.
+  ///
+  /// In fr, this message translates to:
+  /// **'Empreinte du certificat (SHA-256)'**
+  String get certificateFingerprintLabel;
+
+  /// No description provided for @certificateFingerprintDiffers.
+  ///
+  /// In fr, this message translates to:
+  /// **'Différente de l\'empreinte enregistrée : le certificat de l\'automate a changé.'**
+  String get certificateFingerprintDiffers;
+
+  /// No description provided for @certificateFingerprintPinnedInfo.
+  ///
+  /// In fr, this message translates to:
+  /// **'Elle sera enregistrée et vérifiée à chaque connexion.'**
+  String get certificateFingerprintPinnedInfo;
+
+  /// No description provided for @httpCleartextWarning.
+  ///
+  /// In fr, this message translates to:
+  /// **'HTTP non chiffré : le mot de passe circule en clair sur le réseau. Préférez HTTPS si l\'automate le permet.'**
+  String get httpCleartextWarning;
+
+  /// No description provided for @passwordMissingBadge.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mot de passe à ressaisir'**
+  String get passwordMissingBadge;
+
+  /// No description provided for @invalidCredentialsMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Identifiants invalides ({status}). Vérifiez le nom d\'utilisateur et le mot de passe de la connexion.'**
+  String invalidCredentialsMessage(String status);
 }
 
 class _AppLocalizationsDelegate
