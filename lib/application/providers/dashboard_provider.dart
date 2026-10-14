@@ -15,18 +15,11 @@ final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 /// Stream des dashboards pour la connexion active
 final dashboardsProvider = StreamProvider<List<Dashboard>>((ref) {
   final database = ref.watch(databaseProvider);
-  final activeConnection = ref.watch(activeConnectionProvider);
-  final connectionId = activeConnection.connection?.id;
+  final connectionId = ref.watch(activeConnectionProvider.select((s) => s.connection?.id));
 
   _logger.d('dashboardsProvider: watching dashboards for connectionId=$connectionId');
 
   return database.watchDashboardsForConnection(connectionId);
-});
-
-/// Récupère un dashboard par son ID
-final dashboardByIdProvider = FutureProvider.family<Dashboard?, int>((ref, id) {
-  final database = ref.watch(databaseProvider);
-  return database.getDashboardById(id);
 });
 
 /// Stream d'un dashboard par ID
@@ -283,18 +276,6 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
     }
   }
 
-  /// Supprime un widget par position
-  Future<bool> deleteWidgetByPosition(int dashboardId, int position) async {
-    try {
-      final deleted = await _database.deleteDashboardWidgetByPosition(dashboardId, position);
-      _logger.i('deleteWidgetByPosition: deleted widget at position $position = $deleted');
-      return deleted > 0;
-    } catch (e) {
-      _logger.e('deleteWidgetByPosition error: $e');
-      return false;
-    }
-  }
-
   /// Réinitialise l'état (messages)
   void clearMessages() {
     state = const DashboardNotifierState();
@@ -337,7 +318,7 @@ class SingleChartWidgetConfig {
 
   factory SingleChartWidgetConfig.fromJson(Map<String, dynamic> json) {
     return SingleChartWidgetConfig(
-      trendLogInstance: json['trendLogInstance'] as int,
+      trendLogInstance: (json['trendLogInstance'] as num).toInt(),
       title: json['title'] as String?,
       pointName: json['pointName'] as String?,
       units: json['units'] as String?,
@@ -382,14 +363,15 @@ class MultiCurveWidgetConfig {
   factory MultiCurveWidgetConfig.fromJson(Map<String, dynamic> json) {
     return MultiCurveWidgetConfig(
       trendLogInstances: (json['trendLogInstances'] as List<dynamic>)
-          .map((e) => e as int)
+          .whereType<num>()
+          .map((e) => e.toInt())
           .toList(),
       title: json['title'] as String?,
       curveNames: (json['curveNames'] as Map<String, dynamic>?)
-              ?.map((k, v) => MapEntry(k, v as String)) ??
+              ?.map((k, v) => MapEntry(k, v?.toString() ?? '')) ??
           {},
       curveUnits: (json['curveUnits'] as Map<String, dynamic>?)
-              ?.map((k, v) => MapEntry(k, v as String?)) ??
+              ?.map((k, v) => MapEntry(k, v?.toString())) ??
           {},
     );
   }
@@ -403,13 +385,18 @@ class MultiCurveWidgetConfig {
     }
   }
 
-  /// Convertit les maps avec clés String vers int
-  Map<int, String> get curveNamesAsInt {
-    return curveNames.map((k, v) => MapEntry(int.parse(k), v));
-  }
+  /// Convertit les maps avec clés String vers int (clés invalides ignorées)
+  Map<int, String> get curveNamesAsInt => _intKeyed(curveNames);
 
-  Map<int, String?> get curveUnitsAsInt {
-    return curveUnits.map((k, v) => MapEntry(int.parse(k), v));
+  Map<int, String?> get curveUnitsAsInt => _intKeyed(curveUnits);
+
+  static Map<int, V> _intKeyed<V>(Map<String, V> source) {
+    final result = <int, V>{};
+    source.forEach((k, v) {
+      final key = int.tryParse(k) ?? double.tryParse(k)?.toInt();
+      if (key != null) result[key] = v;
+    });
+    return result;
   }
 
   /// Titre affiché (title personnalisé ou auto-généré)
@@ -451,7 +438,7 @@ class StatsWidgetConfig {
 
   factory StatsWidgetConfig.fromJson(Map<String, dynamic> json) {
     return StatsWidgetConfig(
-      trendLogInstance: json['trendLogInstance'] as int,
+      trendLogInstance: (json['trendLogInstance'] as num).toInt(),
       title: json['title'] as String?,
       pointName: json['pointName'] as String?,
       units: json['units'] as String?,

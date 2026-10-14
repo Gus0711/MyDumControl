@@ -10,25 +10,25 @@ final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 /// Provider pour les dossiers de favoris de la connexion active
 final favoriteFoldersProvider = StreamProvider<List<FavoriteFolder>>((ref) {
   final database = ref.watch(databaseProvider);
-  final activeConnection = ref.watch(activeConnectionProvider);
+  final connectionId = ref.watch(activeConnectionProvider.select((s) => s.connection?.id));
 
-  if (activeConnection.connection == null) {
+  if (connectionId == null) {
     return Stream.value([]);
   }
 
-  return database.watchFavoriteFoldersByConnection(activeConnection.connection!.id);
+  return database.watchFavoriteFoldersByConnection(connectionId);
 });
 
 /// Provider pour les favoris sans dossier de la connexion active
 final unassignedFavoritesProvider = StreamProvider<List<Favorite>>((ref) {
   final database = ref.watch(databaseProvider);
-  final activeConnection = ref.watch(activeConnectionProvider);
+  final connectionId = ref.watch(activeConnectionProvider.select((s) => s.connection?.id));
 
-  if (activeConnection.connection == null) {
+  if (connectionId == null) {
     return Stream.value([]);
   }
 
-  return database.watchUnassignedFavorites(activeConnection.connection!.id);
+  return database.watchUnassignedFavorites(connectionId);
 });
 
 /// Provider pour les favoris d'un dossier spécifique
@@ -44,9 +44,13 @@ final folderIdsForFavoriteProvider = StreamProvider.family<List<int>, int>((ref,
 });
 
 /// Provider pour les dossiers complets d'un favori (avec couleurs, icônes, etc.)
-final foldersForFavoriteProvider = FutureProvider.family<List<FavoriteFolder>, int>((ref, favoriteId) async {
+/// Relu à chaque changement d'assignation (stream DB) ; les modifications
+/// d'un dossier (nom, couleur, suppression) invalident la famille.
+final foldersForFavoriteProvider = StreamProvider.autoDispose.family<List<FavoriteFolder>, int>((ref, favoriteId) {
   final database = ref.watch(databaseProvider);
-  return database.getFoldersForFavorite(favoriteId);
+  return database
+      .watchFolderIdsForFavorite(favoriteId)
+      .asyncMap((_) => database.getFoldersForFavorite(favoriteId));
 });
 
 /// Notifier pour gérer les dossiers de favoris
@@ -111,6 +115,7 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
         icon: icon,
       );
 
+      _ref.invalidate(foldersForFavoriteProvider);
       _logger.i('updateFolder: updated folder $folderId');
       state = const AsyncValue.data(null);
       return true;
@@ -130,6 +135,7 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
       await database.deleteFavoriteFolder(folderId);
 
+      _ref.invalidate(foldersForFavoriteProvider);
       _logger.i('deleteFolder: deleted folder $folderId');
       state = const AsyncValue.data(null);
       return true;
@@ -152,6 +158,7 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
     try {
       await database.reorderFavoriteFolders(connectionId, folderIds);
+      _ref.invalidate(foldersForFavoriteProvider);
       _logger.i('reorderFolders: reordered ${folderIds.length} folders');
       return true;
     } catch (e) {
@@ -166,6 +173,7 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
     try {
       await database.assignFavoriteToFolder(favoriteId, folderId);
+      _ref.invalidate(foldersForFavoriteProvider(favoriteId));
       _logger.i('assignToFolder: favorite $favoriteId -> folder $folderId');
       return true;
     } catch (e) {
@@ -180,6 +188,7 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
     try {
       await database.unassignFavoriteFromFolder(favoriteId, folderId);
+      _ref.invalidate(foldersForFavoriteProvider(favoriteId));
       _logger.i('unassignFromFolder: favorite $favoriteId removed from folder $folderId');
       return true;
     } catch (e) {
@@ -197,6 +206,7 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
       await database.setFavoriteFolders(favoriteId, folderIds);
 
+      _ref.invalidate(foldersForFavoriteProvider(favoriteId));
       _logger.i('setFavoriteFolders: favorite $favoriteId -> ${folderIds.length} folders');
       state = const AsyncValue.data(null);
       return true;
