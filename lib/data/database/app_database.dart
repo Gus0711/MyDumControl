@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:logger/logger.dart';
 import 'tables/connections_table.dart';
 import 'tables/folders_table.dart';
 import 'tables/favorites_table.dart';
@@ -12,6 +13,13 @@ import 'tables/synoptic_bindings_table.dart';
 import 'tables/dashboard_tables.dart';
 
 part 'app_database.g.dart';
+
+final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
+
+/// Returns true if a cache entry written at [cachedAt] is younger than [maxAge].
+bool isCacheFresh(DateTime cachedAt, Duration maxAge, {DateTime? now}) {
+  return (now ?? DateTime.now()).difference(cachedAt) < maxAge;
+}
 
 /// Base de données principale de l'application
 @DriftDatabase(tables: [
@@ -33,7 +41,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -93,6 +101,23 @@ class AppDatabase extends _$AppDatabase {
             // Migration de v11 à v12 : ajout de designerUrl pour Envysion
             await m.addColumn(connections, connections.designerUrl);
           }
+          if (from < 13) {
+            // Migration de v12 à v13 : index secondaires sur les colonnes de jointure
+            // (purely additive, existing data is untouched)
+            await m.createIndex(idxFavoriteFolderAssignmentsFolderId);
+            await m.createIndex(idxDashboardsConnectionId);
+            await m.createIndex(idxDashboardWidgetsDashboardId);
+            await m.createIndex(idxSynopticsConnectionId);
+          }
+        },
+        beforeOpen: (details) async {
+          // Cache maintenance: drop expired cache rows so they don't stay forever.
+          // Never block opening the database on this.
+          try {
+            await clearExpiredCache();
+          } catch (e) {
+            _logger.w('clearExpiredCache on open failed: $e');
+          }
         },
       );
 
@@ -124,9 +149,51 @@ class AppDatabase extends _$AppDatabase {
     return update(connections).replace(connection);
   }
 
-  /// Supprime une connexion par son ID
-  Future<int> deleteConnectionById(int id) {
-    return (delete(connections)..where((c) => c.id.equals(id))).go();
+  /// Supprime une connexion par son ID, ainsi que toutes ses données liées
+  /// (favoris, dossiers de favoris, caches, dashboards, synoptiques spécifiques).
+  Future<int> deleteConnectionById(int id) => deleteConnectionCascade(id);
+
+  /// Deletes a connection and every row that references it, in one transaction.
+  ///
+  /// Foreign keys are not enforced (no PRAGMA foreign_keys), so the cascade is
+  /// done explicitly. Returns the number of deleted connection rows (0 or 1).
+  Future<int> deleteConnectionCascade(int id) {
+    return transaction(() async {
+      final favoriteIds = selectOnly(favorites)
+        ..addColumns([favorites.id])
+        ..where(favorites.connectionId.equals(id));
+      final folderIds = selectOnly(favoriteFolders)
+        ..addColumns([favoriteFolders.id])
+        ..where(favoriteFolders.connectionId.equals(id));
+      await (delete(favoriteFolderAssignments)
+            ..where((a) =>
+                a.favoriteId.isInQuery(favoriteIds) |
+                a.folderId.isInQuery(folderIds)))
+          .go();
+      await (delete(favorites)..where((f) => f.connectionId.equals(id))).go();
+      await (delete(favoriteFolders)..where((f) => f.connectionId.equals(id)))
+          .go();
+
+      await _clearAllCacheRows(id);
+
+      final dashboardIds = selectOnly(dashboards)
+        ..addColumns([dashboards.id])
+        ..where(dashboards.connectionId.equals(id));
+      await (delete(dashboardWidgets)
+            ..where((w) => w.dashboardId.isInQuery(dashboardIds)))
+          .go();
+      await (delete(dashboards)..where((d) => d.connectionId.equals(id))).go();
+
+      final synopticIds = selectOnly(synoptics)
+        ..addColumns([synoptics.id])
+        ..where(synoptics.connectionId.equals(id));
+      await (delete(synopticBindings)
+            ..where((b) => b.synopticId.isInQuery(synopticIds)))
+          .go();
+      await (delete(synoptics)..where((s) => s.connectionId.equals(id))).go();
+
+      return (delete(connections)..where((c) => c.id.equals(id))).go();
+    });
   }
 
   /// Met à jour la date de dernière connexion
@@ -224,12 +291,14 @@ class AppDatabase extends _$AppDatabase {
 
   /// Supprime un dossier par son ID (les connexions du dossier passent à la racine)
   Future<void> deleteFolderById(int id) async {
-    // D'abord, déplacer toutes les connexions du dossier vers la racine
-    await (update(connections)..where((c) => c.folderId.equals(id))).write(
-      const ConnectionsCompanion(folderId: Value(null)),
-    );
-    // Ensuite, supprimer le dossier
-    await (delete(folders)..where((f) => f.id.equals(id))).go();
+    await transaction(() async {
+      // D'abord, déplacer toutes les connexions du dossier vers la racine
+      await (update(connections)..where((c) => c.folderId.equals(id))).write(
+        const ConnectionsCompanion(folderId: Value(null)),
+      );
+      // Ensuite, supprimer le dossier
+      await (delete(folders)..where((f) => f.id.equals(id))).go();
+    });
   }
 
   /// Met à jour l'ordre des dossiers
@@ -285,25 +354,44 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Ajoute un point aux favoris
-  Future<int> addFavorite(FavoritesCompanion favorite) async {
-    // Récupérer le prochain ordre de tri
-    final nextOrder = await getNextFavoriteSortOrder(favorite.connectionId.value);
-    return into(favorites).insert(
-      favorite.copyWith(sortOrder: Value(nextOrder)),
-    );
+  Future<int> addFavorite(FavoritesCompanion favorite) {
+    return transaction(() async {
+      // Récupérer le prochain ordre de tri
+      final nextOrder =
+          await getNextFavoriteSortOrder(favorite.connectionId.value);
+      return into(favorites).insert(
+        favorite.copyWith(sortOrder: Value(nextOrder)),
+      );
+    });
   }
 
-  /// Supprime un favori par son ID
+  /// Supprime un favori par son ID (et ses assignations de dossiers)
   Future<int> deleteFavoriteById(int id) {
-    return (delete(favorites)..where((f) => f.id.equals(id))).go();
+    return transaction(() async {
+      await (delete(favoriteFolderAssignments)
+            ..where((a) => a.favoriteId.equals(id)))
+          .go();
+      return (delete(favorites)..where((f) => f.id.equals(id))).go();
+    });
   }
 
   /// Supprime un favori par connexion et référence de point
+  /// (et ses assignations de dossiers)
   Future<int> deleteFavorite(int connectionId, String pointRef) {
-    return (delete(favorites)
-          ..where((f) =>
-              f.connectionId.equals(connectionId) & f.pointRef.equals(pointRef)))
-        .go();
+    return transaction(() async {
+      final ids = selectOnly(favorites)
+        ..addColumns([favorites.id])
+        ..where(favorites.connectionId.equals(connectionId) &
+            favorites.pointRef.equals(pointRef));
+      await (delete(favoriteFolderAssignments)
+            ..where((a) => a.favoriteId.isInQuery(ids)))
+          .go();
+      return (delete(favorites)
+            ..where((f) =>
+                f.connectionId.equals(connectionId) &
+                f.pointRef.equals(pointRef)))
+          .go();
+    });
   }
 
   /// Toggle un favori (ajoute ou supprime)
@@ -313,31 +401,44 @@ class AppDatabase extends _$AppDatabase {
     required String pointName,
     String? pointDescription,
     required String objectType,
-  }) async {
-    final existing = await (select(favorites)
-          ..where((f) =>
-              f.connectionId.equals(connectionId) & f.pointRef.equals(pointRef)))
-        .getSingleOrNull();
+  }) {
+    // Read-then-write inside a transaction so concurrent toggles are serialized
+    return transaction(() async {
+      final existing = await (select(favorites)
+            ..where((f) =>
+                f.connectionId.equals(connectionId) &
+                f.pointRef.equals(pointRef)))
+          .getSingleOrNull();
 
-    if (existing != null) {
-      await deleteFavoriteById(existing.id);
-      return false; // N'est plus favori
-    } else {
-      await addFavorite(FavoritesCompanion.insert(
-        connectionId: connectionId,
-        pointRef: pointRef,
-        pointName: pointName,
-        pointDescription: Value(pointDescription),
-        objectType: objectType,
-      ));
-      return true; // Est maintenant favori
-    }
+      if (existing != null) {
+        await deleteFavoriteById(existing.id);
+        return false; // N'est plus favori
+      } else {
+        await addFavorite(FavoritesCompanion.insert(
+          connectionId: connectionId,
+          pointRef: pointRef,
+          pointName: pointName,
+          pointDescription: Value(pointDescription),
+          objectType: objectType,
+        ));
+        return true; // Est maintenant favori
+      }
+    });
   }
 
-  /// Supprime tous les favoris d'une connexion
+  /// Supprime tous les favoris d'une connexion (et leurs assignations)
   Future<int> deleteAllFavoritesByConnection(int connectionId) {
-    return (delete(favorites)..where((f) => f.connectionId.equals(connectionId)))
-        .go();
+    return transaction(() async {
+      final ids = selectOnly(favorites)
+        ..addColumns([favorites.id])
+        ..where(favorites.connectionId.equals(connectionId));
+      await (delete(favoriteFolderAssignments)
+            ..where((a) => a.favoriteId.isInQuery(ids)))
+          .go();
+      return (delete(favorites)
+            ..where((f) => f.connectionId.equals(connectionId)))
+          .go();
+    });
   }
 
   /// Met à jour l'ordre d'un favori
@@ -476,14 +577,6 @@ class AppDatabase extends _$AppDatabase {
   /// Durée de validité du cache des points statiques (très long car rarement modifié)
   static const pointsCacheMaxAge = Duration(hours: 24);
 
-  /// Récupère les propriétés statiques d'un point depuis le cache
-  Future<CachedPoint?> getCachedPoint(int connectionId, String pointRef) {
-    return (select(cachedPoints)
-          ..where((c) =>
-              c.connectionId.equals(connectionId) & c.pointRef.equals(pointRef)))
-        .getSingleOrNull();
-  }
-
   /// Récupère toutes les propriétés statiques cachées pour une connexion
   Future<List<CachedPoint>> getAllCachedPoints(int connectionId) {
     return (select(cachedPoints)
@@ -492,27 +585,52 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Vérifie si le cache des points est valide (non expiré)
+  /// The cache is valid only if its oldest row is still fresh.
   Future<bool> isPointsCacheValid(int connectionId) async {
-    final result = await (select(cachedPoints)
-          ..where((c) => c.connectionId.equals(connectionId))
-          ..limit(1))
-        .getSingleOrNull();
+    final oldest = cachedPoints.cachedAt.min();
+    final query = selectOnly(cachedPoints)
+      ..addColumns([oldest])
+      ..where(cachedPoints.connectionId.equals(connectionId));
+    final cachedAt = (await query.getSingleOrNull())?.read(oldest);
 
-    if (result == null) return false;
-
-    final age = DateTime.now().difference(result.cachedAt);
-    return age < pointsCacheMaxAge;
+    if (cachedAt == null) return false;
+    return isCacheFresh(cachedAt, pointsCacheMaxAge);
   }
 
-  /// Sauvegarde les propriétés statiques d'un point en cache
-  Future<void> cachePoint(CachedPointsCompanion point) async {
-    await into(cachedPoints).insertOnConflictUpdate(point);
-  }
-
-  /// Sauvegarde plusieurs points en cache (batch)
+  /// Sauvegarde plusieurs points en cache (batch upsert, cachedAt rafraîchi)
   Future<void> cachePoints(List<CachedPointsCompanion> points) async {
+    final now = DateTime.now();
     await batch((batch) {
-      batch.insertAllOnConflictUpdate(cachedPoints, points);
+      batch.insertAllOnConflictUpdate(
+        cachedPoints,
+        points.map((p) => p.copyWith(cachedAt: Value(now))).toList(),
+      );
+    });
+  }
+
+  /// Remplace tout le cache des points d'une connexion (transaction).
+  ///
+  /// Points absent from [points] (deleted on the controller) are purged, and
+  /// every row gets the same fresh cachedAt.
+  Future<void> replaceCachedPoints(
+    int connectionId,
+    List<CachedPointsCompanion> points,
+  ) async {
+    final now = DateTime.now();
+    await transaction(() async {
+      await clearPointsCache(connectionId);
+      await batch((batch) {
+        batch.insertAll(
+          cachedPoints,
+          points
+              .map((p) => p.copyWith(
+                    connectionId: Value(connectionId),
+                    cachedAt: Value(now),
+                  ))
+              .toList(),
+          mode: InsertMode.insertOrReplace,
+        );
+      });
     });
   }
 
@@ -551,9 +669,7 @@ class AppDatabase extends _$AppDatabase {
   Future<bool> isDeviceInfoCacheValid(int connectionId) async {
     final result = await getCachedDeviceInfo(connectionId);
     if (result == null) return false;
-
-    final age = DateTime.now().difference(result.cachedAt);
-    return age < deviceInfoCacheMaxAge;
+    return isCacheFresh(result.cachedAt, deviceInfoCacheMaxAge);
   }
 
   /// Sauvegarde le device info en cache
@@ -584,14 +700,16 @@ class AppDatabase extends _$AppDatabase {
     if (result == null) return null;
 
     // Vérifier si expiré
-    final age = DateTime.now().difference(result.cachedAt);
-    if (age > trendLogMappingCacheMaxAge) return null;
+    if (!isCacheFresh(result.cachedAt, trendLogMappingCacheMaxAge)) return null;
 
     // Décoder le JSON
     try {
       final decoded = jsonDecode(result.mappingJson) as Map<String, dynamic>;
-      return decoded.map((key, value) => MapEntry(key, value as int));
-    } catch (_) {
+      return decoded.map((key, value) => MapEntry(key, (value as num).toInt()));
+    } catch (e) {
+      // Corrupted row: log it and drop it so it is not re-read on every open
+      _logger.w('Corrupted trend log mapping cache for connection $connectionId: $e');
+      await clearTrendLogMappingCache(connectionId);
       return null;
     }
   }
@@ -603,9 +721,7 @@ class AppDatabase extends _$AppDatabase {
         .getSingleOrNull();
 
     if (result == null) return false;
-
-    final age = DateTime.now().difference(result.cachedAt);
-    return age < trendLogMappingCacheMaxAge;
+    return isCacheFresh(result.cachedAt, trendLogMappingCacheMaxAge);
   }
 
   /// Sauvegarde le mapping trend log en cache
@@ -644,8 +760,7 @@ class AppDatabase extends _$AppDatabase {
     if (result == null) return null;
 
     // Vérifier si expiré
-    final age = DateTime.now().difference(result.cachedAt);
-    if (age > objectsSummaryCacheMaxAge) return null;
+    if (!isCacheFresh(result.cachedAt, objectsSummaryCacheMaxAge)) return null;
 
     return result;
   }
@@ -657,9 +772,7 @@ class AppDatabase extends _$AppDatabase {
         .getSingleOrNull();
 
     if (result == null) return false;
-
-    final age = DateTime.now().difference(result.cachedAt);
-    return age < objectsSummaryCacheMaxAge;
+    return isCacheFresh(result.cachedAt, objectsSummaryCacheMaxAge);
   }
 
   /// Sauvegarde le résumé des objets en cache
@@ -680,12 +793,39 @@ class AppDatabase extends _$AppDatabase {
 
   /// Supprime tout le cache pour une connexion
   Future<void> clearAllCache(int connectionId) async {
-    await Future.wait([
-      clearPointsCache(connectionId),
-      clearDeviceInfoCache(connectionId),
-      clearTrendLogMappingCache(connectionId),
-      clearObjectsSummaryCache(connectionId),
-    ]);
+    await transaction(() => _clearAllCacheRows(connectionId));
+  }
+
+  Future<void> _clearAllCacheRows(int connectionId) async {
+    await clearPointsCache(connectionId);
+    await clearDeviceInfoCache(connectionId);
+    await clearTrendLogMappingCache(connectionId);
+    await clearObjectsSummaryCache(connectionId);
+  }
+
+  /// Vide tout le cache, toutes connexions confondues
+  Future<void> clearAllCacheGlobal() async {
+    await transaction(() async {
+      await delete(cachedPoints).go();
+      await delete(cachedDeviceInfo).go();
+      await delete(cachedTrendLogMapping).go();
+      await delete(cachedObjectsSummary).go();
+    });
+  }
+
+  /// Statistiques globales du cache (COUNT, sans charger les lignes)
+  Future<({int totalPoints, int totalDevices})> getGlobalCacheStats() async {
+    final pointsCount = cachedPoints.pointRef.count();
+    final devicesCount = cachedDeviceInfo.connectionId.count();
+    final points = await (selectOnly(cachedPoints)..addColumns([pointsCount]))
+        .getSingle();
+    final devices =
+        await (selectOnly(cachedDeviceInfo)..addColumns([devicesCount]))
+            .getSingle();
+    return (
+      totalPoints: points.read(pointsCount) ?? 0,
+      totalDevices: devices.read(devicesCount) ?? 0,
+    );
   }
 
   /// Supprime tout le cache expiré (maintenance)
@@ -730,18 +870,20 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Crée un nouveau dossier de favoris
-  Future<int> createFavoriteFolder(FavoriteFoldersCompanion folder) async {
-    // Calculer le prochain sortOrder
-    final maxOrder = favoriteFolders.sortOrder.max();
-    final query = selectOnly(favoriteFolders)
-      ..addColumns([maxOrder])
-      ..where(favoriteFolders.connectionId.equals(folder.connectionId.value));
-    final result = await query.getSingleOrNull();
-    final nextOrder = (result?.read(maxOrder) ?? -1) + 1;
+  Future<int> createFavoriteFolder(FavoriteFoldersCompanion folder) {
+    return transaction(() async {
+      // Calculer le prochain sortOrder
+      final maxOrder = favoriteFolders.sortOrder.max();
+      final query = selectOnly(favoriteFolders)
+        ..addColumns([maxOrder])
+        ..where(favoriteFolders.connectionId.equals(folder.connectionId.value));
+      final result = await query.getSingleOrNull();
+      final nextOrder = (result?.read(maxOrder) ?? -1) + 1;
 
-    return into(favoriteFolders).insert(
-      folder.copyWith(sortOrder: Value(nextOrder)),
-    );
+      return into(favoriteFolders).insert(
+        folder.copyWith(sortOrder: Value(nextOrder)),
+      );
+    });
   }
 
   /// Met à jour un dossier de favoris
@@ -767,12 +909,14 @@ class AppDatabase extends _$AppDatabase {
 
   /// Supprime un dossier de favoris (et ses assignations)
   Future<void> deleteFavoriteFolder(int folderId) async {
-    // D'abord supprimer les assignations
-    await (delete(favoriteFolderAssignments)
-          ..where((a) => a.folderId.equals(folderId)))
-        .go();
-    // Puis le dossier
-    await (delete(favoriteFolders)..where((f) => f.id.equals(folderId))).go();
+    await transaction(() async {
+      // D'abord supprimer les assignations
+      await (delete(favoriteFolderAssignments)
+            ..where((a) => a.folderId.equals(folderId)))
+          .go();
+      // Puis le dossier
+      await (delete(favoriteFolders)..where((f) => f.id.equals(folderId))).go();
+    });
   }
 
   /// Réordonne les dossiers de favoris
@@ -921,16 +1065,6 @@ class AppDatabase extends _$AppDatabase {
     return result.read(count) ?? 0;
   }
 
-  /// Récupère tous les dossiers avec leur nombre de favoris pour une connexion
-  Future<Map<int, int>> getFolderFavoriteCounts(int connectionId) async {
-    final folders = await getFavoriteFoldersByConnection(connectionId);
-    final counts = <int, int>{};
-    for (final folder in folders) {
-      counts[folder.id] = await countFavoritesInFolder(folder.id);
-    }
-    return counts;
-  }
-
   // ==========================================================================
   // === SYNOPTIQUES ===
   // ==========================================================================
@@ -981,16 +1115,18 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Crée un nouveau synoptique
-  Future<int> createSynoptic(SynopticsCompanion synoptic) async {
-    // Calculer le prochain sortOrder
-    final maxOrder = synoptics.sortOrder.max();
-    final query = selectOnly(synoptics)..addColumns([maxOrder]);
-    final result = await query.getSingleOrNull();
-    final nextOrder = (result?.read(maxOrder) ?? -1) + 1;
+  Future<int> createSynoptic(SynopticsCompanion synoptic) {
+    return transaction(() async {
+      // Calculer le prochain sortOrder
+      final maxOrder = synoptics.sortOrder.max();
+      final query = selectOnly(synoptics)..addColumns([maxOrder]);
+      final result = await query.getSingleOrNull();
+      final nextOrder = (result?.read(maxOrder) ?? -1) + 1;
 
-    return into(synoptics).insert(
-      synoptic.copyWith(sortOrder: Value(nextOrder)),
-    );
+      return into(synoptics).insert(
+        synoptic.copyWith(sortOrder: Value(nextOrder)),
+      );
+    });
   }
 
   /// Met à jour un synoptique
@@ -1062,28 +1198,31 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Crée ou met à jour une liaison (upsert)
-  Future<int> upsertBinding(SynopticBindingsCompanion binding) async {
-    // On doit d'abord vérifier si une liaison existe déjà pour cet élément SVG
-    final existing = await getBindingByElement(
-      binding.synopticId.value,
-      binding.svgElementId.value,
-    );
-
-    if (existing != null) {
-      // Mettre à jour la liaison existante
-      await (update(synopticBindings)..where((b) => b.id.equals(existing.id))).write(
-        SynopticBindingsCompanion(
-          pointRef: binding.pointRef,
-          bindingType: binding.bindingType,
-          configJson: binding.configJson,
-          pointName: binding.pointName,
-        ),
+  Future<int> upsertBinding(SynopticBindingsCompanion binding) {
+    return transaction(() async {
+      // On doit d'abord vérifier si une liaison existe déjà pour cet élément SVG
+      final existing = await getBindingByElement(
+        binding.synopticId.value,
+        binding.svgElementId.value,
       );
-      return existing.id;
-    } else {
-      // Créer une nouvelle liaison
-      return into(synopticBindings).insert(binding);
-    }
+
+      if (existing != null) {
+        // Mettre à jour la liaison existante
+        await (update(synopticBindings)..where((b) => b.id.equals(existing.id)))
+            .write(
+          SynopticBindingsCompanion(
+            pointRef: binding.pointRef,
+            bindingType: binding.bindingType,
+            configJson: binding.configJson,
+            pointName: binding.pointName,
+          ),
+        );
+        return existing.id;
+      } else {
+        // Créer une nouvelle liaison
+        return into(synopticBindings).insert(binding);
+      }
+    });
   }
 
   /// Crée une nouvelle liaison
@@ -1182,18 +1321,27 @@ class AppDatabase extends _$AppDatabase {
     int? connectionId,
     int columns = 2,
     int rows = 2,
-  }) async {
-    // Calculer le prochain sortOrder
-    final existing = await getDashboardsForConnection(connectionId);
-    final nextOrder = existing.isEmpty ? 0 : existing.length;
+  }) {
+    return transaction(() async {
+      // Calculer le prochain sortOrder (MAX + 1, robuste aux suppressions)
+      final maxOrder = dashboards.sortOrder.max();
+      final query = selectOnly(dashboards)
+        ..addColumns([maxOrder])
+        ..where(connectionId != null
+            ? dashboards.connectionId.equals(connectionId) |
+                dashboards.connectionId.isNull()
+            : dashboards.connectionId.isNull());
+      final result = await query.getSingleOrNull();
+      final nextOrder = (result?.read(maxOrder) ?? -1) + 1;
 
-    return into(dashboards).insert(DashboardsCompanion(
-      name: Value(name),
-      connectionId: Value(connectionId),
-      columns: Value(columns),
-      rows: Value(rows),
-      sortOrder: Value(nextOrder),
-    ));
+      return into(dashboards).insert(DashboardsCompanion(
+        name: Value(name),
+        connectionId: Value(connectionId),
+        columns: Value(columns),
+        rows: Value(rows),
+        sortOrder: Value(nextOrder),
+      ));
+    });
   }
 
   /// Met à jour un dashboard
@@ -1215,11 +1363,14 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Supprime un dashboard et tous ses widgets
-  Future<int> deleteDashboard(int id) async {
-    // Supprimer d'abord les widgets
-    await (delete(dashboardWidgets)..where((w) => w.dashboardId.equals(id))).go();
-    // Puis supprimer le dashboard
-    return (delete(dashboards)..where((d) => d.id.equals(id))).go();
+  Future<int> deleteDashboard(int id) {
+    return transaction(() async {
+      // Supprimer d'abord les widgets
+      await (delete(dashboardWidgets)..where((w) => w.dashboardId.equals(id)))
+          .go();
+      // Puis supprimer le dashboard
+      return (delete(dashboards)..where((d) => d.id.equals(id))).go();
+    });
   }
 
   /// Réorganise l'ordre des dashboards
