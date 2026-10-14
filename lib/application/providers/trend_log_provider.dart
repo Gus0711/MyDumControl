@@ -314,8 +314,11 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
       _logger.i('loadData: connection changed (wasBacnet=$_lastConnectionWasBacnet, isBacnet=$currentIsBacnet, lastId=$_lastConnectionId, currentId=$currentConnectionId), invalidating cache and resetting period');
       _cachedFullData = null;
       // Réinitialiser la période à la valeur par défaut quand on change d'automate
-      selectedPeriod = TrendPeriod.month;
-      state = state.copyWith(selectedPeriod: selectedPeriod);
+      // (sauf si une période est explicitement demandée)
+      if (period == null) {
+        selectedPeriod = TrendPeriod.month;
+        state = state.copyWith(selectedPeriod: selectedPeriod);
+      }
     }
 
     // Mettre à jour le type de connexion
