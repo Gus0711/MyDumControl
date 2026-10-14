@@ -79,14 +79,27 @@ class TrendLog {
       logInterval: _parseInt(json['log-interval'] ?? json['logInterval']),
       bufferSize: _parseInt(json['buffer-size'] ?? json['bufferSize']),
       recordCount: _parseInt(json['record-count'] ?? json['recordCount']),
-      enabled: json['enable'] ?? json['enabled'],
+      enabled: _parseBool(json['enable'] ?? json['enabled']),
     );
   }
 
   static int? _parseInt(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;
-    if (value is String) return int.tryParse(value);
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? double.tryParse(value)?.toInt();
+    return null;
+  }
+
+  static bool? _parseBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final lower = value.toLowerCase();
+      if (lower == 'true' || lower == '1' || lower == 'active') return true;
+      if (lower == 'false' || lower == '0' || lower == 'inactive') return false;
+    }
     return null;
   }
 
@@ -136,7 +149,14 @@ class TrendLogRecord {
   });
 
   /// Parse une valeur numérique pour les graphiques
+  /// Valeur numérique finie (NaN / Infinity ignorés : ils fausseraient
+  /// min/max/moyenne et les graphiques)
   double? get numericValue {
+    final v = _rawNumericValue;
+    return (v != null && v.isFinite) ? v : null;
+  }
+
+  double? get _rawNumericValue {
     if (value == null) return null;
     if (value is num) return value.toDouble();
     if (value is bool) return value ? 1.0 : 0.0;
@@ -363,7 +383,8 @@ class TrendLogBufferParser {
 
       // Déterminer le type de record (V1 /trend a un champ "type")
       // Type 0=LogStatus, 1=boolean, 2=real, 3=enum, 4=unsigned, 5=signed, 6=bitstring, 7=null, 8=failure, 9=timeChange
-      final recordTypeInt = sample['type'] as int?;
+      final rawType = sample['type'];
+      final recordTypeInt = rawType is num ? rawType.toInt() : int.tryParse(rawType?.toString() ?? '');
       TrendRecordType recordType = TrendRecordType.value;
       if (recordTypeInt != null) {
         switch (recordTypeInt) {

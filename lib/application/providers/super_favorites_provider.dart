@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import '../../data/database/app_database.dart';
 import '../../data/services/api_service.dart';
-import '../../data/services/bacnet/bacnet_constants.dart';
 import '../../domain/models/bacnet_object.dart';
 import 'active_connection_provider.dart';
 import 'bacnet_provider.dart';
+import 'bacnet_type_codes.dart';
 import 'connection_providers.dart';
 import 'database_provider.dart';
 
@@ -86,7 +86,7 @@ class ConnectionQuickInfo {
 
 /// État global des super favoris par connexion
 class SuperFavoritesState {
-  /// Map connectionId -> List<SuperFavoriteWithValue>
+  /// Map `connectionId -> List<SuperFavoriteWithValue>`
   final Map<int, List<SuperFavoriteWithValue>> byConnection;
 
   /// Connexions en cours de refresh
@@ -154,6 +154,26 @@ class SuperFavoritesState {
   }
 }
 
+/// Applique des résultats de refresh (par pointRef) sur la liste courante.
+/// Les pointRef absents des résultats gardent leur état ; les résultats dont
+/// le pointRef n'est plus dans la liste sont ignorés.
+List<SuperFavoriteWithValue> mergeSuperFavoriteRefresh(
+  List<SuperFavoriteWithValue> current,
+  Map<String, ({BacnetObject? liveData, String? error})> resultsByRef,
+  DateTime now,
+) {
+  return current.map((sf) {
+    final result = resultsByRef[sf.favorite.pointRef];
+    if (result == null) return sf;
+    return sf.copyWith(
+      liveData: result.liveData,
+      lastRefreshed: now,
+      isLoading: false,
+      error: result.error,
+    );
+  }).toList();
+}
+
 /// Provider pour les super favoris bruts depuis la DB (groupés par connexion)
 final superFavoritesDbProvider = StreamProvider<Map<int, List<Favorite>>>((ref) {
   final database = ref.watch(databaseProvider);
@@ -166,6 +186,10 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
 
   /// Cache des ConnectedApiClient par connexion (pour éviter de recréer)
   final Map<int, ConnectedApiClient> _apiClients = {};
+
+  /// Empreinte (URL, version, auth) ayant servi à créer chaque client en cache :
+  /// si l'utilisateur modifie hôte/port/identifiants/version, il est recréé.
+  final Map<int, String> _apiClientFingerprints = {};
 
   SuperFavoritesNotifier(this._ref) : super(const SuperFavoritesState()) {
     // Écouter les changements de super favoris dans la DB
@@ -239,6 +263,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
       final connection = await database.getConnectionById(connectionId);
       if (connection == null) {
         _logger.e('refreshConnection: connection $connectionId not found');
+        _disposeCachedClient(connectionId);
         _setError(connectionId, 'Connexion introuvable');
         return;
       }
@@ -282,7 +307,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     List<SuperFavoriteWithValue> superFavs,
   ) async {
     // Récupérer ou créer le ConnectedApiClient pour cette connexion
-    final apiClient = await _getApiClientForConnection(connectionId);
+    final apiClient = await _getApiClientForConnection(connection);
     if (apiClient == null) {
       _logger.e('_refreshApiConnection: failed to create ApiClient for $connectionId');
       _setError(connectionId, 'Connectez-vous à cet automate');
@@ -314,18 +339,20 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
 
     // Mettre à jour les valeurs des points
     final now = DateTime.now();
-    final updatedList = superFavs.map((sf) {
-      final liveData = pointsResults[sf.favorite.pointRef];
-      return sf.copyWith(
-        liveData: liveData,
-        lastRefreshed: now,
-        isLoading: false,
-        error: liveData == null ? 'Point non trouvé' : null,
-      );
-    }).toList();
+    if (!mounted) return;
 
     final newByConnection = Map<int, List<SuperFavoriteWithValue>>.from(state.byConnection);
-    newByConnection[connectionId] = updatedList;
+    newByConnection[connectionId] = _mergeRefreshResults(
+      connectionId,
+      {
+        for (final ref in pointRefs)
+          ref: (
+            liveData: pointsResults[ref],
+            error: pointsResults[ref] == null ? 'Point non trouvé' : null,
+          ),
+      },
+      now,
+    );
 
     // Mettre à jour les infos de la connexion
     final newConnectionInfos = Map<int, ConnectionQuickInfo>.from(state.connectionInfos);
@@ -351,104 +378,62 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     final bacnetService = _ref.read(bacnetServiceProvider);
 
     // Parser les pointRefs BACnet (format "shortName:instance", ex: "AI:1", "AV:5")
-    final points = <({int objectType, int objectInstance, bool isCommandable, bool isInput})>[];
-    final pointRefToIndex = <String, int>{};
-
-    for (int i = 0; i < superFavs.length; i++) {
-      final sf = superFavs[i];
-      final parts = sf.favorite.pointRef.split(':');
-      if (parts.length == 2) {
-        final shortName = parts[0];
-        final objectInstance = int.tryParse(parts[1]);
-
-        // Convertir le shortName en objectType
-        final bacnetType = BacnetObjectType.fromShortName(shortName);
-        final objectType = bacnetType != null ? _bacnetTypeToObjectTypeCode(bacnetType) : null;
-
-        if (objectType != null && objectInstance != null) {
-          // Déterminer si commandable (AO, BO, MSO, AV, BV, MSV) ou input (AI, BI, MSI)
-          final isCommandable = [
-            BacnetObjectTypeCode.analogOutput,
-            BacnetObjectTypeCode.binaryOutput,
-            BacnetObjectTypeCode.multiStateOutput,
-            BacnetObjectTypeCode.analogValue,
-            BacnetObjectTypeCode.binaryValue,
-            BacnetObjectTypeCode.multiStateValue,
-          ].contains(objectType);
-          final isInput = [
-            BacnetObjectTypeCode.analogInput,
-            BacnetObjectTypeCode.binaryInput,
-            BacnetObjectTypeCode.multiStateInput,
-          ].contains(objectType);
-
-          points.add((
-            objectType: objectType,
-            objectInstance: objectInstance,
-            isCommandable: isCommandable,
-            isInput: isInput,
-          ));
-          pointRefToIndex[sf.favorite.pointRef] = i;
-          _logger.d('_refreshBacnetConnection: parsed ${sf.favorite.pointRef} -> type=$objectType, instance=$objectInstance');
-        } else {
-          _logger.w('_refreshBacnetConnection: failed to parse pointRef "${sf.favorite.pointRef}"');
-        }
+    // une seule fois, la liste est réutilisée pour lire les résultats
+    final parsedRefs = <ParsedBacnetPointRef>[];
+    for (final sf in superFavs) {
+      final parsed = parseBacnetPointRef(sf.favorite.pointRef);
+      if (parsed != null) {
+        parsedRefs.add(parsed);
+      } else {
+        _logger.w('_refreshBacnetConnection: failed to parse pointRef "${sf.favorite.pointRef}"');
       }
     }
 
-    if (points.isEmpty) {
+    if (parsedRefs.isEmpty) {
       _logger.w('_refreshBacnetConnection: no valid points to refresh');
       _setError(connectionId, 'Aucun point valide');
       return;
     }
 
-    _logger.i('_refreshBacnetConnection: refreshing ${points.length} BACnet points on ${connection.host}:${connection.port}');
+    _logger.i('_refreshBacnetConnection: refreshing ${parsedRefs.length} BACnet points on ${connection.host}:${connection.port}');
 
     // Faire la requête batch BACnet
     final results = await bacnetService.refreshMultiplePointValues(
       host: connection.host,
       port: connection.port,
-      points: points,
+      points: [
+        for (final p in parsedRefs)
+          (
+            objectType: p.typeCode,
+            objectInstance: p.instance,
+            isCommandable: p.type.isCommandable,
+            isInput: p.type.isInput,
+          ),
+      ],
     );
 
     _logger.i('_refreshBacnetConnection: got ${results.length} results');
+    if (!mounted) return;
 
-    // Mettre à jour les valeurs
+    // Construire les résultats par pointRef
     final now = DateTime.now();
-    final updatedList = superFavs.map((sf) {
-      final pointRef = sf.favorite.pointRef;
-      final parts = pointRef.split(':');
-
-      if (parts.length != 2) {
-        return sf.copyWith(
-          lastRefreshed: now,
-          isLoading: false,
-          error: 'Format invalide',
-        );
-      }
-
-      final shortName = parts[0];
-      final objectInstance = int.tryParse(parts[1]);
-      final bacnetType = BacnetObjectType.fromShortName(shortName);
-      final objectTypeCode = bacnetType != null ? _bacnetTypeToObjectTypeCode(bacnetType) : null;
-
-      if (objectTypeCode == null || objectInstance == null) {
-        return sf.copyWith(
-          lastRefreshed: now,
-          isLoading: false,
-          error: 'Type inconnu',
-        );
-      }
-
+    final nameByRef = {for (final sf in superFavs) sf.favorite.pointRef: sf.favorite.pointName};
+    final byRef = <String, ({BacnetObject? liveData, String? error})>{};
+    for (final sf in superFavs) {
+      byRef[sf.favorite.pointRef] = (liveData: null, error: 'Type inconnu');
+    }
+    for (final p in parsedRefs) {
       // La clé dans les résultats BACnet est "objectType:instance" (ex: "2:5")
-      final resultKey = '$objectTypeCode:$objectInstance';
-      final data = results[resultKey];
-
-      if (data != null) {
-        // Créer un BacnetObject à partir des données rafraîchies
-        final liveData = BacnetObject(
-          type: bacnetType!,
-          instance: objectInstance,
-          objectName: sf.favorite.pointName,
+      final data = results['${p.typeCode}:${p.instance}'];
+      if (data == null) {
+        byRef[p.pointRef] = (liveData: null, error: 'Point non trouvé');
+        continue;
+      }
+      byRef[p.pointRef] = (
+        liveData: BacnetObject(
+          type: p.type,
+          instance: p.instance,
+          objectName: nameByRef[p.pointRef] ?? p.pointRef,
           presentValue: data.presentValue,
           units: data.units,
           isOverridden: data.isOverridden,
@@ -456,25 +441,13 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
           overrideValue: data.overrideValue,
           outOfService: data.outOfService,
           inAlarm: data.inAlarm,
-        );
-
-        return sf.copyWith(
-          liveData: liveData,
-          lastRefreshed: now,
-          isLoading: false,
-          error: null,
-        );
-      } else {
-        return sf.copyWith(
-          lastRefreshed: now,
-          isLoading: false,
-          error: 'Point non trouvé',
-        );
-      }
-    }).toList();
+        ),
+        error: null,
+      );
+    }
 
     final newByConnection = Map<int, List<SuperFavoriteWithValue>>.from(state.byConnection);
-    newByConnection[connectionId] = updatedList;
+    newByConnection[connectionId] = _mergeRefreshResults(connectionId, byRef, now);
 
     state = state.copyWith(
       byConnection: newByConnection,
@@ -482,38 +455,15 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     );
   }
 
-  /// Convertit un BacnetObjectType en code numérique BACnet
-  int? _bacnetTypeToObjectTypeCode(BacnetObjectType type) {
-    switch (type) {
-      case BacnetObjectType.analogInput:
-        return BacnetObjectTypeCode.analogInput;
-      case BacnetObjectType.analogOutput:
-        return BacnetObjectTypeCode.analogOutput;
-      case BacnetObjectType.analogValue:
-        return BacnetObjectTypeCode.analogValue;
-      case BacnetObjectType.binaryInput:
-        return BacnetObjectTypeCode.binaryInput;
-      case BacnetObjectType.binaryOutput:
-        return BacnetObjectTypeCode.binaryOutput;
-      case BacnetObjectType.binaryValue:
-        return BacnetObjectTypeCode.binaryValue;
-      case BacnetObjectType.multiStateInput:
-        return BacnetObjectTypeCode.multiStateInput;
-      case BacnetObjectType.multiStateOutput:
-        return BacnetObjectTypeCode.multiStateOutput;
-      case BacnetObjectType.multiStateValue:
-        return BacnetObjectTypeCode.multiStateValue;
-      case BacnetObjectType.schedule:
-        return BacnetObjectTypeCode.schedule;
-      case BacnetObjectType.calendar:
-        return BacnetObjectTypeCode.calendar;
-      case BacnetObjectType.trendLog:
-        return BacnetObjectTypeCode.trendLog;
-      case BacnetObjectType.device:
-        return BacnetObjectTypeCode.device;
-      default:
-        return null;
-    }
+  /// Applique les résultats d'un refresh sur la liste COURANTE des super
+  /// favoris (et non celle capturée avant les await) : un super favori retiré
+  /// ou ajouté pendant le refresh n'est ni ressuscité ni perdu.
+  List<SuperFavoriteWithValue> _mergeRefreshResults(
+    int connectionId,
+    Map<String, ({BacnetObject? liveData, String? error})> resultsByRef,
+    DateTime now,
+  ) {
+    return mergeSuperFavoriteRefresh(state.forConnection(connectionId), resultsByRef, now);
   }
 
   /// Refresh les super favoris de toutes les connexions d'un dossier en parallèle
@@ -548,33 +498,30 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     );
   }
 
-  /// Récupère ou crée un ConnectedApiClient pour une connexion
-  Future<ConnectedApiClient?> _getApiClientForConnection(int connectionId) async {
-    // Vérifier le cache local
-    if (_apiClients.containsKey(connectionId)) {
-      return _apiClients[connectionId];
-    }
+  /// Ferme et retire le client en cache d'une connexion
+  void _disposeCachedClient(int connectionId) {
+    _apiClients.remove(connectionId)?.dispose();
+    _apiClientFingerprints.remove(connectionId);
+  }
 
-    // Vérifier si c'est la connexion active (réutiliser son client)
+  /// Récupère ou crée un ConnectedApiClient pour une connexion
+  Future<ConnectedApiClient?> _getApiClientForConnection(Connection connection) async {
+    final connectionId = connection.id;
+
+    // Connexion active : réutiliser son client (identifiants à jour)
     final activeState = _ref.read(activeConnectionProvider);
-    if (activeState.isConnected && activeState.connection?.id == connectionId) {
+    if (activeState.isConnected && activeState.connection?.id == connectionId && activeState.client != null) {
       _logger.i('_getApiClientForConnection: reusing active connection client for $connectionId');
       return activeState.client;
     }
 
-    // Récupérer les infos de connexion depuis la DB
-    final database = _ref.read(databaseProvider);
-    final connection = await database.getConnectionById(connectionId);
-    if (connection == null) {
-      _logger.e('_getApiClientForConnection: connection $connectionId not found in DB');
-      return null;
-    }
-
     // Récupérer le mot de passe depuis le secure storage (avec les bonnes options Android)
+    // Relu à chaque fois : un mot de passe modifié invalide le client en cache
     final secureStorage = _ref.read(secureStorageProvider);
     final password = await secureStorage.read(key: connection.passwordKey);
     if (password == null) {
-      _logger.e('_getApiClientForConnection: password not found for key "${connection.passwordKey}" - user needs to reconnect on this device');
+      _logger.e('_getApiClientForConnection: password not found for connection $connectionId - user needs to reconnect on this device');
+      _disposeCachedClient(connectionId);
       return null;
     }
 
@@ -582,16 +529,27 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     final protocol = connection.useHttps ? 'https' : 'http';
     final baseUrl = '$protocol://${connection.host}:${connection.port}';
     final basicAuth = 'Basic ${base64Encode(utf8.encode('${connection.username}:$password'))}';
+    final apiVersion = connection.apiVersion ?? 'V1';
+
+    // Vérifier le cache local (recréé si hôte/port/identifiants/version ont changé)
+    final fingerprint = '$baseUrl|$apiVersion|$basicAuth';
+    final cached = _apiClients[connectionId];
+    if (cached != null) {
+      if (_apiClientFingerprints[connectionId] == fingerprint) return cached;
+      _logger.i('_getApiClientForConnection: connection $connectionId changed, recreating client');
+      _disposeCachedClient(connectionId);
+    }
 
     try {
       // Créer le ConnectedApiClient
       final apiClient = ConnectedApiClient(
         baseUrl: baseUrl,
         basicAuth: basicAuth,
-        apiVersion: connection.apiVersion ?? 'V1',
+        apiVersion: apiVersion,
       );
 
       _apiClients[connectionId] = apiClient;
+      _apiClientFingerprints[connectionId] = fingerprint;
       return apiClient;
     } catch (e) {
       _logger.e('_getApiClientForConnection error: $e');
@@ -606,6 +564,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
       client.dispose();
     }
     _apiClients.clear();
+    _apiClientFingerprints.clear();
     super.dispose();
   }
 }
@@ -614,20 +573,4 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
 final superFavoritesProvider =
     StateNotifierProvider<SuperFavoritesNotifier, SuperFavoritesState>((ref) {
   return SuperFavoritesNotifier(ref);
-});
-
-/// Provider pour toggle le statut super favori d'un favori
-final toggleSuperFavoriteProvider = Provider<Future<bool> Function(int favoriteId)>((ref) {
-  final database = ref.watch(databaseProvider);
-
-  return (int favoriteId) async {
-    try {
-      final newValue = await database.toggleSuperFavorite(favoriteId);
-      _logger.i('toggleSuperFavorite: $favoriteId is now ${newValue ? "super" : "normal"}');
-      return newValue;
-    } catch (e) {
-      _logger.e('toggleSuperFavorite error: $e');
-      return false;
-    }
-  };
 });
