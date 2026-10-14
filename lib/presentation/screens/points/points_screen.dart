@@ -10,6 +10,7 @@ import '../../../application/providers/bacnet_provider.dart';
 import '../../../application/providers/settings_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../domain/models/display_preferences.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/favorite_button.dart';
 import '../../widgets/gradient_app_bar.dart';
@@ -84,6 +85,19 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
   final TextEditingController _searchController = TextEditingController();
   bool _showSearch = false;
   Timer? _autoRefreshTimer;
+
+  /// Manual refresh in progress (API refreshes do not set isLoading)
+  bool _isRefreshing = false;
+
+  Future<void> _manualRefresh() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      await ref.read(pointsProvider.notifier).refresh();
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
+  }
 
   /// Les catégories dans l'ordre des onglets
   static const _categories = [
@@ -217,6 +231,14 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
 
     // Écouter les changements de favoris pour mettre à jour le tri
     ref.listen(favoritesProvider, (_, _) => _updateFavoriteIds());
+    // Rebuild the values when the display settings change
+    ref.watch(settingsProvider.select((s) => (s.decimalPlaces, s.temperatureUnit)));
+
+    // Le réglage d'intervalle change : l'appliquer au timer
+    ref.listen(settingsProvider.select((s) => s.refreshIntervalSeconds), (_, next) {
+      ref.read(autoRefreshIntervalProvider.notifier).state = next;
+      _setupAutoRefresh();
+    });
 
     return Scaffold(
       appBar: GradientAppBar(
@@ -264,10 +286,14 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
             _buildAutoRefreshButton(l10n),
           // Rafraîchir (optimisé pour BACnet)
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: pointsState.isLoading
-                ? null
-                : () => ref.read(pointsProvider.notifier).refresh(),
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: pointsState.isLoading || _isRefreshing ? null : _manualRefresh,
           ),
         ],
         bottom: TabBar(
@@ -706,9 +732,12 @@ class _PointTile extends ConsumerWidget {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              point.presentValue != null
-                  ? BacnetTypeUtils.formatValue(point)
-                  : '-',
+              point.presentValue == null
+                  ? '-'
+                  : point.presentValue is num && !point.type.isBinary && !point.type.isMultiState
+                      // Analog: decimal places / °F from the display settings
+                      ? DisplayPreferences.formatAnalog(point.presentValue as num, point.units)
+                      : BacnetTypeUtils.formatValue(point),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: valueColor,

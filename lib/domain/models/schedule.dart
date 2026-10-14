@@ -1,3 +1,5 @@
+import 'display_preferences.dart';
+
 /// Sentinel pour distinguer "paramètre non fourni" de "null" dans copyWith
 const Object _unset = Object();
 
@@ -79,7 +81,12 @@ class ScheduleTransition {
   String get formattedTime {
     final parts = time.split(':');
     if (parts.length < 2) return time;
-    return '${parts[0]}:${parts[1]}';
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (DisplayPreferences.use24HourFormat || hour == null || minute == null) {
+      return '${parts[0]}:${parts[1]}';
+    }
+    return DisplayPreferences.formatHourMinute(hour, minute);
   }
 
   /// Parse depuis le format V1
@@ -225,18 +232,13 @@ class TimeSlot {
   }
 
   /// Heure de début formatée (HH:mm)
-  String get formattedStart {
-    final hours = startMinutes ~/ 60;
-    final mins = startMinutes % 60;
-    return '${hours.toString().padLeft(2, '0')}:${mins.toString().padLeft(2, '0')}';
-  }
+  String get formattedStart =>
+      DisplayPreferences.formatHourMinute(startMinutes ~/ 60, startMinutes % 60);
 
   /// Heure de fin formatée (HH:mm)
   String get formattedEnd {
-    if (endMinutes >= 1440) return '24:00';
-    final hours = endMinutes ~/ 60;
-    final mins = endMinutes % 60;
-    return '${hours.toString().padLeft(2, '0')}:${mins.toString().padLeft(2, '0')}';
+    if (endMinutes >= 1440) return DisplayPreferences.formatHourMinute(24, 0);
+    return DisplayPreferences.formatHourMinute(endMinutes ~/ 60, endMinutes % 60);
   }
 
   /// Durée en minutes

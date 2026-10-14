@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../application/providers/bacnet_provider.dart';
+import '../../../application/providers/settings_provider.dart';
 import '../../../data/services/bacnet_service.dart';
 
 /// Resultat de decouverte BACnet
@@ -178,7 +179,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
 
       try {
         await bacnetService.discoverLocalDevices(
-          port: 47808,
+          port: ref.read(settingsProvider).defaultBacnetPort,
           timeout: const Duration(seconds: 5),
           sendCount: 3,
           sendInterval: const Duration(milliseconds: 800),

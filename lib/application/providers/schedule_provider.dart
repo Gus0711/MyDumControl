@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import '../../domain/models/schedule.dart';
+import '../../data/services/api_exceptions.dart';
+import '../../data/services/api_service.dart';
 import '../../data/services/bacnet_service.dart';
 import 'active_connection_provider.dart';
 import 'bacnet_provider.dart';
@@ -74,10 +76,29 @@ final schedulesListProvider = FutureProvider<List<ScheduleSummary>>((ref) async 
   // ========================================
   // CONNEXION API DISTECH
   // ========================================
-  final schedules = await state.client!.getSchedules();
+  final client = state.client!;
+  client.clearLastError();
+  final schedules = await client.getSchedules();
+  // An empty list caused by a 401/403 must not look like "no schedule"
+  throwIfAuthFailed(isEmpty: schedules.isEmpty, client: client);
   _logger.i('schedulesListProvider: loaded ${schedules.length} schedules via API');
   return schedules;
 });
+
+/// Throws the client's auth error when an empty API result (empty list /
+/// null) was caused by invalid credentials, so the screen shows an error
+/// (AsyncError) instead of "no data".
+@visibleForTesting
+void throwIfAuthFailed({required bool isEmpty, required ConnectedApiClient client}) {
+  if (!isEmpty || !client.hasAuthError) return;
+  final error = client.lastError;
+  throw error ?? const ApiAuthException();
+}
+
+/// Schedules just written by [ScheduleEditNotifier.save], keyed by
+/// (connection id, instance). Consumed once by [scheduleDetailProvider] so the
+/// detail screen shows the saved version without re-reading the controller.
+final _savedScheduleCacheProvider = Provider<Map<(int?, int), Schedule>>((ref) => {});
 
 /// Détecte le type de valeur depuis la presentValue
 ScheduleValueType _detectValueType(dynamic value) {
@@ -138,6 +159,9 @@ ScheduleValueType _detectValueTypeFromWeeklySchedule(DecodedWeeklySchedule? week
 /// provider, ce qui évite une double lecture à l'ouverture de l'écran.
 final scheduleDetailProvider = FutureProvider.family<Schedule?, int>((ref, instance) async {
   _watchScheduleConnectionKey(ref);
+  final connectionId = ref.read(activeConnectionProvider).connection?.id;
+  final saved = ref.read(_savedScheduleCacheProvider).remove((connectionId, instance));
+  if (saved != null) return saved;
   return _fetchSchedule(ref, instance);
 });
 
@@ -194,7 +218,10 @@ Future<Schedule?> _fetchSchedule(Ref ref, int instance) async {
   // ========================================
   // CONNEXION API DISTECH
   // ========================================
-  final schedule = await state.client!.getScheduleDetail(instance);
+  final client = state.client!;
+  client.clearLastError();
+  final schedule = await client.getScheduleDetail(instance);
+  throwIfAuthFailed(isEmpty: schedule == null, client: client);
 
   if (schedule != null) {
     _logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via API');
@@ -421,6 +448,18 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       selectedDay: WeekDay.monday,
     );
     _logger.i('ScheduleEditNotifier: loaded schedule ${schedule.objectName}');
+  }
+
+  /// Starts editing [schedule] (already read by [scheduleDetailProvider])
+  /// without any controller access. Cancels a pending [loadSchedule].
+  void loadFrom(Schedule schedule) {
+    _loadToken++;
+    _lastInstance = schedule.instance;
+    state = ScheduleEditState(
+      originalSchedule: schedule,
+      editedSchedule: schedule,
+      selectedDay: WeekDay.monday,
+    );
   }
 
   /// Active/désactive le mode édition
@@ -796,6 +835,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
           port: bacnetConnection.port,
           scheduleInstance: toWrite.instance,
           weeklySchedule: bacnetWeeklySchedule,
+          deviceId: bacnetConnection.deviceId,
         );
       }
       // ========================================
@@ -819,8 +859,11 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
           successMessage: 'Planning sauvegardé',
         );
 
-        // Invalider le provider de détail : l'écran (hors édition) relit le
-        // planning tel qu'écrit sur l'automate (une seule lecture)
+        // Update the detail cache with the written version (no re-read of
+        // the controller): the next evaluation consumes this entry. The
+        // refresh button still re-reads the controller.
+        _ref.read(_savedScheduleCacheProvider)[
+            (connectionState.connection?.id, toWrite.instance)] = toWrite;
         _ref.invalidate(scheduleDetailProvider(toWrite.instance));
 
         _logger.i('ScheduleEditNotifier: saved successfully');

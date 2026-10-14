@@ -9,7 +9,10 @@ import 'package:share_plus/share_plus.dart';
 import '../providers/connection_providers.dart';
 import '../providers/database_provider.dart';
 import '../providers/folder_providers.dart';
+import 'points_provider.dart';
+import 'trend_log_provider.dart';
 import '../../data/database/app_database.dart';
+import '../../domain/models/display_preferences.dart';
 
 /// Clés pour SharedPreferences
 class SettingsKeys {
@@ -82,6 +85,12 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   late final Future<void> _ready;
 
   SettingsNotifier(Ref ref) : super(const AppSettings()) {
+    // Keep the display preferences read by the models in sync
+    addListener((s) => DisplayPreferences.apply(
+          decimalPlaces: s.decimalPlaces,
+          temperatureUnit: s.temperatureUnit,
+          use24HourFormat: s.use24HourFormat,
+        ));
     _ready = _init();
   }
 
@@ -197,6 +206,9 @@ class CacheOperations {
     final db = _ref.read(databaseProvider);
     // Vider les caches pour toutes les connexions
     await db.clearAllCacheGlobal();
+    // Providers built from the purged cache
+    _ref.read(pointsProvider.notifier).onCacheCleared();
+    _ref.invalidate(trendLogMappingProvider);
   }
 
   /// Obtient la taille estimée du cache

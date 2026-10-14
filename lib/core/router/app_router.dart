@@ -148,7 +148,8 @@ class AppRouter {
             name: 'scheduleDetail',
             pageBuilder: (context, state) {
               final instanceStr = state.pathParameters['instance']!;
-              final instance = int.tryParse(instanceStr) ?? 0;
+              final instance = int.tryParse(instanceStr);
+              if (instance == null) return _invalidRoutePage(state, instanceStr);
               return PageTransitions.scaleTransition(
                 context: context,
                 state: state,
@@ -197,7 +198,8 @@ class AppRouter {
             name: 'synopticView',
             pageBuilder: (context, state) {
               final idStr = state.pathParameters['id']!;
-              final id = int.tryParse(idStr) ?? 0;
+              final id = int.tryParse(idStr);
+              if (id == null) return _invalidRoutePage(state, idStr);
               return PageTransitions.scaleTransition(
                 context: context,
                 state: state,
@@ -211,7 +213,8 @@ class AppRouter {
                 name: 'synopticEdit',
                 pageBuilder: (context, state) {
                   final idStr = state.pathParameters['id']!;
-                  final id = int.tryParse(idStr) ?? 0;
+                  final id = int.tryParse(idStr);
+                  if (id == null) return _invalidRoutePage(state, idStr);
                   return PageTransitions.fadeTransition(
                     context: context,
                     state: state,
@@ -230,7 +233,8 @@ class AppRouter {
         name: 'envysionViewer',
         pageBuilder: (context, state) {
           final connectionIdStr = state.pathParameters['connectionId']!;
-          final connectionId = int.tryParse(connectionIdStr) ?? 0;
+          final connectionId = int.tryParse(connectionIdStr);
+          if (connectionId == null) return _invalidRoutePage(state, connectionIdStr);
           return PageTransitions.slideTransition(
             context: context,
             state: state,
@@ -255,7 +259,8 @@ class AppRouter {
             name: 'dashboardView',
             pageBuilder: (context, state) {
               final idStr = state.pathParameters['id']!;
-              final id = int.tryParse(idStr) ?? 0;
+              final id = int.tryParse(idStr);
+              if (id == null) return _invalidRoutePage(state, idStr);
               return PageTransitions.scaleTransition(
                 context: context,
                 state: state,
@@ -288,14 +293,33 @@ class AppRouter {
         ),
       ),
     ],
-    errorBuilder: (context, state) => Scaffold(
+    errorBuilder: (context, state) =>
+        _RouteErrorScreen(message: 'Page non trouvée: ${state.uri.path}'),
+  );
+
+  /// Page shown when a route parameter is not a valid integer id
+  static Page<void> _invalidRoutePage(GoRouterState state, String rawId) => MaterialPage<void>(
+        key: state.pageKey,
+        child: _RouteErrorScreen(message: 'Identifiant invalide : "$rawId"'),
+      );
+}
+
+/// Error screen for unknown routes or invalid route parameters
+class _RouteErrorScreen extends StatelessWidget {
+  final String message;
+
+  const _RouteErrorScreen({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text('Page non trouvée: ${state.uri.path}'),
+            Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => context.go(Routes.connections),
@@ -304,6 +328,6 @@ class AppRouter {
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }

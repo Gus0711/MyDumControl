@@ -2350,10 +2350,12 @@ class BacnetService {
     required int port,
     required int scheduleInstance,
     required BacnetWeeklySchedule weeklySchedule,
+    // Target device (same scope as readScheduleFull); used for diagnostics
+    int? deviceId,
   }) async {
     await init();
 
-    _logger.i('writeWeeklySchedule: writing to schedule $scheduleInstance on $host:$port');
+    _logger.i('writeWeeklySchedule: writing to schedule $scheduleInstance on $host:$port (device ${deviceId ?? '?'})');
 
     // Debug: log what we're trying to write
     for (int i = 0; i < 7; i++) {

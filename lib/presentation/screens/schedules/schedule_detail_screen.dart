@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/providers/schedule_provider.dart';
+import '../../../application/providers/settings_provider.dart';
 import '../../../domain/models/schedule.dart';
 import 'widgets/schedule_dialogs.dart';
 import 'widgets/schedule_colors.dart';
@@ -35,6 +36,8 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
   Widget build(BuildContext context) {
     final scheduleAsync = ref.watch(scheduleDetailProvider(widget.instance));
     final editState = ref.watch(scheduleEditProvider);
+    // Rebuild the times when the 12/24 h setting changes
+    ref.watch(settingsProvider.select((s) => s.use24HourFormat));
 
     // Écouter les messages de succès/erreur
     ref.listen(scheduleEditProvider, (previous, next) {
@@ -81,10 +84,13 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
           data: (schedule) {
             if (schedule == null) return _buildNotFound(context);
 
-            // Utiliser le schedule édité si en mode édition
-            final displaySchedule = _isEditing && editState.editedSchedule != null
-                ? editState.editedSchedule!
-                : schedule;
+            // Utiliser le schedule édité si en mode édition (et seulement s'il
+            // s'agit bien de ce planning)
+            final edited = editState.editedSchedule;
+            final displaySchedule =
+                _isEditing && edited != null && edited.instance == widget.instance
+                    ? edited
+                    : schedule;
 
             return _ScheduleDetailContent(
               schedule: displaySchedule,
@@ -179,9 +185,16 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
   Future<void> _startEditing() async {
     // The edit state is loaded lazily (the read-only view uses scheduleDetailProvider)
     final notifier = ref.read(scheduleEditProvider.notifier);
-    await notifier.loadSchedule(widget.instance);
-    if (!mounted) return;
-    if (ref.read(scheduleEditProvider).editedSchedule == null) return;
+    final loaded = ref.read(scheduleDetailProvider(widget.instance)).valueOrNull;
+    if (loaded != null) {
+      // Already read for the view: no controller access
+      notifier.loadFrom(loaded);
+    } else {
+      await notifier.loadSchedule(widget.instance);
+      if (!mounted) return;
+    }
+    final edited = ref.read(scheduleEditProvider).editedSchedule;
+    if (edited == null || edited.instance != widget.instance) return;
     setState(() => _isEditing = true);
     notifier.setEditing(true);
   }

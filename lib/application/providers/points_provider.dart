@@ -5,6 +5,7 @@ import '../../data/services/bacnet/bacnet_constants.dart';
 import 'active_connection_provider.dart';
 import 'cache_provider.dart';
 import 'bacnet_provider.dart';
+import 'bacnet_type_codes.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
@@ -244,6 +245,12 @@ class PointsNotifier extends StateNotifier<PointsState> {
     _staticCacheWrittenFor = null;
     state = PointsState();
     _logger.i('PointsNotifier: reset');
+  }
+
+  /// The local cache was purged: loaded points stay displayed, but the static
+  /// properties will be written to the cache again on the next load.
+  void onCacheCleared() {
+    _staticCacheWrittenFor = null;
   }
 
   /// Sort points by type, then by name.
@@ -529,7 +536,6 @@ class PointsNotifier extends StateNotifier<PointsState> {
         host: bacnetConnection.host,
         port: bacnetConnection.port,
         points: pointsToRefresh,
-        batchSize: 10, // 10 requêtes en parallèle
       );
 
       if (!_isCurrent(generation, connectionId)) {
@@ -1199,38 +1205,9 @@ class PointsNotifier extends StateNotifier<PointsState> {
   }
 
   /// Convertit un BacnetObjectType en code numérique BACnet
-  int _bacnetObjectTypeToCode(BacnetObjectType type) {
-    switch (type) {
-      case BacnetObjectType.analogInput:
-        return BacnetObjectTypeCode.analogInput;
-      case BacnetObjectType.analogOutput:
-        return BacnetObjectTypeCode.analogOutput;
-      case BacnetObjectType.analogValue:
-        return BacnetObjectTypeCode.analogValue;
-      case BacnetObjectType.binaryInput:
-        return BacnetObjectTypeCode.binaryInput;
-      case BacnetObjectType.binaryOutput:
-        return BacnetObjectTypeCode.binaryOutput;
-      case BacnetObjectType.binaryValue:
-        return BacnetObjectTypeCode.binaryValue;
-      case BacnetObjectType.multiStateInput:
-        return BacnetObjectTypeCode.multiStateInput;
-      case BacnetObjectType.multiStateOutput:
-        return BacnetObjectTypeCode.multiStateOutput;
-      case BacnetObjectType.multiStateValue:
-        return BacnetObjectTypeCode.multiStateValue;
-      case BacnetObjectType.schedule:
-        return BacnetObjectTypeCode.schedule;
-      case BacnetObjectType.calendar:
-        return BacnetObjectTypeCode.calendar;
-      case BacnetObjectType.trendLog:
-        return BacnetObjectTypeCode.trendLog;
-      case BacnetObjectType.notificationClass:
-        return BacnetObjectTypeCode.notificationClass;
-      case BacnetObjectType.device:
-        return BacnetObjectTypeCode.device;
-    }
-  }
+  /// (shared mapping, plus notification-class which it does not cover)
+  int _bacnetObjectTypeToCode(BacnetObjectType type) =>
+      bacnetObjectTypeCode(type) ?? BacnetObjectTypeCode.notificationClass;
 
   /// Met à jour un point localement dans le state
   void _updatePointLocally(
