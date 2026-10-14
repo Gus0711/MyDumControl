@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 
 /// Information d'un appareil ECLYPSE découvert via mDNS
 class EclypseDevice {
@@ -27,7 +27,6 @@ class EclypseDevice {
 /// Service de découverte mDNS pour les automates ECLYPSE Distech
 /// Implémentation manuelle compatible Windows
 class MdnsDiscoveryService {
-  static final _logger = Logger(); // Static pour éviter les allocations répétées
   RawDatagramSocket? _socket;
   StreamSubscription<RawSocketEvent>? _subscription; // Pour cleanup propre
 
@@ -46,7 +45,7 @@ class MdnsDiscoveryService {
     final devices = <EclypseDevice>[];
     final deviceNames = <String>{};
 
-    _logger.i('Starting mDNS discovery for ECLYPSE devices...');
+    logger.i('Starting mDNS discovery for ECLYPSE devices...');
 
     try {
       // Créer le socket UDP
@@ -60,7 +59,7 @@ class MdnsDiscoveryService {
       try {
         _socket!.joinMulticast(InternetAddress(mdnsAddress));
       } catch (e) {
-        _logger.w('Could not join multicast group: $e');
+        logger.w('Could not join multicast group: $e');
       }
 
       // Écouter les réponses avec référence pour cleanup
@@ -73,7 +72,7 @@ class MdnsDiscoveryService {
               if (device != null && !deviceNames.contains(device.name)) {
                 deviceNames.add(device.name);
                 devices.add(device);
-                _logger.i('Discovered ECLYPSE: ${device.name} at ${device.ipAddress}');
+                logger.i('Discovered ECLYPSE: ${device.name} at ${device.ipAddress}');
                 onDeviceFound?.call(device);
               }
             } catch (e) {
@@ -86,7 +85,7 @@ class MdnsDiscoveryService {
       // Envoyer la requête mDNS pour _eclypse._tcp.local
       final query = _buildMdnsQuery(eclypseServiceType);
       _socket!.send(query, InternetAddress(mdnsAddress), mdnsPort);
-      _logger.d('mDNS query sent for $eclypseServiceType');
+      logger.d('mDNS query sent for $eclypseServiceType');
 
       // Envoyer aussi pour _dcconf._udp.local
       final query2 = _buildMdnsQuery('_dcconf._udp.local');
@@ -96,7 +95,7 @@ class MdnsDiscoveryService {
       await Future.delayed(timeout);
 
     } catch (e) {
-      _logger.e('mDNS discovery error: $e');
+      logger.e('mDNS discovery error: $e');
     } finally {
       // Cleanup propre
       await _subscription?.cancel();
@@ -105,7 +104,7 @@ class MdnsDiscoveryService {
       _socket = null;
     }
 
-    _logger.i('mDNS discovery completed: ${devices.length} ECLYPSE found');
+    logger.i('mDNS discovery completed: ${devices.length} ECLYPSE found');
     return devices;
   }
 

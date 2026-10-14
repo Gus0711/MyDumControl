@@ -1,12 +1,10 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../data/database/app_database.dart';
 import '../../domain/models/bacnet_object.dart';
 import 'database_provider.dart';
 import 'active_connection_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// État du favori : 0 = pas favori, 1 = favori, 2 = super favori
 enum FavoriteState {
@@ -61,7 +59,7 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
   Future<FavoriteState> cycleFavoriteState(BacnetObject object) async {
     final activeConnection = _ref.read(activeConnectionProvider);
     if (activeConnection.connection == null) {
-      _logger.w('cycleFavoriteState: no active connection');
+      logger.w('cycleFavoriteState: no active connection');
       return FavoriteState.none;
     }
 
@@ -69,7 +67,7 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
     final connectionId = activeConnection.connection!.id;
 
     if (!_cycling.add(object.objectId)) {
-      _logger.d('cycleFavoriteState: ${object.objectId} already cycling, ignored');
+      logger.d('cycleFavoriteState: ${object.objectId} already cycling, ignored');
       return _currentState(object.objectId);
     }
 
@@ -102,22 +100,22 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
             ),
           );
           newState = FavoriteState.favorite;
-          _logger.i('cycleFavoriteState: ${object.objectId} ☆ → ⭐ (favori)');
+          logger.i('cycleFavoriteState: ${object.objectId} ☆ → ⭐ (favori)');
         } else if (!existing.isSuperFavorite && !existing.wasPromoted) {
           // ⭐ Favori (montée) → ✨ Super favori
           await database.setSuperFavorite(existing.id, true);
           newState = FavoriteState.superFavorite;
-          _logger.i('cycleFavoriteState: ${object.objectId} ⭐ → ✨ (super favori)');
+          logger.i('cycleFavoriteState: ${object.objectId} ⭐ → ✨ (super favori)');
         } else if (existing.isSuperFavorite) {
           // ✨ Super favori → ⭐ Favori (on descend, marquer wasPromoted)
           await database.demoteSuperFavorite(existing.id);
           newState = FavoriteState.favorite;
-          _logger.i('cycleFavoriteState: ${object.objectId} ✨ → ⭐ (rétrogradé)');
+          logger.i('cycleFavoriteState: ${object.objectId} ✨ → ⭐ (rétrogradé)');
         } else {
           // ⭐ Favori (wasPromoted = true) → ☆ Pas favori (suppression)
           await database.deleteFavoriteById(existing.id);
           newState = FavoriteState.none;
-          _logger.i('cycleFavoriteState: ${object.objectId} ⭐ → ☆ (supprimé)');
+          logger.i('cycleFavoriteState: ${object.objectId} ⭐ → ☆ (supprimé)');
         }
         return newState;
       });
@@ -125,7 +123,7 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
       state = const AsyncValue.data(null);
       return newState;
     } catch (e, st) {
-      _logger.e('cycleFavoriteState error: $e');
+      logger.e('cycleFavoriteState error: $e');
       state = AsyncValue.error(e, st);
       return _currentState(object.objectId);
     } finally {
@@ -139,10 +137,10 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
 
     try {
       await database.deleteFavoriteById(favoriteId);
-      _logger.i('removeFavoriteById: $favoriteId removed');
+      logger.i('removeFavoriteById: $favoriteId removed');
       return true;
     } catch (e) {
-      _logger.e('removeFavoriteById error: $e');
+      logger.e('removeFavoriteById error: $e');
       return false;
     }
   }
@@ -159,10 +157,10 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
 
     try {
       await database.reorderFavorites(connectionId, favoriteIds);
-      _logger.i('reorderFavorites: reordered ${favoriteIds.length} favorites');
+      logger.i('reorderFavorites: reordered ${favoriteIds.length} favorites');
       return true;
     } catch (e) {
-      _logger.e('reorderFavorites error: $e');
+      logger.e('reorderFavorites error: $e');
       return false;
     }
   }

@@ -1,14 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 
 import '../../core/constants/api_constants.dart';
 import '../database/app_database.dart';
 import 'api_service.dart';
 import 'certificate_pinning.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Default API version when a connection has none stored (V2 controllers are
 /// the large majority; V1 is detected by the connection test).
@@ -104,12 +102,12 @@ class ApiClientFactory {
           ? (fingerprint) {
               if (pinned || config.expectedCertFingerprint != null) return;
               pinned = true;
-              _logger.i('TOFU: pinning certificate of connection ${config.connectionId}: $fingerprint');
+              logger.i('TOFU: pinning certificate of connection ${config.connectionId}: $fingerprint');
               database
                   .updateCertificateFingerprint(config.connectionId, fingerprint)
                   .then((_) => onCertificatePinned?.call(fingerprint))
                   .catchError((Object e) {
-                _logger.w('TOFU: failed to store certificate fingerprint: $e');
+                logger.w('TOFU: failed to store certificate fingerprint: $e');
               });
             }
           : null,

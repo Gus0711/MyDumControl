@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../data/database/app_database.dart';
 import '../../data/services/api_client_factory.dart';
 import '../../data/services/api_service.dart';
@@ -10,8 +10,6 @@ import 'cache_provider.dart';
 import 'points_provider.dart';
 import 'schedule_provider.dart';
 import 'bacnet_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// État de la connexion active
 class ActiveConnectionState {
@@ -120,13 +118,13 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
   /// Se connecte à un automate (connexion rapide, données en arrière-plan)
   Future<bool> connect(int connectionId) async {
-    _logger.i('connect: connectionId=$connectionId');
+    logger.i('connect: connectionId=$connectionId');
     final token = ++_connectionToken;
 
     // Dispose de l'ancien client avant de créer un nouveau (éviter les memory leaks)
     final oldClient = state.client;
     if (oldClient != null) {
-      _logger.i('connect: disposing previous client');
+      logger.i('connect: disposing previous client');
       oldClient.dispose();
     }
 
@@ -143,7 +141,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       if (!_isCurrent(token)) return false;
 
       if (connection == null) {
-        _logger.e('connect: connexion introuvable');
+        logger.e('connect: connexion introuvable');
         state = state.copyWith(
           isConnecting: false,
           error: 'Connexion introuvable',
@@ -151,7 +149,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
         return false;
       }
 
-      _logger.i('connect: connection=${connection.name}, host=${connection.host}:${connection.port}, type=${connection.connectionType}');
+      logger.i('connect: connection=${connection.name}, host=${connection.host}:${connection.port}, type=${connection.connectionType}');
 
       // ========================================
       // CONNEXION BACNET NATIVE
@@ -165,7 +163,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       // ========================================
       return await _connectDistechApi(connection, token);
     } catch (e) {
-      _logger.e('connect: error: $e');
+      logger.e('connect: error: $e');
       if (!_isCurrent(token)) return false;
       state = state.copyWith(
         isConnecting: false,
@@ -177,7 +175,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
   /// Connexion BACnet native
   Future<bool> _connectBacnet(Connection connection, int token) async {
-    _logger.i('_connectBacnet: connecting to ${connection.host}:${connection.port}');
+    logger.i('_connectBacnet: connecting to ${connection.host}:${connection.port}');
 
     final bacnetService = _ref.read(bacnetServiceProvider);
     final database = _ref.read(databaseProvider);
@@ -187,7 +185,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
     if (deviceId == null) {
       // Essayer de découvrir le device ID
-      _logger.i('_connectBacnet: discovering device ID via Who-Is...');
+      logger.i('_connectBacnet: discovering device ID via Who-Is...');
       final devices = await bacnetService.whoIs(
         host: connection.host,
         port: connection.port,
@@ -196,7 +194,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       if (!_isCurrent(token)) return false;
 
       if (devices.isEmpty) {
-        _logger.e('_connectBacnet: no BACnet device responded');
+        logger.e('_connectBacnet: no BACnet device responded');
         state = state.copyWith(
           isConnecting: false,
           error: 'Aucun device BACnet n\'a répondu',
@@ -205,7 +203,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       }
 
       deviceId = devices.first.deviceId;
-      _logger.i('_connectBacnet: discovered device ID: $deviceId');
+      logger.i('_connectBacnet: discovered device ID: $deviceId');
     }
 
     // Mettre à jour la date de dernière connexion
@@ -221,7 +219,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     );
 
     // CONNEXION ÉTABLIE
-    _logger.i('_connectBacnet: connected! Device ID: $deviceId');
+    logger.i('_connectBacnet: connected! Device ID: $deviceId');
 
     state = ActiveConnectionState(
       connection: connection,
@@ -297,9 +295,9 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
         );
       }
 
-      _logger.i('_loadBacnetDataInBackground: deviceInfo loaded: $deviceName');
+      logger.i('_loadBacnetDataInBackground: deviceInfo loaded: $deviceName');
     } catch (e) {
-      _logger.w('_loadBacnetDataInBackground: failed to load device info: $e');
+      logger.w('_loadBacnetDataInBackground: failed to load device info: $e');
       if (_isCurrent(token)) {
         state = state.copyWith(
           deviceInfo: DeviceInfo(objectName: connection.name, deviceInstance: deviceId),
@@ -320,7 +318,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
   /// Connexion API Distech
   Future<bool> _connectDistechApi(Connection connection, int token) async {
-    _logger.i('_connectDistechApi: connecting to ${connection.host}:${connection.port}');
+    logger.i('_connectDistechApi: connecting to ${connection.host}:${connection.port}');
 
     // Construire le client (mot de passe, auth, version, timeouts, TOFU)
     final factory = _ref.read(apiClientFactoryProvider);
@@ -329,13 +327,13 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       config = await factory.resolve(connection);
     } on PasswordMissingException catch (e) {
       if (!_isCurrent(token)) return false;
-      _logger.e('_connectDistechApi: mot de passe introuvable');
+      logger.e('_connectDistechApi: mot de passe introuvable');
       state = ActiveConnectionState(connection: connection, error: e.message, failure: e);
       return false;
     }
     if (!_isCurrent(token)) return false;
 
-    _logger.i('_connectDistechApi: baseUrl=${config.baseUrl}, apiVersion=${config.apiVersion}');
+    logger.i('_connectDistechApi: baseUrl=${config.baseUrl}, apiVersion=${config.apiVersion}');
 
     final client = factory.build(
       config,
@@ -360,7 +358,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     }
 
     // CONNEXION IMMÉDIATE - L'UI peut naviguer maintenant!
-    _logger.i('_connectDistechApi: connected! Loading cache first, then fresh data...');
+    logger.i('_connectDistechApi: connected! Loading cache first, then fresh data...');
 
     // Charger immédiatement depuis le cache (si disponible)
     final cacheService = _ref.read(cacheServiceProvider);
@@ -372,10 +370,10 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     }
 
     if (cachedDeviceInfo != null) {
-      _logger.i('_connectDistechApi: deviceInfo loaded from cache: ${cachedDeviceInfo.objectName}');
+      logger.i('_connectDistechApi: deviceInfo loaded from cache: ${cachedDeviceInfo.objectName}');
     }
     if (cachedSummary != null) {
-      _logger.i('_connectDistechApi: objectsSummary loaded from cache: ${cachedSummary.total} objets');
+      logger.i('_connectDistechApi: objectsSummary loaded from cache: ${cachedSummary.total} objets');
     }
 
     // TOUJOURS afficher l'animation de chargement (même avec cache)
@@ -407,7 +405,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   /// mismatch, invalid credentials): the home screen shows [failure].
   void _failConnection(ApiException failure, Connection connection, int token) {
     if (!_isCurrent(token)) return;
-    _logger.e('connection failed: $failure');
+    logger.e('connection failed: $failure');
     _connectionToken++;
     state.client?.dispose();
     _clearDataProviders();
@@ -452,7 +450,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
     // Charger deviceInfo (en arrière-plan)
     client.getDeviceInfo().then((deviceInfo) {
-      _logger.i('Background: deviceInfo loaded: ${deviceInfo.objectName}');
+      logger.i('Background: deviceInfo loaded: ${deviceInfo.objectName}');
       if (!_isCurrent(token)) return;
 
       // Mettre à jour le cache
@@ -462,7 +460,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       if (deviceInfo.modelName != null) {
         final database = _ref.read(databaseProvider);
         database.updateModelName(connectionId, deviceInfo.modelName!);
-        _logger.i('Background: modelName saved to DB: ${deviceInfo.modelName}');
+        logger.i('Background: modelName saved to DB: ${deviceInfo.modelName}');
       }
 
       if (_isCurrent(token)) {
@@ -473,7 +471,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
         );
       }
     }).catchError((e) {
-      _logger.w('Background: getDeviceInfo failed: $e');
+      logger.w('Background: getDeviceInfo failed: $e');
       if (_isCurrent(token)) {
         // Si on a des données du cache, on les garde
         if (state.deviceInfo == null) {
@@ -489,7 +487,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
     // Charger objectsSummary (en arrière-plan)
     client.getObjectsSummary().then((summary) {
-      _logger.i('Background: objectsSummary loaded: ${summary.total} objets');
+      logger.i('Background: objectsSummary loaded: ${summary.total} objets');
       if (!_isCurrent(token)) return;
 
       // Mettre à jour le cache
@@ -503,7 +501,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
         );
       }
     }).catchError((e) {
-      _logger.w('Background: getObjectsSummary failed: $e');
+      logger.w('Background: getObjectsSummary failed: $e');
       if (_isCurrent(token)) {
         // Si on a des données du cache, on les garde
         if (state.objectsSummary == null) {
@@ -519,33 +517,33 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
     // Charger l'heure de l'automate (en arrière-plan)
     client.getControllerTime().then((controllerTime) {
-      _logger.i('Background: controllerTime loaded: ${controllerTime.formattedDateTime}, offset=${controllerTime.offsetDescription}');
+      logger.i('Background: controllerTime loaded: ${controllerTime.formattedDateTime}, offset=${controllerTime.offsetDescription}');
 
       if (_isCurrent(token)) {
         state = state.copyWith(controllerTime: controllerTime);
       }
     }).catchError((e) {
-      _logger.w('Background: getControllerTime failed: $e');
+      logger.w('Background: getControllerTime failed: $e');
       // Pas critique, on continue sans l'heure
     });
 
     // Charger les infos réseau (API V1 uniquement, en arrière-plan)
     client.getNetworkInfo().then((networkInfo) {
       if (networkInfo != null) {
-        _logger.i('Background: networkInfo loaded: $networkInfo');
+        logger.i('Background: networkInfo loaded: $networkInfo');
         if (_isCurrent(token)) {
           state = state.copyWith(networkInfo: networkInfo);
         }
       }
     }).catchError((e) {
-      _logger.w('Background: getNetworkInfo failed: $e');
+      logger.w('Background: getNetworkInfo failed: $e');
       // Pas critique, on continue sans les infos réseau
     });
   }
 
   /// Se déconnecte et réinitialise tous les providers de données
   void disconnect() {
-    _logger.i('disconnect: clearing all data providers');
+    logger.i('disconnect: clearing all data providers');
     _connectionToken++;
     state.client?.dispose();
     _ref.read(activeBacnetConnectionProvider.notifier).state = null;
@@ -569,7 +567,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     // Note: schedulesListProvider et trendLogMappingProvider sont des FutureProvider
     // Ils se rafraîchiront automatiquement car ils watchent activeConnectionProvider
 
-    _logger.i('_clearDataProviders: data providers reset');
+    logger.i('_clearDataProviders: data providers reset');
   }
 
   /// Rafraîchit les données (en arrière-plan)
@@ -585,7 +583,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     if (forceRefresh) {
       final cacheService = _ref.read(cacheServiceProvider);
       await cacheService.clearAllCache(connectionId);
-      _logger.i('refresh: cache cleared for connection $connectionId');
+      logger.i('refresh: cache cleared for connection $connectionId');
       if (!_isCurrent(token)) return;
     }
 

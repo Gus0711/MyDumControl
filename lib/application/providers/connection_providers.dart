@@ -1,12 +1,10 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import 'package:uuid/uuid.dart';
 import '../../data/database/app_database.dart';
 import 'database_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Generates a unique secure-storage key for a connection password.
 String generatePasswordKey() => 'conn_pwd_${const Uuid().v4()}';
@@ -195,7 +193,7 @@ class ConnectionRepository {
     try {
       await secureStorage.delete(key: existing.passwordKey);
     } catch (e) {
-      _logger.w('deleteConnection: failed to delete password secret: $e');
+      logger.w('deleteConnection: failed to delete password secret: $e');
     }
   }
 

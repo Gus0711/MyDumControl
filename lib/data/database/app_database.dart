@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import 'tables/connections_table.dart';
 import 'tables/folders_table.dart';
 import 'tables/favorites_table.dart';
@@ -13,8 +13,6 @@ import 'tables/synoptic_bindings_table.dart';
 import 'tables/dashboard_tables.dart';
 
 part 'app_database.g.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Returns true if a cache entry written at [cachedAt] is younger than [maxAge].
 bool isCacheFresh(DateTime cachedAt, Duration maxAge, {DateTime? now}) {
@@ -116,7 +114,7 @@ class AppDatabase extends _$AppDatabase {
           try {
             await clearExpiredCache();
           } catch (e) {
-            _logger.w('clearExpiredCache on open failed: $e');
+            logger.w('clearExpiredCache on open failed: $e');
           }
         },
       );
@@ -709,7 +707,7 @@ class AppDatabase extends _$AppDatabase {
       return decoded.map((key, value) => MapEntry(key, (value as num).toInt()));
     } catch (e) {
       // Corrupted row: log it and drop it so it is not re-read on every open
-      _logger.w('Corrupted trend log mapping cache for connection $connectionId: $e');
+      logger.w('Corrupted trend log mapping cache for connection $connectionId: $e');
       await clearTrendLogMappingCache(connectionId);
       return null;
     }

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 
 import 'bacnet/bacnet_constants.dart';
 import 'bacnet/bacnet_encoder.dart';
@@ -15,8 +15,6 @@ import '../../domain/models/network_interface_choice.dart';
 export 'bacnet/bacnet_encoder.dart' show ReadRangeType, BacnetTimeValue, BacnetDailySchedule, BacnetWeeklySchedule, ScheduleValueTag;
 export 'bacnet/bacnet_decoder.dart'
     show TrendLogRecordData, ReadRangeResult, DecodedTimeValue, DecodedDailySchedule, DecodedWeeklySchedule, BacnetScheduleDecoder;
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Résultat d'un test de connexion BACnet
 class BacnetConnectionResult {
@@ -126,10 +124,10 @@ class BacnetService {
       socket = await RawDatagramSocket.bind(bindAddress, standardBacnetPort, reuseAddress: true);
       standardPort = true;
     } catch (e) {
-      _logger.w('Could not bind to port $standardBacnetPort: $e. Using dynamic port.');
+      logger.w('Could not bind to port $standardBacnetPort: $e. Using dynamic port.');
       socket = await RawDatagramSocket.bind(bindAddress, 0);
       standardPort = false;
-      _logger.w('BACnet service using non-standard port ${socket.port} - some devices may not respond');
+      logger.w('BACnet service using non-standard port ${socket.port} - some devices may not respond');
     }
 
     socket.broadcastEnabled = true; // Activer le broadcast pour Who-Is
@@ -139,7 +137,7 @@ class BacnetService {
     _actualPort = socket.port;
     _socketSubscription = socket.listen(_handleSocketEvent);
     _isInitialized = true;
-    _logger.i(
+    logger.i(
       'BACnet service bound to ${bindAddress.address}:${socket.port} '
       '(interface: ${bindInterface?.address ?? "all"}), broadcast enabled',
     );
@@ -184,7 +182,7 @@ class BacnetService {
   /// Réinitialise le service sur une nouvelle interface réseau
   /// Note: Ne ferme pas les StreamControllers pour permettre aux listeners de continuer
   Future<void> rebindToInterface(NetworkInterfaceChoice? newInterface) async {
-    _logger.i('Rebinding BACnet service to ${newInterface?.address ?? "all interfaces"}');
+    logger.i('Rebinding BACnet service to ${newInterface?.address ?? "all interfaces"}');
 
     // Fermer seulement le socket, pas les controllers
     await _closeSocket('Socket rebound to another interface');
@@ -208,13 +206,13 @@ class BacnetService {
     for (final controller in [_iAmController, _rawIAmController, _routerController, _conflictController]) {
       if (!controller.isClosed) controller.close();
     }
-    _logger.d('BACnet service disposed');
+    logger.d('BACnet service disposed');
   }
 
   /// Réinitialise le cache des devices vus (avant une nouvelle découverte)
   void clearSeenDevices() {
     _seenDevices.clear();
-    _logger.d('Cleared seen devices cache');
+    logger.d('Cleared seen devices cache');
   }
 
   /// Vérifie que le service est initialisé
@@ -274,7 +272,7 @@ class BacnetService {
     try {
       frame = BacnetDecoder.parseFrame(data);
     } catch (e) {
-      _logger.d('Malformed BACnet frame from ${datagram.address.address}: $e');
+      logger.d('Malformed BACnet frame from ${datagram.address.address}: $e');
       return;
     }
     if (frame == null) return;
@@ -296,12 +294,12 @@ class BacnetService {
       try {
         final response = BacnetDecoder.decodeApdu(data, apduOffset);
         if (response.type == BacnetResponseType.iAm) {
-          _logger.i('I-Am received from ${sourceAddress.address}:$sourcePort, deviceId: ${response.objectInstance}');
+          logger.i('I-Am received from ${sourceAddress.address}:$sourcePort, deviceId: ${response.objectInstance}');
           _handleIAm(response, sourceAddress, sourcePort, frame.npdu);
         }
         // Autres unconfirmedRequests (COV, Who-Is relayés...) ignorés
       } catch (e) {
-        _logger.d('Failed to decode unconfirmed request from ${sourceAddress.address}: $e');
+        logger.d('Failed to decode unconfirmed request from ${sourceAddress.address}: $e');
       }
       return;
     }
@@ -332,14 +330,14 @@ class BacnetService {
     }
 
     if (response.isError) {
-      _logger.w(
+      logger.w(
         'BACnet error response: type=${response.type}, class=${response.errorClass}, code=${response.errorCode}, msg=${response.errorMessage}',
       );
     }
 
     // Abort out-of-resources: the device is busy, try again if allowed
     if (response.type == BacnetResponseType.abort && response.errorCode == _abortOutOfResources && request.attempts <= _retries) {
-      _logger.d('Device busy (Abort out-of-resources), retrying invokeId $invokeId');
+      logger.d('Device busy (Abort out-of-resources), retrying invokeId $invokeId');
       _transmit(request);
       return;
     }
@@ -393,7 +391,7 @@ class BacnetService {
     }
 
     final payload = request.segments!.takeBytes();
-    _logger.d('Segmented response reassembled: ${payload.length} bytes, invokeId ${header.invokeId}');
+    logger.d('Segmented response reassembled: ${payload.length} bytes, invokeId ${header.invokeId}');
     _completeRequest(
       request,
       BacnetDecoder.decodeReassembledComplexAck(
@@ -423,7 +421,7 @@ class BacnetService {
       }
 
       if (networks.isNotEmpty && !_routerController.isClosed) {
-        _logger.i('I-Am-Router-To-Network from ${address.address}: networks=$networks');
+        logger.i('I-Am-Router-To-Network from ${address.address}: networks=$networks');
         _routerController.add(RouterInfo(address: address, networks: networks));
       }
     }
@@ -451,7 +449,7 @@ class BacnetService {
     }
 
     if (_iAmController.isClosed) {
-      _logger.w('_handleIAm: iAmController is CLOSED! Cannot emit device $deviceId');
+      logger.w('_handleIAm: iAmController is CLOSED! Cannot emit device $deviceId');
       return;
     }
 
@@ -462,7 +460,7 @@ class BacnetService {
       if (existingDevice.knowsAddress(address)) return;
 
       // CONFLIT : Même deviceId, adresse IP différente
-      _logger.w(
+      logger.w(
         'CONFLIT Device ID $deviceId: '
         '${existingDevice.address.address} ET ${address.address}',
       );
@@ -488,7 +486,7 @@ class BacnetService {
 
     // Nouveau device
     _seenDevices[deviceId] = info;
-    _logger.d('_handleIAm: Emitting new device $deviceId to iAmStream');
+    logger.d('_handleIAm: Emitting new device $deviceId to iAmStream');
     _iAmController.add(info);
   }
 
@@ -551,7 +549,7 @@ class BacnetService {
     request.attempts++;
     try {
       socket.send(request.packet, request.address, request.port);
-      _logger.d(
+      logger.d(
         'BACnet request sent to ${request.address.address}:${request.port}, '
         'invokeId: ${request.invokeId}, attempt ${request.attempts}',
       );
@@ -572,11 +570,11 @@ class BacnetService {
     // Retry only if no segment has been received (otherwise the device's
     // transaction state machine is mid-way and a resend would be ambiguous)
     if (request.segments == null && request.attempts <= _retries) {
-      _logger.w('BACnet timeout for invokeId ${request.invokeId} to ${request.address.address}, retrying');
+      logger.w('BACnet timeout for invokeId ${request.invokeId} to ${request.address.address}, retrying');
       _transmit(request);
       return;
     }
-    _logger.w(
+    logger.w(
       'BACnet TIMEOUT for invokeId: ${request.invokeId} to ${request.address.address} '
       '(after ${request.attempts} attempt(s) of ${_timeout.inSeconds}s)',
     );
@@ -689,7 +687,7 @@ class BacnetService {
       final packet = BacnetEncoder.encodeWhoIsRequest(lowLimit: lowLimit, highLimit: highLimit, broadcast: isBroadcast);
 
       _socket!.send(packet, address, port);
-      _logger.d('Who-Is sent to $host:$port (broadcast: $isBroadcast)');
+      logger.d('Who-Is sent to $host:$port (broadcast: $isBroadcast)');
 
       // Attendre les réponses
       await Future.delayed(timeout);
@@ -726,10 +724,10 @@ class BacnetService {
       if (existingIndex != -1) {
         // Remplacer par la version mise à jour (avec conflits éventuels)
         devices[existingIndex] = device;
-        _logger.d('Updated device ${device.deviceId} (conflicts: ${device.hasConflict})');
+        logger.d('Updated device ${device.deviceId} (conflicts: ${device.hasConflict})');
       } else {
         devices.add(device);
-        _logger.i('Discovered device ${device.deviceId} at ${device.address.address}');
+        logger.i('Discovered device ${device.deviceId} at ${device.address.address}');
       }
     });
 
@@ -738,7 +736,7 @@ class BacnetService {
       for (final network in router.networks) {
         if (!discoveredNetworks.contains(network)) {
           discoveredNetworks.add(network);
-          _logger.i('Discovered BACnet network $network via router ${router.address.address}');
+          logger.i('Discovered BACnet network $network via router ${router.address.address}');
         }
       }
     });
@@ -746,14 +744,14 @@ class BacnetService {
     try {
       // Obtenir les adresses de broadcast du réseau local
       final broadcastAddresses = await _getLocalBroadcastAddresses();
-      _logger.i('Broadcast addresses: $broadcastAddresses');
+      logger.i('Broadcast addresses: $broadcastAddresses');
 
       // 255.255.255.255 leaves through the default route only: when an
       // interface is selected on a 0.0.0.0 socket, stick to its broadcast
       final sendGlobalBroadcast = _boundInterface == null || Platform.isWindows;
 
       // === PHASE 1: Découverte des routeurs BACnet ===
-      _logger.i('Phase 1: Discovering BACnet routers...');
+      logger.i('Phase 1: Discovering BACnet routers...');
       final whoIsRouterPacket = BacnetEncoder.encodeWhoIsRouterToNetwork();
 
       for (final broadcastAddr in broadcastAddresses) {
@@ -775,10 +773,10 @@ class BacnetService {
 
       // Attendre les réponses des routeurs
       await Future.delayed(const Duration(milliseconds: 500));
-      _logger.i('Found ${discoveredNetworks.length} remote BACnet networks: $discoveredNetworks');
+      logger.i('Found ${discoveredNetworks.length} remote BACnet networks: $discoveredNetworks');
 
       // === PHASE 2: Who-Is broadcasts locaux ===
-      _logger.i('Phase 2: Local Who-Is broadcasts...');
+      logger.i('Phase 2: Local Who-Is broadcasts...');
 
       // Construire les paquets Who-Is
       final packetGlobal = BacnetEncoder.encodeWhoIsRequest(broadcast: true);
@@ -794,7 +792,7 @@ class BacnetService {
           await Future.delayed(sendInterval);
         }
 
-        _logger.d('Who-Is broadcast round ${i + 1}/$sendCount');
+        logger.d('Who-Is broadcast round ${i + 1}/$sendCount');
 
         final packet = (i % 2 == 0) ? packetGlobal : packetWithRange;
 
@@ -803,7 +801,7 @@ class BacnetService {
             final address = InternetAddress(broadcastAddr);
             _socket!.send(packet, address, port);
           } catch (e) {
-            _logger.w('Failed to send to $broadcastAddr: $e');
+            logger.w('Failed to send to $broadcastAddr: $e');
           }
         }
 
@@ -812,14 +810,14 @@ class BacnetService {
             final globalBroadcast = InternetAddress('255.255.255.255');
             _socket!.send(packet, globalBroadcast, port);
           } catch (e) {
-            _logger.w('Failed to send global broadcast: $e');
+            logger.w('Failed to send global broadcast: $e');
           }
         }
       }
 
       // === PHASE 3: Who-Is vers les réseaux distants découverts ===
       if (discoveredNetworks.isNotEmpty) {
-        _logger.i('Phase 3: Who-Is to ${discoveredNetworks.length} remote networks...');
+        logger.i('Phase 3: Who-Is to ${discoveredNetworks.length} remote networks...');
 
         for (final networkNumber in discoveredNetworks) {
           final networkWhoIs = BacnetEncoder.encodeWhoIsToNetwork(destinationNetwork: networkNumber, lowLimit: 0, highLimit: 4194303);
@@ -828,7 +826,7 @@ class BacnetService {
             try {
               final address = InternetAddress(broadcastAddr);
               _socket!.send(networkWhoIs, address, port);
-              _logger.d('Who-Is sent to network $networkNumber via $broadcastAddr');
+              logger.d('Who-Is sent to network $networkNumber via $broadcastAddr');
             } catch (e) {
               // Ignorer
             }
@@ -842,7 +840,7 @@ class BacnetService {
       // Attendre les réponses
       await Future.delayed(timeout);
 
-      _logger.i('Discovery completed: ${devices.length} devices found');
+      logger.i('Discovery completed: ${devices.length} devices found');
       return devices;
     } finally {
       await deviceSubscription.cancel();
@@ -863,7 +861,7 @@ class BacnetService {
     if (bound != null) {
       final match = interfaces.where((i) => i.address == bound.address).toList();
       final broadcast = match.isNotEmpty ? match.first.broadcast : bound.broadcastAddress;
-      _logger.d('Using bound interface broadcast: $broadcast');
+      logger.d('Using bound interface broadcast: $broadcast');
       return [broadcast];
     }
 
@@ -960,7 +958,7 @@ class BacnetService {
     // 1. Lire la liste des objets (object-list)
     final objectList = await _readObjectList(host: host, port: port, deviceId: deviceId);
     if (objectList == null) {
-      _logger.e('Failed to read object-list of device $deviceId on $host');
+      logger.e('Failed to read object-list of device $deviceId on $host');
       return [];
     }
 
@@ -974,7 +972,7 @@ class BacnetService {
         try {
           return await _readObjectProperties(host: host, port: port, objectType: objInfo.type, objectInstance: objInfo.instance);
         } catch (e) {
-          _logger.e('Error reading object ${objInfo.type}:${objInfo.instance}: $e');
+          logger.e('Error reading object ${objInfo.type}:${objInfo.instance}: $e');
           return null;
         }
       }),
@@ -1010,10 +1008,10 @@ class BacnetService {
     if (whole.isSuccess) {
       objects = _parseObjectList(whole.value);
     } else if (whole.isDeviceError) {
-      _logger.w('object-list read refused (${whole.errorMessage}), reading it element by element');
+      logger.w('object-list read refused (${whole.errorMessage}), reading it element by element');
       objects = await _readObjectListByIndex(host: host, port: port, deviceId: deviceId);
     } else {
-      _logger.e('Failed to read object-list: ${whole.errorMessage}');
+      logger.e('Failed to read object-list: ${whole.errorMessage}');
     }
 
     if (objects != null) {
@@ -1033,10 +1031,10 @@ class BacnetService {
     );
     final length = lengthResult.isSuccess ? _toInt(lengthResult.value) : null;
     if (length == null) {
-      _logger.e('Failed to read object-list length: ${lengthResult.errorMessage}');
+      logger.e('Failed to read object-list length: ${lengthResult.errorMessage}');
       return null;
     }
-    _logger.i('object-list has $length elements, reading them by index');
+    logger.i('object-list has $length elements, reading them by index');
 
     final items = await Future.wait(
       List.generate(
@@ -1062,7 +1060,7 @@ class BacnetService {
       }
     }
     if (failures > 0) {
-      _logger.w('object-list: $failures of $length elements could not be read');
+      logger.w('object-list: $failures of $length elements could not be read');
     }
     return objects;
   }
@@ -1098,7 +1096,7 @@ class BacnetService {
       }
 
       if (rpm.type == BacnetResponseType.reject && rpm.errorCode == _rejectUnrecognizedService) {
-        _logger.w('$hostKey does not support ReadPropertyMultiple, using ReadProperty');
+        logger.w('$hostKey does not support ReadPropertyMultiple, using ReadProperty');
         _rpmUnsupportedHosts.add(hostKey);
       }
     }
@@ -1124,10 +1122,10 @@ class BacnetService {
   List<_ObjectInfo> _parseObjectList(dynamic value) {
     final objects = <_ObjectInfo>[];
 
-    _logger.d('_parseObjectList: input type=${value.runtimeType}');
+    logger.d('_parseObjectList: input type=${value.runtimeType}');
 
     if (value is List) {
-      _logger.d('_parseObjectList: list has ${value.length} items');
+      logger.d('_parseObjectList: list has ${value.length} items');
       for (int i = 0; i < value.length; i++) {
         final item = value[i];
         if (item is Map) {
@@ -1135,19 +1133,19 @@ class BacnetService {
           final type = item['type'] ?? item['objectType'];
           final instance = item['instance'] ?? item['objectInstance'];
           if (i < 5 || type == 20) {
-            _logger.d('_parseObjectList: item[$i] = $item -> type=$type, instance=$instance');
+            logger.d('_parseObjectList: item[$i] = $item -> type=$type, instance=$instance');
           }
           if (type != null && instance != null) {
             objects.add(_ObjectInfo(type: type as int, instance: instance as int));
           }
         } else {
           if (i < 5) {
-            _logger.d('_parseObjectList: item[$i] is not a Map, it is ${item.runtimeType}: $item');
+            logger.d('_parseObjectList: item[$i] is not a Map, it is ${item.runtimeType}: $item');
           }
         }
       }
     } else if (value is Map) {
-      _logger.d('_parseObjectList: single map: $value');
+      logger.d('_parseObjectList: single map: $value');
       // Si c'est un seul objet (pas une liste)
       final type = value['type'] ?? value['objectType'];
       final instance = value['instance'] ?? value['objectInstance'];
@@ -1155,10 +1153,10 @@ class BacnetService {
         objects.add(_ObjectInfo(type: type as int, instance: instance as int));
       }
     } else {
-      _logger.w('_parseObjectList: unexpected value type: ${value.runtimeType}');
+      logger.w('_parseObjectList: unexpected value type: ${value.runtimeType}');
     }
 
-    _logger.d('_parseObjectList: parsed ${objects.length} objects');
+    logger.d('_parseObjectList: parsed ${objects.length} objects');
     return objects;
   }
 
@@ -1219,11 +1217,11 @@ class BacnetService {
 
     // Parser status-flags pour détecter les alarmes
     final statusFlags = properties[BacnetPropertyId.statusFlags];
-    _logger.d('_createBacnetObject: ${BacnetObjectTypeCode.getName(objectType)}:$objectInstance, statusFlags=$statusFlags');
+    logger.d('_createBacnetObject: ${BacnetObjectTypeCode.getName(objectType)}:$objectInstance, statusFlags=$statusFlags');
     final statusInfo = _parseStatusFlags(statusFlags);
 
     if (statusInfo.inAlarm) {
-      _logger.i('_createBacnetObject: ALARM detected on ${BacnetObjectTypeCode.getName(objectType)}:$objectInstance');
+      logger.i('_createBacnetObject: ALARM detected on ${BacnetObjectTypeCode.getName(objectType)}:$objectInstance');
     }
 
     return BacnetObject(
@@ -1255,7 +1253,7 @@ class BacnetService {
       return (inAlarm: false, fault: false, overridden: false, outOfService: false);
     }
 
-    _logger.d('_parseStatusFlags: received ${statusFlags.runtimeType}: $statusFlags');
+    logger.d('_parseStatusFlags: received ${statusFlags.runtimeType}: $statusFlags');
 
     // Format liste de booléens (le plus courant depuis notre décodeur)
     if (statusFlags is List) {
@@ -1309,7 +1307,7 @@ class BacnetService {
       );
     }
 
-    _logger.d('_parseStatusFlags: unknown format ${statusFlags.runtimeType}: $statusFlags');
+    logger.d('_parseStatusFlags: unknown format ${statusFlags.runtimeType}: $statusFlags');
     return (inAlarm: false, fault: false, overridden: false, outOfService: false);
   }
 
@@ -1469,7 +1467,7 @@ class BacnetService {
         try {
           return await _refreshPointGroup(host: host, port: port, group: group);
         } catch (e) {
-          _logger.e('Error refreshing ${group.length} points: $e');
+          logger.e('Error refreshing ${group.length} points: $e');
           return const <String, RefreshedPointData>{};
         }
       }),
@@ -1559,7 +1557,7 @@ class BacnetService {
     }
 
     if (!response.isDeviceError) {
-      _logger.w('refreshMultiplePointValues: no answer for ${group.length} points (${response.errorMessage})');
+      logger.w('refreshMultiplePointValues: no answer for ${group.length} points (${response.errorMessage})');
       return results;
     }
 
@@ -1567,7 +1565,7 @@ class BacnetService {
 
     // The device refused the grouped request (e.g. one unknown object makes
     // some devices reject the whole RPM): one request per point
-    _logger.w('refreshMultiplePointValues: grouped RPM refused (${response.errorMessage}), reading points one by one');
+    logger.w('refreshMultiplePointValues: grouped RPM refused (${response.errorMessage}), reading points one by one');
     final single = await Future.wait(group.map((point) => _refreshPointGroup(host: host, port: port, group: [point])));
     for (final r in single) {
       results.addAll(r);
@@ -1591,7 +1589,7 @@ class BacnetService {
     // Status-flags (pour alarmes)
     final statusInfo = _parseStatusFlags(valueOf(BacnetPropertyId.statusFlags));
     if (statusInfo.inAlarm) {
-      _logger.i('refreshMultiplePointValues: ALARM on $key');
+      logger.i('refreshMultiplePointValues: ALARM on $key');
     }
 
     // Priority-array (pour commandables)
@@ -1683,26 +1681,26 @@ class BacnetService {
 
     final trendLogs = <BacnetTrendLog>[];
 
-    _logger.i('discoverTrendLogs: starting discovery on $host:$port, deviceId=$deviceId');
+    logger.i('discoverTrendLogs: starting discovery on $host:$port, deviceId=$deviceId');
 
     // 1. Lire la liste des objets
     final objectList = await _readObjectList(host: host, port: port, deviceId: deviceId);
     if (objectList == null) {
-      _logger.e('discoverTrendLogs: Failed to read object-list');
+      logger.e('discoverTrendLogs: Failed to read object-list');
       return trendLogs;
     }
-    _logger.i('discoverTrendLogs: parsed ${objectList.length} total objects');
+    logger.i('discoverTrendLogs: parsed ${objectList.length} total objects');
 
     // Log tous les types d'objets trouvés
     final typeCount = <int, int>{};
     for (final obj in objectList) {
       typeCount[obj.type] = (typeCount[obj.type] ?? 0) + 1;
     }
-    _logger.i('discoverTrendLogs: object types found: $typeCount');
+    logger.i('discoverTrendLogs: object types found: $typeCount');
 
     final trendLogObjects = objectList.where((o) => o.type == BacnetObjectTypeCode.trendLog).toList();
 
-    _logger.i('discoverTrendLogs: Found ${trendLogObjects.length} TrendLog objects (type 20)');
+    logger.i('discoverTrendLogs: Found ${trendLogObjects.length} TrendLog objects (type 20)');
 
     // 2. Lire les propriétés de chaque TrendLog (en parallèle, borné par device)
     final read = await Future.wait(
@@ -1710,7 +1708,7 @@ class BacnetService {
         try {
           return await _readTrendLogProperties(host: host, port: port, objectInstance: obj.instance);
         } catch (e) {
-          _logger.e('Error reading TrendLog ${obj.instance}: $e');
+          logger.e('Error reading TrendLog ${obj.instance}: $e');
           return null;
         }
       }),
@@ -1749,12 +1747,12 @@ class BacnetService {
 
   /// Crée un BacnetTrendLog depuis une map de propriétés
   BacnetTrendLog _createTrendLogFromPropertiesMap({required int objectInstance, required Map<int, dynamic> properties}) {
-    _logger.d('_createTrendLogFromPropertiesMap: TrendLog $objectInstance, properties keys: ${properties.keys.toList()}');
-    _logger.d('_createTrendLogFromPropertiesMap: all properties: $properties');
+    logger.d('_createTrendLogFromPropertiesMap: TrendLog $objectInstance, properties keys: ${properties.keys.toList()}');
+    logger.d('_createTrendLogFromPropertiesMap: all properties: $properties');
 
     // Parser log-device-object-property pour obtenir l'objet tracké
     final logDeviceObjectProperty = properties[BacnetPropertyId.logDeviceObjectProperty];
-    _logger.d(
+    logger.d(
       '_createTrendLogFromPropertiesMap: logDeviceObjectProperty (propId=${BacnetPropertyId.logDeviceObjectProperty}) = $logDeviceObjectProperty (type: ${logDeviceObjectProperty.runtimeType})',
     );
 
@@ -1765,7 +1763,7 @@ class BacnetService {
       final parsed = _parseLogDeviceObjectProperty(logDeviceObjectProperty);
       trackedObjectType = parsed.$1;
       trackedObjectInstance = parsed.$2;
-      _logger.d('_createTrendLogFromPropertiesMap: parsed -> type=$trackedObjectType, instance=$trackedObjectInstance');
+      logger.d('_createTrendLogFromPropertiesMap: parsed -> type=$trackedObjectType, instance=$trackedObjectInstance');
     }
 
     return BacnetTrendLog(
@@ -1786,26 +1784,26 @@ class BacnetService {
   /// Parse la propriété log-device-object-property
   /// Format BACnet natif: {objectIdentifier: {type: X, instance: Y}, propertyIdentifier: Z, ...}
   (String?, int?) _parseLogDeviceObjectProperty(dynamic value) {
-    _logger.d('_parseLogDeviceObjectProperty: input=$value (type=${value.runtimeType})');
+    logger.d('_parseLogDeviceObjectProperty: input=$value (type=${value.runtimeType})');
 
     if (value == null) return (null, null);
 
     // Format Map (BACnet natif - depuis _decodeConstructedValue)
     if (value is Map) {
-      _logger.d('_parseLogDeviceObjectProperty: Map keys=${value.keys.toList()}');
+      logger.d('_parseLogDeviceObjectProperty: Map keys=${value.keys.toList()}');
 
       // Essayer différentes clés possibles
       final objectId = value['objectIdentifier'] ?? value['object-identifier'] ?? value['context0'];
-      _logger.d('_parseLogDeviceObjectProperty: objectId=$objectId (type=${objectId.runtimeType})');
+      logger.d('_parseLogDeviceObjectProperty: objectId=$objectId (type=${objectId.runtimeType})');
 
       if (objectId is Map) {
         final typeCode = objectId['type'] ?? objectId['objectType'];
         final instance = objectId['instance'] ?? objectId['objectInstance'];
-        _logger.d('_parseLogDeviceObjectProperty: typeCode=$typeCode, instance=$instance');
+        logger.d('_parseLogDeviceObjectProperty: typeCode=$typeCode, instance=$instance');
 
         if (typeCode != null && instance != null) {
           final typeName = BacnetObjectTypeCode.getName(typeCode as int);
-          _logger.d('_parseLogDeviceObjectProperty: resolved -> typeName=$typeName, instance=$instance');
+          logger.d('_parseLogDeviceObjectProperty: resolved -> typeName=$typeName, instance=$instance');
           return (typeName, instance as int);
         }
       }
@@ -1825,7 +1823,7 @@ class BacnetService {
       }
     }
 
-    _logger.w('_parseLogDeviceObjectProperty: could not parse value');
+    logger.w('_parseLogDeviceObjectProperty: could not parse value');
     return (null, null);
   }
 
@@ -1879,12 +1877,12 @@ class BacnetService {
     int? maxRecords,
     int? totalRecordCount,
   }) async {
-    _logger.i('readTrendLogBuffer: starting for TrendLog $trendLogInstance on $host:$port');
+    logger.i('readTrendLogBuffer: starting for TrendLog $trendLogInstance on $host:$port');
 
     // 1. Obtenir totalRecordCount si pas fourni (c'est le seqNum du dernier record)
     int? lastSeqNum = totalRecordCount;
     if (lastSeqNum == null) {
-      _logger.d('readTrendLogBuffer: reading totalRecordCount property...');
+      logger.d('readTrendLogBuffer: reading totalRecordCount property...');
       final trcResponse = await readProperty(
         host: host,
         port: port,
@@ -1895,11 +1893,11 @@ class BacnetService {
 
       if (trcResponse.isSuccess && trcResponse.value != null) {
         lastSeqNum = trcResponse.value is int ? trcResponse.value as int : int.tryParse(trcResponse.value.toString());
-        _logger.i('readTrendLogBuffer: totalRecordCount=$lastSeqNum');
+        logger.i('readTrendLogBuffer: totalRecordCount=$lastSeqNum');
       }
 
       if (lastSeqNum == null || lastSeqNum == 0) {
-        _logger.w('readTrendLogBuffer: totalRecordCount is null or 0, no records available');
+        logger.w('readTrendLogBuffer: totalRecordCount is null or 0, no records available');
         return [];
       }
     }
@@ -1916,7 +1914,7 @@ class BacnetService {
     int referenceSeqNum = lastSeqNum;
     int iteration = 0;
 
-    _logger.i('readTrendLogBuffer: using bySequenceNumber, starting from seqNum=$lastSeqNum, reading up to $recordsToRead records');
+    logger.i('readTrendLogBuffer: using bySequenceNumber, starting from seqNum=$lastSeqNum, reading up to $recordsToRead records');
 
     while (allRecords.length < recordsToRead && referenceSeqNum > 0) {
       iteration++;
@@ -1925,7 +1923,7 @@ class BacnetService {
       final requestCount = -remaining.clamp(1, chunkSize);
       final previousReference = referenceSeqNum;
 
-      _logger.d('readTrendLogBuffer: iteration $iteration, referenceSeqNum=$referenceSeqNum, requesting $requestCount');
+      logger.d('readTrendLogBuffer: iteration $iteration, referenceSeqNum=$referenceSeqNum, requesting $requestCount');
 
       final response = await readRange(
         host: host,
@@ -1938,27 +1936,27 @@ class BacnetService {
         count: requestCount,
       );
 
-      _logger.d('readTrendLogBuffer: response.type=${response.type}, isSuccess=${response.isSuccess}');
+      logger.d('readTrendLogBuffer: response.type=${response.type}, isSuccess=${response.isSuccess}');
 
       if (!response.isSuccess) {
-        _logger.e(
+        logger.e(
           'readTrendLogBuffer: Failed - ${response.errorMessage}, errorClass=${response.errorClass}, errorCode=${response.errorCode}',
         );
         break;
       }
 
       if (response.value is! ReadRangeResult) {
-        _logger.e('readTrendLogBuffer: Unexpected value type: ${response.value?.runtimeType}');
+        logger.e('readTrendLogBuffer: Unexpected value type: ${response.value?.runtimeType}');
         break;
       }
 
       final result = response.value as ReadRangeResult;
-      _logger.i(
+      logger.i(
         'readTrendLogBuffer: received ${result.records.length} records, firstSeqNum=${result.firstSequenceNumber}, firstItem=${result.firstItem}, moreItems=${result.moreItems}',
       );
 
       if (result.records.isEmpty) {
-        _logger.w('readTrendLogBuffer: no records returned, stopping');
+        logger.w('readTrendLogBuffer: no records returned, stopping');
         break;
       }
 
@@ -1972,16 +1970,16 @@ class BacnetService {
       if (result.firstSequenceNumber != null && result.firstSequenceNumber! > 0) {
         // Prochain point de départ = juste avant le premier record qu'on vient de lire
         referenceSeqNum = result.firstSequenceNumber! - 1;
-        _logger.d('readTrendLogBuffer: next referenceSeqNum=$referenceSeqNum');
+        logger.d('readTrendLogBuffer: next referenceSeqNum=$referenceSeqNum');
       } else {
         // Pas de firstSequenceNumber, on estime basé sur le nombre de records reçus
         referenceSeqNum -= result.records.length;
-        _logger.d('readTrendLogBuffer: estimated next referenceSeqNum=$referenceSeqNum (no firstSeqNum in response)');
+        logger.d('readTrendLogBuffer: estimated next referenceSeqNum=$referenceSeqNum (no firstSeqNum in response)');
       }
 
       // S'arrêter si on a atteint le début du buffer
       if (referenceSeqNum <= 0) {
-        _logger.i('readTrendLogBuffer: reached beginning of buffer (seqNum <= 0)');
+        logger.i('readTrendLogBuffer: reached beginning of buffer (seqNum <= 0)');
         break;
       }
 
@@ -1989,20 +1987,20 @@ class BacnetService {
       // Receiving fewer records than requested is NOT the end of the buffer:
       // the device may simply have filled its APDU.
       if (result.firstItem) {
-        _logger.i('readTrendLogBuffer: first-item flag set, beginning of buffer reached');
+        logger.i('readTrendLogBuffer: first-item flag set, beginning of buffer reached');
         break;
       }
 
       // Safety: the reference must move backwards
       if (referenceSeqNum >= previousReference) {
-        _logger.w('readTrendLogBuffer: sequence number did not decrease, stopping');
+        logger.w('readTrendLogBuffer: sequence number did not decrease, stopping');
         break;
       }
 
-      _logger.d('readTrendLogBuffer: total so far: ${allRecords.length}, continue: ${allRecords.length < recordsToRead}');
+      logger.d('readTrendLogBuffer: total so far: ${allRecords.length}, continue: ${allRecords.length < recordsToRead}');
     }
 
-    _logger.i('readTrendLogBuffer: completed with ${allRecords.length} total records over $iteration iterations');
+    logger.i('readTrendLogBuffer: completed with ${allRecords.length} total records over $iteration iterations');
     return allRecords;
   }
 
@@ -2016,17 +2014,17 @@ class BacnetService {
 
     final schedules = <BacnetScheduleInfo>[];
 
-    _logger.i('discoverSchedules: starting discovery on $host:$port, deviceId=$deviceId');
+    logger.i('discoverSchedules: starting discovery on $host:$port, deviceId=$deviceId');
 
     // 1. Lire la liste des objets et filtrer les schedules (type 17)
     final objectList = await _readObjectList(host: host, port: port, deviceId: deviceId);
     if (objectList == null) {
-      _logger.e('discoverSchedules: Failed to read object-list');
+      logger.e('discoverSchedules: Failed to read object-list');
       return schedules;
     }
     final scheduleObjects = objectList.where((o) => o.type == BacnetObjectTypeCode.schedule).toList();
 
-    _logger.i('discoverSchedules: Found ${scheduleObjects.length} Schedule objects');
+    logger.i('discoverSchedules: Found ${scheduleObjects.length} Schedule objects');
 
     // 2. Lire les propriétés de base de chaque schedule
     final read = await Future.wait(
@@ -2034,7 +2032,7 @@ class BacnetService {
         try {
           return await readScheduleBasicInfo(host: host, port: port, scheduleInstance: obj.instance);
         } catch (e) {
-          _logger.e('Error reading Schedule ${obj.instance}: $e');
+          logger.e('Error reading Schedule ${obj.instance}: $e');
           return null;
         }
       }),
@@ -2073,24 +2071,24 @@ class BacnetService {
     );
 
     if (propMap == null) {
-      _logger.e('readScheduleBasicInfo: Failed to read properties for schedule $scheduleInstance');
+      logger.e('readScheduleBasicInfo: Failed to read properties for schedule $scheduleInstance');
       return null;
     }
-    _logger.d('readScheduleBasicInfo: properties = $propMap');
+    logger.d('readScheduleBasicInfo: properties = $propMap');
 
     // Essayer de récupérer les state-text
     List<String>? stateTexts = _parseStateText(propMap[BacnetPropertyId.stateText]);
-    _logger.d('readScheduleBasicInfo: stateTexts from schedule = $stateTexts');
+    logger.d('readScheduleBasicInfo: stateTexts from schedule = $stateTexts');
 
     // Si pas de state-text sur le schedule, essayer de les récupérer depuis l'objet référencé
     if (stateTexts == null || stateTexts.isEmpty) {
       // D'abord essayer depuis le RPM
       var objRefs = propMap[BacnetPropertyId.listOfObjectPropertyReferences];
-      _logger.d('readScheduleBasicInfo: list-of-object-property-references from RPM = $objRefs (${objRefs?.runtimeType})');
+      logger.d('readScheduleBasicInfo: list-of-object-property-references from RPM = $objRefs (${objRefs?.runtimeType})');
 
       // Si pas dans RPM, lire séparément avec ReadProperty
       if (objRefs == null) {
-        _logger.d('readScheduleBasicInfo: trying to read list-of-object-property-references separately');
+        logger.d('readScheduleBasicInfo: trying to read list-of-object-property-references separately');
         final refResult = await readProperty(
           host: host,
           port: port,
@@ -2100,13 +2098,13 @@ class BacnetService {
         );
         if (refResult.isSuccess && refResult.value != null) {
           objRefs = refResult.value;
-          _logger.d('readScheduleBasicInfo: list-of-object-property-references from ReadProperty = $objRefs (${objRefs?.runtimeType})');
+          logger.d('readScheduleBasicInfo: list-of-object-property-references from ReadProperty = $objRefs (${objRefs?.runtimeType})');
         }
       }
 
       if (objRefs != null) {
         stateTexts = await _getStateTextsFromReferencedObject(host, port, objRefs);
-        _logger.d('readScheduleBasicInfo: stateTexts from referenced object = $stateTexts');
+        logger.d('readScheduleBasicInfo: stateTexts from referenced object = $stateTexts');
       }
 
       // Si toujours pas de state-text, essayer les propriétés propriétaires Distech
@@ -2122,11 +2120,11 @@ class BacnetService {
             propertyId: propId,
           );
           if (propResult.isSuccess && propResult.value != null) {
-            _logger.i('readScheduleBasicInfo: proprietary prop $propId = ${propResult.value} (${propResult.value.runtimeType})');
+            logger.i('readScheduleBasicInfo: proprietary prop $propId = ${propResult.value} (${propResult.value.runtimeType})');
             // Essayer de parser comme state-text si c'est une liste de strings
             final parsed = _parseStateText(propResult.value);
             if (parsed != null && parsed.isNotEmpty) {
-              _logger.i('readScheduleBasicInfo: found state-texts in prop $propId: $parsed');
+              logger.i('readScheduleBasicInfo: found state-texts in prop $propId: $parsed');
               stateTexts = parsed;
               break;
             }
@@ -2136,7 +2134,7 @@ class BacnetService {
         // Si toujours pas trouvé, chercher par nom
         if (stateTexts == null || stateTexts.isEmpty) {
           final scheduleName = propMap[BacnetPropertyId.objectName]?.toString() ?? '';
-          _logger.d('readScheduleBasicInfo: searching for multistate by schedule name "$scheduleName"');
+          logger.d('readScheduleBasicInfo: searching for multistate by schedule name "$scheduleName"');
 
           if (scheduleName.toLowerCase().contains('enum')) {
             stateTexts = await _findStateTextsFromMultistateByName(host, port, deviceId, 'enum');
@@ -2158,7 +2156,7 @@ class BacnetService {
 
   /// Cherche un objet Multi-state par son nom et retourne ses state-text
   Future<List<String>?> _findStateTextsFromMultistateByName(String host, int port, int deviceId, String searchName) async {
-    _logger.d('_findStateTextsFromMultistateByName: searching for "$searchName" on device $deviceId');
+    logger.d('_findStateTextsFromMultistateByName: searching for "$searchName" on device $deviceId');
 
     // Types Multi-state à chercher
     const multistateTypes = [
@@ -2169,13 +2167,13 @@ class BacnetService {
 
     final objects = await _readObjectList(host: host, port: port, deviceId: deviceId);
     if (objects == null) {
-      _logger.d('_findStateTextsFromMultistateByName: could not read object list');
+      logger.d('_findStateTextsFromMultistateByName: could not read object list');
       return null;
     }
 
     // Filtrer les objets Multi-state
     final multistateObjects = objects.where((obj) => multistateTypes.contains(obj.type)).toList();
-    _logger.d('_findStateTextsFromMultistateByName: found ${multistateObjects.length} multistate objects');
+    logger.d('_findStateTextsFromMultistateByName: found ${multistateObjects.length} multistate objects');
 
     // Chercher l'objet par son nom (noms lus par lots en parallèle)
     const chunkSize = 8;
@@ -2199,10 +2197,10 @@ class BacnetService {
 
         if (nameResult.isSuccess && nameResult.value != null) {
           final objName = nameResult.value.toString();
-          _logger.d('_findStateTextsFromMultistateByName: object ${obj.type}:${obj.instance} name="$objName"');
+          logger.d('_findStateTextsFromMultistateByName: object ${obj.type}:${obj.instance} name="$objName"');
 
           if (objName.toLowerCase().contains(searchName.toLowerCase())) {
-            _logger.i('_findStateTextsFromMultistateByName: found matching object "$objName" (${obj.type}:${obj.instance})');
+            logger.i('_findStateTextsFromMultistateByName: found matching object "$objName" (${obj.type}:${obj.instance})');
 
             // Lire ses state-text
             final stateTextResult = await readProperty(
@@ -2215,7 +2213,7 @@ class BacnetService {
 
             if (stateTextResult.isSuccess && stateTextResult.value != null) {
               final stateTexts = _parseStateText(stateTextResult.value);
-              _logger.i('_findStateTextsFromMultistateByName: state-texts = $stateTexts');
+              logger.i('_findStateTextsFromMultistateByName: state-texts = $stateTexts');
               return stateTexts;
             }
           }
@@ -2223,7 +2221,7 @@ class BacnetService {
       }
     }
 
-    _logger.d('_findStateTextsFromMultistateByName: no matching object found');
+    logger.d('_findStateTextsFromMultistateByName: no matching object found');
     return null;
   }
 
@@ -2248,11 +2246,11 @@ class BacnetService {
       }
 
       if (objectType == null || objectInstance == null) {
-        _logger.d('_getStateTextsFromReferencedObject: could not parse object reference');
+        logger.d('_getStateTextsFromReferencedObject: could not parse object reference');
         return null;
       }
 
-      _logger.d('_getStateTextsFromReferencedObject: reading state-text from object type=$objectType instance=$objectInstance');
+      logger.d('_getStateTextsFromReferencedObject: reading state-text from object type=$objectType instance=$objectInstance');
 
       // Lire le state-text de l'objet référencé
       final result = await readProperty(
@@ -2267,7 +2265,7 @@ class BacnetService {
         return _parseStateText(result.value);
       }
     } catch (e) {
-      _logger.e('_getStateTextsFromReferencedObject: error $e');
+      logger.e('_getStateTextsFromReferencedObject: error $e');
     }
 
     return null;
@@ -2277,7 +2275,7 @@ class BacnetService {
   Future<DecodedWeeklySchedule?> readWeeklySchedule({required String host, required int port, required int scheduleInstance}) async {
     await init();
 
-    _logger.i('readWeeklySchedule: reading schedule $scheduleInstance from $host:$port');
+    logger.i('readWeeklySchedule: reading schedule $scheduleInstance from $host:$port');
 
     // Lire la propriété weekly-schedule (123)
     final result = await readProperty(
@@ -2289,28 +2287,28 @@ class BacnetService {
     );
 
     if (!result.isSuccess) {
-      _logger.e('readWeeklySchedule: Failed - ${result.errorMessage}');
+      logger.e('readWeeklySchedule: Failed - ${result.errorMessage}');
       return null;
     }
 
-    _logger.d('readWeeklySchedule: raw value type=${result.value.runtimeType}');
+    logger.d('readWeeklySchedule: raw value type=${result.value.runtimeType}');
 
     // Vérifier si le décodeur a déjà retourné un DecodedWeeklySchedule
     DecodedWeeklySchedule decoded;
     if (result.value is DecodedWeeklySchedule) {
       // Déjà décodé par BacnetDecoder._decodeReadPropertyAck
       decoded = result.value as DecodedWeeklySchedule;
-      _logger.d('readWeeklySchedule: value already decoded');
+      logger.d('readWeeklySchedule: value already decoded');
     } else {
       // Décoder le weekly-schedule depuis les données brutes
       decoded = BacnetScheduleDecoder.decodeWeeklySchedule(result.value);
-      _logger.d('readWeeklySchedule: decoded from raw data');
+      logger.d('readWeeklySchedule: decoded from raw data');
     }
 
-    _logger.i('readWeeklySchedule: decoded ${decoded.days.length} days');
+    logger.i('readWeeklySchedule: decoded ${decoded.days.length} days');
     for (int i = 0; i < decoded.days.length; i++) {
       final day = decoded.days[i];
-      _logger.d('  Day ${i + 1}: ${day.timeValues.length} transitions');
+      logger.d('  Day ${i + 1}: ${day.timeValues.length} transitions');
     }
 
     return decoded;
@@ -2355,15 +2353,15 @@ class BacnetService {
   }) async {
     await init();
 
-    _logger.i('writeWeeklySchedule: writing to schedule $scheduleInstance on $host:$port (device ${deviceId ?? '?'})');
+    logger.i('writeWeeklySchedule: writing to schedule $scheduleInstance on $host:$port (device ${deviceId ?? '?'})');
 
     // Debug: log what we're trying to write
     for (int i = 0; i < 7; i++) {
       final day = weeklySchedule.days[i];
       if (day.timeValues.isNotEmpty) {
-        _logger.d('writeWeeklySchedule: Day ${i + 1}: ${day.timeValues.length} transitions');
+        logger.d('writeWeeklySchedule: Day ${i + 1}: ${day.timeValues.length} transitions');
         for (final tv in day.timeValues) {
-          _logger.d('  - ${tv.hour}:${tv.minute} = ${tv.value} (tag: ${tv.valueTag})');
+          logger.d('  - ${tv.hour}:${tv.minute} = ${tv.value} (tag: ${tv.valueTag})');
         }
       }
     }
@@ -2379,11 +2377,11 @@ class BacnetService {
     );
 
     if (response.isSuccess) {
-      _logger.i('writeWeeklySchedule: Success');
+      logger.i('writeWeeklySchedule: Success');
       return true;
     } else {
-      _logger.e('writeWeeklySchedule: Failed - ${response.errorMessage}');
-      _logger.e('writeWeeklySchedule: error class=${response.errorClass}, code=${response.errorCode}');
+      logger.e('writeWeeklySchedule: Failed - ${response.errorMessage}');
+      logger.e('writeWeeklySchedule: error class=${response.errorClass}, code=${response.errorCode}');
       return false;
     }
   }
@@ -2400,11 +2398,11 @@ class BacnetService {
     await init();
 
     if (dayIndex < 1 || dayIndex > 7) {
-      _logger.e('writeDailySchedule: Invalid dayIndex $dayIndex (must be 1-7)');
+      logger.e('writeDailySchedule: Invalid dayIndex $dayIndex (must be 1-7)');
       return false;
     }
 
-    _logger.i('writeDailySchedule: writing day $dayIndex to schedule $scheduleInstance');
+    logger.i('writeDailySchedule: writing day $dayIndex to schedule $scheduleInstance');
 
     final response = await _sendConfirmed(
       host,
@@ -2418,10 +2416,10 @@ class BacnetService {
     );
 
     if (response.isSuccess) {
-      _logger.i('writeDailySchedule: Success for day $dayIndex');
+      logger.i('writeDailySchedule: Success for day $dayIndex');
       return true;
     } else {
-      _logger.e('writeDailySchedule: Failed for day $dayIndex - ${response.errorMessage}');
+      logger.e('writeDailySchedule: Failed for day $dayIndex - ${response.errorMessage}');
       return false;
     }
   }

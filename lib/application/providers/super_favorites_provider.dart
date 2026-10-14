@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../data/database/app_database.dart';
 import '../../data/services/api_client_factory.dart';
 import '../../data/services/api_service.dart';
@@ -9,8 +9,6 @@ import 'api_provider.dart';
 import 'bacnet_provider.dart';
 import 'bacnet_type_codes.dart';
 import 'database_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// État d'un super favori avec sa valeur live
 class SuperFavoriteWithValue {
@@ -244,7 +242,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
 
     // Vérifier si déjà en cours de refresh
     if (state.isRefreshing(connectionId)) {
-      _logger.w('refreshConnection: already refreshing $connectionId');
+      logger.w('refreshConnection: already refreshing $connectionId');
       return;
     }
 
@@ -253,12 +251,12 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     if (lastRefresh != null) {
       final elapsed = DateTime.now().difference(lastRefresh);
       if (elapsed < superFavoriteRefreshCooldown) {
-        _logger.i('refreshConnection: skipping, last refresh ${elapsed.inSeconds}s ago');
+        logger.i('refreshConnection: skipping, last refresh ${elapsed.inSeconds}s ago');
         return;
       }
     }
 
-    _logger.i('refreshConnection: refreshing ${superFavs.length} points for connection $connectionId');
+    logger.i('refreshConnection: refreshing ${superFavs.length} points for connection $connectionId');
 
     // Marquer comme en cours de refresh
     state = state.copyWith(
@@ -270,7 +268,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
       final database = _ref.read(databaseProvider);
       final connection = await database.getConnectionById(connectionId);
       if (connection == null) {
-        _logger.e('refreshConnection: connection $connectionId not found');
+        logger.e('refreshConnection: connection $connectionId not found');
         _disposeCachedClient(connectionId);
         _setError(connectionId, 'Connexion introuvable');
         return;
@@ -283,7 +281,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
         await _refreshApiConnection(connectionId, connection, superFavs);
       }
     } catch (e) {
-      _logger.e('refreshConnection error: $e');
+      logger.e('refreshConnection error: $e');
       _setError(connectionId, e.toString());
     }
   }
@@ -293,7 +291,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     try {
       return await apiClient.getDeviceInfo();
     } catch (e) {
-      _logger.w('_safeGetDeviceInfo error: $e');
+      logger.w('_safeGetDeviceInfo error: $e');
       return null;
     }
   }
@@ -303,7 +301,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     try {
       return await apiClient.getControllerTime();
     } catch (e) {
-      _logger.w('_safeGetControllerTime error: $e');
+      logger.w('_safeGetControllerTime error: $e');
       return null;
     }
   }
@@ -319,12 +317,12 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     try {
       apiClient = await _getApiClientForConnection(connection);
     } on PasswordMissingException catch (e) {
-      _logger.e('_refreshApiConnection: password not found for connection $connectionId - user needs to edit the connection on this device');
+      logger.e('_refreshApiConnection: password not found for connection $connectionId - user needs to edit the connection on this device');
       _setError(connectionId, e.message);
       return;
     }
     if (apiClient == null) {
-      _logger.e('_refreshApiConnection: failed to create ApiClient for $connectionId');
+      logger.e('_refreshApiConnection: failed to create ApiClient for $connectionId');
       _setError(connectionId, 'Connectez-vous à cet automate');
       return;
     }
@@ -349,19 +347,19 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     final failure = apiClient.lastError;
     if (failure is CertificateMismatchException || failure is ApiAuthException) {
       if (!mounted) return;
-      _logger.w('_refreshApiConnection: $failure');
+      logger.w('_refreshApiConnection: $failure');
       if (failure is CertificateMismatchException) _disposeCachedClient(connectionId);
       _setError(connectionId, superFavoriteFailureMessage(failure!));
       return;
     }
 
-    _logger.i('_refreshApiConnection: got ${pointsResults.length} points, deviceInfo=${deviceInfo?.modelName}, time=${controllerTime?.formattedTime}');
+    logger.i('_refreshApiConnection: got ${pointsResults.length} points, deviceInfo=${deviceInfo?.modelName}, time=${controllerTime?.formattedTime}');
 
     // Mettre à jour le modelName en DB si disponible
     if (deviceInfo?.modelName != null) {
       final database = _ref.read(databaseProvider);
       await database.updateModelName(connectionId, deviceInfo!.modelName!);
-      _logger.i('_refreshApiConnection: modelName saved to DB: ${deviceInfo.modelName}');
+      logger.i('_refreshApiConnection: modelName saved to DB: ${deviceInfo.modelName}');
     }
 
     // Mettre à jour les valeurs des points
@@ -412,17 +410,17 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
       if (parsed != null) {
         parsedRefs.add(parsed);
       } else {
-        _logger.w('_refreshBacnetConnection: failed to parse pointRef "${sf.favorite.pointRef}"');
+        logger.w('_refreshBacnetConnection: failed to parse pointRef "${sf.favorite.pointRef}"');
       }
     }
 
     if (parsedRefs.isEmpty) {
-      _logger.w('_refreshBacnetConnection: no valid points to refresh');
+      logger.w('_refreshBacnetConnection: no valid points to refresh');
       _setError(connectionId, 'Aucun point valide');
       return;
     }
 
-    _logger.i('_refreshBacnetConnection: refreshing ${parsedRefs.length} BACnet points on ${connection.host}:${connection.port}');
+    logger.i('_refreshBacnetConnection: refreshing ${parsedRefs.length} BACnet points on ${connection.host}:${connection.port}');
 
     // Faire la requête batch BACnet
     final results = await bacnetService.refreshMultiplePointValues(
@@ -439,7 +437,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
       ],
     );
 
-    _logger.i('_refreshBacnetConnection: got ${results.length} results');
+    logger.i('_refreshBacnetConnection: got ${results.length} results');
     if (!mounted) return;
 
     // Construire les résultats par pointRef
@@ -495,7 +493,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
 
   /// Refresh les super favoris de toutes les connexions d'un dossier en parallèle
   Future<void> refreshFolder(List<int> connectionIds) async {
-    _logger.i('refreshFolder: refreshing ${connectionIds.length} connections in parallel');
+    logger.i('refreshFolder: refreshing ${connectionIds.length} connections in parallel');
 
     await Future.wait(
       connectionIds.map((id) => refreshConnection(id)),
@@ -538,7 +536,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     // Connexion active : réutiliser son client (identifiants à jour)
     final activeState = _ref.read(activeConnectionProvider);
     if (activeState.isConnected && activeState.connection?.id == connectionId && activeState.client != null) {
-      _logger.i('_getApiClientForConnection: reusing active connection client for $connectionId');
+      logger.i('_getApiClientForConnection: reusing active connection client for $connectionId');
       return activeState.client;
     }
 
@@ -557,7 +555,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     final cached = _apiClients[connectionId];
     if (cached != null) {
       if (_apiClientFingerprints[connectionId] == cacheKey) return cached;
-      _logger.i('_getApiClientForConnection: connection $connectionId changed, recreating client');
+      logger.i('_getApiClientForConnection: connection $connectionId changed, recreating client');
       _disposeCachedClient(connectionId);
     }
 
@@ -567,7 +565,7 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
       _apiClientFingerprints[connectionId] = cacheKey;
       return apiClient;
     } catch (e) {
-      _logger.e('_getApiClientForConnection error: $e');
+      logger.e('_getApiClientForConnection error: $e');
       return null;
     }
   }

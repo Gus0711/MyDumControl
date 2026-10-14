@@ -1,14 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../domain/models/schedule.dart';
-import '../../data/services/api_exceptions.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/bacnet_service.dart';
 import 'active_connection_provider.dart';
 import 'bacnet_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Ne surveille que les champs de la connexion active utiles aux schedules,
 /// pour ne pas relancer les lectures à chaque mise à jour de deviceInfo,
@@ -28,20 +25,20 @@ final schedulesListProvider = FutureProvider<List<ScheduleSummary>>((ref) async 
   _watchScheduleConnectionKey(ref);
   final state = ref.read(activeConnectionProvider);
   if (!state.isConnected) {
-    _logger.w('schedulesListProvider: not connected');
+    logger.w('schedulesListProvider: not connected');
     return [];
   }
 
-  _logger.i('schedulesListProvider: loading schedules (isBacnet=${state.isBacnetConnection}, hasClient=${state.client != null})');
+  logger.i('schedulesListProvider: loading schedules (isBacnet=${state.isBacnetConnection}, hasClient=${state.client != null})');
 
   // ========================================
   // CONNEXION BACNET NATIVE
   // ========================================
   if (state.isBacnetConnection) {
-    _logger.i('schedulesListProvider: using BACnet native mode');
+    logger.i('schedulesListProvider: using BACnet native mode');
     final bacnetConnection = ref.read(activeBacnetConnectionProvider);
     if (bacnetConnection == null) {
-      _logger.e('schedulesListProvider: no active BACnet connection');
+      logger.e('schedulesListProvider: no active BACnet connection');
       return [];
     }
 
@@ -63,12 +60,12 @@ final schedulesListProvider = FutureProvider<List<ScheduleSummary>>((ref) async 
         valueType: _detectValueType(info.presentValue),
       )).toList();
 
-      _logger.i('schedulesListProvider: loaded ${summaries.length} schedules via BACnet');
+      logger.i('schedulesListProvider: loaded ${summaries.length} schedules via BACnet');
       return summaries;
     } catch (e) {
       // Remonter l'erreur (AsyncError) pour que l'écran affiche une erreur
       // avec "Réessayer" plutôt que "aucun planning"
-      _logger.e('schedulesListProvider: BACnet error: $e');
+      logger.e('schedulesListProvider: BACnet error: $e');
       rethrow;
     }
   }
@@ -81,7 +78,7 @@ final schedulesListProvider = FutureProvider<List<ScheduleSummary>>((ref) async 
   final schedules = await client.getSchedules();
   // An empty list caused by a 401/403 must not look like "no schedule"
   throwIfAuthFailed(isEmpty: schedules.isEmpty, client: client);
-  _logger.i('schedulesListProvider: loaded ${schedules.length} schedules via API');
+  logger.i('schedulesListProvider: loaded ${schedules.length} schedules via API');
   return schedules;
 });
 
@@ -140,12 +137,12 @@ ScheduleValueType _detectValueTypeFromWeeklySchedule(DecodedWeeklySchedule? week
     // Si toutes les valeurs sont 0 ou 1 uniquement -> boolean
     // Si une valeur > 1 existe -> enumerated
     final maxValue = uniqueValues.reduce((a, b) => a > b ? a : b);
-    _logger.d('_detectValueTypeFromWeeklySchedule: uniqueValues=$uniqueValues');
+    logger.d('_detectValueTypeFromWeeklySchedule: uniqueValues=$uniqueValues');
     if (maxValue > 1) {
-      _logger.d('_detectValueTypeFromWeeklySchedule: maxValue=$maxValue -> enumerated');
+      logger.d('_detectValueTypeFromWeeklySchedule: maxValue=$maxValue -> enumerated');
       return ScheduleValueType.enumerated;
     } else {
-      _logger.d('_detectValueTypeFromWeeklySchedule: values=$uniqueValues -> boolean');
+      logger.d('_detectValueTypeFromWeeklySchedule: values=$uniqueValues -> boolean');
       return ScheduleValueType.boolean;
     }
   }
@@ -169,11 +166,11 @@ final scheduleDetailProvider = FutureProvider.family<Schedule?, int>((ref, insta
 Future<Schedule?> _fetchSchedule(Ref ref, int instance) async {
   final state = ref.read(activeConnectionProvider);
   if (!state.isConnected) {
-    _logger.w('scheduleDetailProvider: not connected');
+    logger.w('scheduleDetailProvider: not connected');
     return null;
   }
 
-  _logger.i('scheduleDetailProvider: loading schedule $instance (isBacnet=${state.isBacnetConnection})');
+  logger.i('scheduleDetailProvider: loading schedule $instance (isBacnet=${state.isBacnetConnection})');
 
   // ========================================
   // CONNEXION BACNET NATIVE
@@ -181,7 +178,7 @@ Future<Schedule?> _fetchSchedule(Ref ref, int instance) async {
   if (state.isBacnetConnection) {
     final bacnetConnection = ref.read(activeBacnetConnectionProvider);
     if (bacnetConnection == null) {
-      _logger.e('scheduleDetailProvider: no active BACnet connection');
+      logger.e('scheduleDetailProvider: no active BACnet connection');
       return null;
     }
 
@@ -196,21 +193,21 @@ Future<Schedule?> _fetchSchedule(Ref ref, int instance) async {
       );
 
       if (scheduleInfo == null) {
-        _logger.e('scheduleDetailProvider: failed to read schedule $instance via BACnet');
+        logger.e('scheduleDetailProvider: failed to read schedule $instance via BACnet');
         return null;
       }
 
       // Convertir BacnetScheduleInfo en Schedule
       final schedule = _convertBacnetScheduleInfoToSchedule(scheduleInfo);
 
-      _logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via BACnet');
+      logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via BACnet');
       _logScheduleDetails(schedule);
 
       return schedule;
     } catch (e) {
       // Remonter l'erreur (AsyncError) : un timeout ne doit pas ressembler
       // à "planning introuvable"
-      _logger.e('scheduleDetailProvider: BACnet error: $e');
+      logger.e('scheduleDetailProvider: BACnet error: $e');
       rethrow;
     }
   }
@@ -224,7 +221,7 @@ Future<Schedule?> _fetchSchedule(Ref ref, int instance) async {
   throwIfAuthFailed(isEmpty: schedule == null, client: client);
 
   if (schedule != null) {
-    _logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via API');
+    logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via API');
     _logScheduleDetails(schedule);
   }
 
@@ -240,7 +237,7 @@ Schedule _convertBacnetScheduleInfoToSchedule(BacnetScheduleInfo info) {
   } else {
     valueType = _detectValueType(info.presentValue);
   }
-  _logger.d('_convertBacnetScheduleInfoToSchedule: detected valueType=$valueType');
+  logger.d('_convertBacnetScheduleInfoToSchedule: detected valueType=$valueType');
 
   // Convertir le weekly schedule
   WeeklySchedule weeklySchedule;
@@ -326,12 +323,12 @@ String _valueTagToTypeString(int valueTag) {
 
 /// Log les détails d'un schedule pour debug
 void _logScheduleDetails(Schedule schedule) {
-  _logger.d('scheduleDetailProvider: valueType=${schedule.valueType}, stateTexts=${schedule.stateTexts.length}');
+  logger.d('scheduleDetailProvider: valueType=${schedule.valueType}, stateTexts=${schedule.stateTexts.length}');
 
   for (final day in WeekDay.values) {
     final daySchedule = schedule.weeklySchedule.getDay(day);
     if (daySchedule.hasTransitions) {
-      _logger.d('scheduleDetailProvider: ${day.shortName}: ${daySchedule.transitionCount} transitions');
+      logger.d('scheduleDetailProvider: ${day.shortName}: ${daySchedule.transitionCount} transitions');
     }
   }
 }
@@ -430,7 +427,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       schedule = await _ref.read(scheduleDetailProvider(instance).future);
     } catch (e) {
       if (!mounted || token != _loadToken) return;
-      _logger.e('ScheduleEditNotifier.loadSchedule: error: $e');
+      logger.e('ScheduleEditNotifier.loadSchedule: error: $e');
       state = ScheduleEditState(error: 'Erreur de chargement du planning: $e');
       return;
     }
@@ -438,7 +435,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
     if (!mounted || token != _loadToken) return;
 
     if (schedule == null) {
-      _logger.w('ScheduleEditNotifier.loadSchedule: schedule $instance not available');
+      logger.w('ScheduleEditNotifier.loadSchedule: schedule $instance not available');
       return;
     }
 
@@ -447,7 +444,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       editedSchedule: schedule,
       selectedDay: WeekDay.monday,
     );
-    _logger.i('ScheduleEditNotifier: loaded schedule ${schedule.objectName}');
+    logger.i('ScheduleEditNotifier: loaded schedule ${schedule.objectName}');
   }
 
   /// Starts editing [schedule] (already read by [scheduleDetailProvider])
@@ -487,7 +484,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   /// Copie un jour dans le presse-papier
   void copyDay(WeekDay day) {
     state = state.copyWith(clipboardSourceDay: day);
-    _logger.i('ScheduleEditNotifier: copied ${day.displayName} to clipboard');
+    logger.i('ScheduleEditNotifier: copied ${day.displayName} to clipboard');
   }
 
   /// Colle le jour du presse-papier sur un autre jour
@@ -505,7 +502,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to ${targetDay.displayName}');
+    logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to ${targetDay.displayName}');
   }
 
   /// Colle le jour sur tous les jours ouvrés
@@ -524,7 +521,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to work days');
+    logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to work days');
   }
 
   /// Colle le jour sur tous les jours
@@ -543,7 +540,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to all days');
+    logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to all days');
   }
 
   /// Efface le presse-papier
@@ -566,7 +563,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: cleared ${day.displayName}');
+    logger.i('ScheduleEditNotifier: cleared ${day.displayName}');
   }
 
   /// Ajoute une transition à un jour
@@ -585,7 +582,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: added transition at ${transition.formattedTime} to ${day.displayName}');
+    logger.i('ScheduleEditNotifier: added transition at ${transition.formattedTime} to ${day.displayName}');
   }
 
   /// Ajoute un créneau en ajustant les créneaux existants pour éviter les chevauchements
@@ -612,7 +609,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
 
       // Cas 1: Le nouveau créneau couvre entièrement l'existant → supprimer l'existant
       if (newSlot.startMinutes <= existing.startMinutes && newSlot.endMinutes >= existing.endMinutes) {
-        _logger.d('Slot ${existing.formattedStart}-${existing.formattedEnd} supprimé (couvert par le nouveau)');
+        logger.d('Slot ${existing.formattedStart}-${existing.formattedEnd} supprimé (couvert par le nouveau)');
         continue; // Ne pas ajouter ce créneau
       }
 
@@ -625,7 +622,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
             endMinutes: newSlot.startMinutes,
             value: existing.value,
           ));
-          _logger.d('Slot ajusté: ${existing.formattedStart}-${existing.formattedEnd} → ${existing.formattedStart}-${newSlot.formattedStart}');
+          logger.d('Slot ajusté: ${existing.formattedStart}-${existing.formattedEnd} → ${existing.formattedStart}-${newSlot.formattedStart}');
         } else {
           // Le nouveau est au milieu : couper l'existant en deux
           adjustedSlots.add(TimeSlot(
@@ -638,7 +635,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
             endMinutes: existing.endMinutes,
             value: existing.value,
           ));
-          _logger.d('Slot coupé en deux: ${existing.formattedStart}-${newSlot.formattedStart} et ${newSlot.formattedEnd}-${existing.formattedEnd}');
+          logger.d('Slot coupé en deux: ${existing.formattedStart}-${newSlot.formattedStart} et ${newSlot.formattedEnd}-${existing.formattedEnd}');
         }
         continue;
       }
@@ -650,7 +647,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
           endMinutes: existing.endMinutes,
           value: existing.value,
         ));
-        _logger.d('Slot ajusté: ${existing.formattedStart}-${existing.formattedEnd} → ${newSlot.formattedEnd}-${existing.formattedEnd}');
+        logger.d('Slot ajusté: ${existing.formattedStart}-${existing.formattedEnd} → ${newSlot.formattedEnd}-${existing.formattedEnd}');
         continue;
       }
 
@@ -673,7 +670,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: added slot ${newSlot.formattedStart}-${newSlot.formattedEnd} to ${day.displayName}');
+    logger.i('ScheduleEditNotifier: added slot ${newSlot.formattedStart}-${newSlot.formattedEnd} to ${day.displayName}');
   }
 
   /// Met à jour un créneau existant
@@ -702,7 +699,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
     // Ajouter le nouveau créneau (qui gérera les chevauchements)
     addTimeSlot(day, newSlot);
 
-    _logger.i('ScheduleEditNotifier: updated slot on ${day.displayName}');
+    logger.i('ScheduleEditNotifier: updated slot on ${day.displayName}');
   }
 
   /// Supprime un créneau
@@ -731,7 +728,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: removed slot ${slot.formattedStart}-${slot.formattedEnd} from ${day.displayName}');
+    logger.i('ScheduleEditNotifier: removed slot ${slot.formattedStart}-${slot.formattedEnd} from ${day.displayName}');
   }
 
   /// Modifie une transition existante
@@ -753,7 +750,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: updated transition $index on ${day.displayName}');
+    logger.i('ScheduleEditNotifier: updated transition $index on ${day.displayName}');
   }
 
   /// Supprime une transition
@@ -774,7 +771,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: removed transition $index from ${day.displayName}');
+    logger.i('ScheduleEditNotifier: removed transition $index from ${day.displayName}');
   }
 
   /// Annule les modifications
@@ -789,7 +786,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       clearSuccess: true,
     );
 
-    _logger.i('ScheduleEditNotifier: reverted changes');
+    logger.i('ScheduleEditNotifier: reverted changes');
   }
 
   /// Sauvegarde les modifications sur l'automate
@@ -866,14 +863,14 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
             (connectionState.connection?.id, toWrite.instance)] = toWrite;
         _ref.invalidate(scheduleDetailProvider(toWrite.instance));
 
-        _logger.i('ScheduleEditNotifier: saved successfully');
+        logger.i('ScheduleEditNotifier: saved successfully');
         return true;
       } else {
         state = state.copyWith(
           isSaving: false,
           error: 'Échec de la sauvegarde',
         );
-        _logger.e('ScheduleEditNotifier: save failed');
+        logger.e('ScheduleEditNotifier: save failed');
         return false;
       }
     } catch (e) {
@@ -882,7 +879,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
         isSaving: false,
         error: 'Erreur: $e',
       );
-      _logger.e('ScheduleEditNotifier: save error: $e');
+      logger.e('ScheduleEditNotifier: save error: $e');
       return false;
     }
   }

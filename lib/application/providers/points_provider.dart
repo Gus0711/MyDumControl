@@ -1,13 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../domain/models/bacnet_object.dart';
 import '../../data/services/bacnet/bacnet_constants.dart';
 import 'active_connection_provider.dart';
 import 'cache_provider.dart';
 import 'bacnet_provider.dart';
 import 'bacnet_type_codes.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// État des points BACnet avec cache des valeurs calculées
 class PointsState {
@@ -244,7 +242,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
     _refreshInFlight = null;
     _staticCacheWrittenFor = null;
     state = PointsState();
-    _logger.i('PointsNotifier: reset');
+    logger.i('PointsNotifier: reset');
   }
 
   /// The local cache was purged: loaded points stay displayed, but the static
@@ -319,7 +317,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         // Trier par type puis par nom
         _sortByTypeThenName(pointsFromCache);
 
-        _logger.i('loadPoints: ${pointsFromCache.length} points loaded from cache (instant!)');
+        logger.i('loadPoints: ${pointsFromCache.length} points loaded from cache (instant!)');
 
         state = state.copyWith(
           points: pointsFromCache,
@@ -338,14 +336,14 @@ class PointsNotifier extends StateNotifier<PointsState> {
     try {
       final points = await client.getAllPointsOptimized();
       if (!_isCurrent(generation, connectionId)) {
-        _logger.w('loadPoints: stale result ignored (connection changed)');
+        logger.w('loadPoints: stale result ignored (connection changed)');
         return;
       }
 
       // Trier par type puis par nom
       _sortByTypeThenName(points);
 
-      _logger.i('loadPoints: ${points.length} points loaded from API');
+      logger.i('loadPoints: ${points.length} points loaded from API');
 
       // ÉTAPE 3: Mettre à jour le cache des propriétés statiques (en arrière-plan)
       // Only on first load of the session or on explicit forceRefresh:
@@ -361,12 +359,12 @@ class PointsNotifier extends StateNotifier<PointsState> {
         fromCache: false, // Données fraîches
       );
     } catch (e) {
-      _logger.e('loadPoints error: $e');
+      logger.e('loadPoints error: $e');
       if (!_isCurrent(generation, connectionId)) return;
 
       // En cas d'erreur, garder les données du cache si disponibles
       if (state.points.isNotEmpty && state.fromCache) {
-        _logger.w('loadPoints: keeping cached data due to API error');
+        logger.w('loadPoints: keeping cached data due to API error');
         state = state.copyWith(
           error: 'Erreur API (données du cache affichées): $e',
           isLoading: false,
@@ -398,7 +396,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
 
-      _logger.i('_loadPointsBacnet: discovering objects from device ${bacnetConnection.deviceId}');
+      logger.i('_loadPointsBacnet: discovering objects from device ${bacnetConnection.deviceId}');
 
       // Découvrir les objets BACnet
       // Filtrer pour n'obtenir que les types de points (pas device, schedule, etc.)
@@ -421,14 +419,14 @@ class PointsNotifier extends StateNotifier<PointsState> {
         objectTypesFilter: objectTypesFilter,
       );
       if (!_isCurrent(generation, connectionId)) {
-        _logger.w('_loadPointsBacnet: stale result ignored (connection changed)');
+        logger.w('_loadPointsBacnet: stale result ignored (connection changed)');
         return;
       }
 
       // Trier par type puis par nom
       _sortByTypeThenName(points);
 
-      _logger.i('_loadPointsBacnet: ${points.length} points discovered via BACnet');
+      logger.i('_loadPointsBacnet: ${points.length} points discovered via BACnet');
 
       state = state.copyWith(
         points: points,
@@ -436,7 +434,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         fromCache: false,
       );
     } catch (e) {
-      _logger.e('_loadPointsBacnet error: $e');
+      logger.e('_loadPointsBacnet error: $e');
       if (!_isCurrent(generation, connectionId)) return;
       state = state.copyWith(
         error: 'Erreur BACnet: $e',
@@ -495,13 +493,13 @@ class PointsNotifier extends StateNotifier<PointsState> {
     try {
       final points = await client.getAllPointsOptimized();
       if (!_isCurrent(generation, connectionId)) {
-        _logger.w('_refreshValuesApi: stale result ignored (connection changed)');
+        logger.w('_refreshValuesApi: stale result ignored (connection changed)');
         return;
       }
       _sortByTypeThenName(points);
       state = state.copyWith(points: points, fromCache: false, clearError: true);
     } catch (e) {
-      _logger.e('_refreshValuesApi error: $e');
+      logger.e('_refreshValuesApi error: $e');
     }
   }
 
@@ -518,7 +516,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return;
     }
 
-    _logger.i('_refreshAllValuesBacnet: refreshing ${state.points.length} points');
+    logger.i('_refreshAllValuesBacnet: refreshing ${state.points.length} points');
 
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
@@ -539,11 +537,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
       );
 
       if (!_isCurrent(generation, connectionId)) {
-        _logger.w('_refreshAllValuesBacnet: stale result ignored (connection changed)');
+        logger.w('_refreshAllValuesBacnet: stale result ignored (connection changed)');
         return;
       }
 
-      _logger.i('_refreshAllValuesBacnet: got ${refreshedData.length} points');
+      logger.i('_refreshAllValuesBacnet: got ${refreshedData.length} points');
 
       // Mettre à jour les points avec les nouvelles valeurs, infos de forçage et alarmes
       final updatedPoints = state.points.map((point) {
@@ -564,7 +562,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       state = state.copyWith(points: updatedPoints);
     } catch (e) {
-      _logger.e('_refreshAllValuesBacnet error: $e');
+      logger.e('_refreshAllValuesBacnet error: $e');
     }
   }
 
@@ -609,7 +607,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       if (!_isCurrent(generation, connectionId)) return;
       _updatePointLocally(point, presentValue: newValue);
     } catch (e) {
-      _logger.e('_refreshPointValueBacnet error: $e');
+      logger.e('_refreshPointValueBacnet error: $e');
     }
   }
 
@@ -687,7 +685,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
-      _logger.e('writeValue (API) error: $e');
+      logger.e('writeValue (API) error: $e');
       return false;
     }
   }
@@ -713,7 +711,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       _updatePointLocally(point, presentValue: value, isOverridden: false);
       return true;
     } catch (e) {
-      _logger.e('_writeValueBacnet error: $e');
+      logger.e('_writeValueBacnet error: $e');
       return false;
     }
   }
@@ -761,7 +759,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
-      _logger.e('writeOverride (API) error: $e');
+      logger.e('writeOverride (API) error: $e');
       return false;
     }
   }
@@ -794,7 +792,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       );
       return true;
     } catch (e) {
-      _logger.e('_writeOverrideBacnet error: $e');
+      logger.e('_writeOverrideBacnet error: $e');
       return false;
     }
   }
@@ -834,7 +832,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
-      _logger.e('releaseOverride (API) error: $e');
+      logger.e('releaseOverride (API) error: $e');
       return false;
     }
   }
@@ -862,7 +860,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       _updatePointLocally(point, isOverridden: false);
       return true;
     } catch (e) {
-      _logger.e('_releaseOverrideBacnet error: $e');
+      logger.e('_releaseOverrideBacnet error: $e');
       return false;
     }
   }
@@ -901,7 +899,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
-      _logger.e('emergencyRelease (API) error: $e');
+      logger.e('emergencyRelease (API) error: $e');
       return false;
     }
   }
@@ -929,7 +927,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
           priority: priority,
         );
       } catch (e) {
-        _logger.w('_emergencyReleaseBacnet: priority $priority failed: $e');
+        logger.w('_emergencyReleaseBacnet: priority $priority failed: $e');
         failed.add(priority);
       }
     }
@@ -942,7 +940,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
     if (failed.isNotEmpty) {
       failed.sort();
-      _logger.e('_emergencyReleaseBacnet: failed priorities: $failed');
+      logger.e('_emergencyReleaseBacnet: failed priorities: $failed');
       return false;
     }
 
@@ -989,7 +987,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
-      _logger.e('forceInput (API) error: $e');
+      logger.e('forceInput (API) error: $e');
       return false;
     }
   }
@@ -1013,7 +1011,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         value: true,
       );
       if (!oosResponse.isSuccess) {
-        _logger.e('_forceInputBacnet: out-of-service write refused: ${oosResponse.errorMessage ?? oosResponse.type}');
+        logger.e('_forceInputBacnet: out-of-service write refused: ${oosResponse.errorMessage ?? oosResponse.type}');
         return false;
       }
 
@@ -1028,7 +1026,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         );
       } catch (e) {
         // Rollback: do not leave the input out-of-service with a stale value
-        _logger.e('_forceInputBacnet: present-value write failed, rolling back out-of-service: $e');
+        logger.e('_forceInputBacnet: present-value write failed, rolling back out-of-service: $e');
         try {
           final rollback = await bacnetService.writeProperty(
             host: bacnetConnection.host,
@@ -1039,11 +1037,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
             value: false,
           );
           if (!rollback.isSuccess) {
-            _logger.e('_forceInputBacnet: rollback refused, input left out-of-service');
+            logger.e('_forceInputBacnet: rollback refused, input left out-of-service');
             _updatePointLocally(point, outOfService: true);
           }
         } catch (e2) {
-          _logger.e('_forceInputBacnet: rollback failed, input left out-of-service: $e2');
+          logger.e('_forceInputBacnet: rollback failed, input left out-of-service: $e2');
           _updatePointLocally(point, outOfService: true);
         }
         return false;
@@ -1057,7 +1055,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       );
       return true;
     } catch (e) {
-      _logger.e('_forceInputBacnet error: $e');
+      logger.e('_forceInputBacnet error: $e');
       return false;
     }
   }
@@ -1096,7 +1094,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
-      _logger.e('releaseInput (API) error: $e');
+      logger.e('releaseInput (API) error: $e');
       return false;
     }
   }
@@ -1120,7 +1118,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         value: false,
       );
       if (!response.isSuccess) {
-        _logger.e('_releaseInputBacnet: write refused: ${response.errorMessage ?? response.type}');
+        logger.e('_releaseInputBacnet: write refused: ${response.errorMessage ?? response.type}');
         return false;
       }
 
@@ -1128,7 +1126,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       _updatePointLocally(point, outOfService: false);
       return true;
     } catch (e) {
-      _logger.e('_releaseInputBacnet error: $e');
+      logger.e('_releaseInputBacnet error: $e');
       return false;
     }
   }
@@ -1168,7 +1166,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
-      _logger.e('writeDescription error: $e');
+      logger.e('writeDescription error: $e');
       return false;
     }
   }
@@ -1191,7 +1189,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         value: description,
       );
       if (!response.isSuccess) {
-        _logger.e('_writeDescriptionBacnet: write refused: ${response.errorMessage ?? response.type}');
+        logger.e('_writeDescriptionBacnet: write refused: ${response.errorMessage ?? response.type}');
         return false;
       }
 
@@ -1199,7 +1197,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       _updatePointLocally(point, description: description);
       return true;
     } catch (e) {
-      _logger.e('_writeDescriptionBacnet error: $e');
+      logger.e('_writeDescriptionBacnet error: $e');
       return false;
     }
   }

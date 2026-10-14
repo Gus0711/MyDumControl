@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../core/constants/api_constants.dart';
 import '../../domain/models/bacnet_object.dart';
 import '../../domain/models/schedule.dart';
@@ -11,8 +11,6 @@ import 'api_type_names.dart';
 import 'certificate_pinning.dart';
 
 export 'api_exceptions.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Résultat d'un test de connexion
 class ConnectionTestResult {
@@ -114,7 +112,7 @@ class ApiService {
         );
       }
     } catch (e) {
-      _logger.w('testConnection: V2 probe failed: $e');
+      logger.w('testConnection: V2 probe failed: $e');
       // Hôte injoignable : inutile d'attendre un second timeout en V1
       if (e is DioException &&
           (e.type == DioExceptionType.connectionTimeout ||
@@ -304,7 +302,7 @@ class ConnectedApiClient {
         if (checkCertificate(expected, fingerprint) != CertificateCheck.mismatch) {
           return true;
         }
-        _logger.e('ConnectedApiClient: certificate fingerprint mismatch for $host');
+        logger.e('ConnectedApiClient: certificate fingerprint mismatch for $host');
         final mismatch = CertificateMismatchException(
           expectedFingerprint: expected!,
           receivedFingerprint: fingerprint,
@@ -337,7 +335,7 @@ class ConnectedApiClient {
         handler.next(error);
       },
     ));
-    _logger.i('ConnectedApiClient créé: baseUrl=$baseUrl, apiVersion=$apiVersion');
+    logger.i('ConnectedApiClient créé: baseUrl=$baseUrl, apiVersion=$apiVersion');
   }
 
   void _recordStatus(int? statusCode, String url) {
@@ -346,7 +344,7 @@ class ConnectedApiClient {
     final error = ApiException.fromStatus(statusCode, url: url);
     _lastError = error;
     if (error is ApiAuthException) {
-      _logger.w('ConnectedApiClient: authentication failure ($statusCode) on $url');
+      logger.w('ConnectedApiClient: authentication failure ($statusCode) on $url');
       onAuthError?.call(error);
     }
   }
@@ -411,12 +409,12 @@ class ConnectedApiClient {
 
     // V2: méthode standard
     final url = '$baseUrl$_bacnetBasePath/objects/device';
-    _logger.i('getDeviceInfo: GET $url');
+    logger.i('getDeviceInfo: GET $url');
 
     try {
       final response = await _dio.get(url, options: _authOptions);
-      _logger.i('getDeviceInfo: status=${response.statusCode}');
-      _logger.d(() => 'getDeviceInfo: data=${response.data}');
+      logger.i('getDeviceInfo: status=${response.statusCode}');
+      logger.d(() => 'getDeviceInfo: data=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -424,7 +422,7 @@ class ConnectedApiClient {
           final firstItem = data.first;
           if (firstItem is int) {
             final detailUrl = '$baseUrl$_bacnetBasePath/objects/device/$firstItem';
-            _logger.i('getDeviceInfo: fetching details from $detailUrl');
+            logger.i('getDeviceInfo: fetching details from $detailUrl');
             final detailResponse = await _dio.get(detailUrl, options: _authOptions);
             if (detailResponse.statusCode == 200 && detailResponse.data != null) {
               return DeviceInfo.fromJson(detailResponse.data as Map<String, dynamic>);
@@ -437,7 +435,7 @@ class ConnectedApiClient {
         }
       }
     } catch (e) {
-      _logger.e('getDeviceInfo error: $e');
+      logger.e('getDeviceInfo error: $e');
     }
 
     throw Exception('Impossible de récupérer les informations de l\'appareil');
@@ -450,28 +448,28 @@ class ConnectedApiClient {
     // 1. Récupérer le nom BACnet depuis /bacnet/local
     try {
       final localUrl = '$baseUrl$_bacnetBasePath';
-      _logger.i('_getDeviceInfoV1: GET $localUrl');
+      logger.i('_getDeviceInfoV1: GET $localUrl');
       final localResponse = await _dio.get(localUrl, options: _authOptions);
       if (localResponse.statusCode == 200 && localResponse.data is Map<String, dynamic>) {
         bacnetName = (localResponse.data as Map<String, dynamic>)['name'] as String?;
       }
     } catch (e) {
-      _logger.w('_getDeviceInfoV1: /bacnet/local error: $e');
+      logger.w('_getDeviceInfoV1: /bacnet/local error: $e');
     }
 
     // 2. Récupérer les infos détaillées depuis /info/device
     try {
       final infoUrl = '$baseUrl/api/rest/v1/info/device';
-      _logger.i('_getDeviceInfoV1: GET $infoUrl');
+      logger.i('_getDeviceInfoV1: GET $infoUrl');
       final infoResponse = await _dio.get(infoUrl, options: _authOptions);
-      _logger.d(() => '_getDeviceInfoV1: /info/device response=${infoResponse.data}');
+      logger.d(() => '_getDeviceInfoV1: /info/device response=${infoResponse.data}');
 
       if (infoResponse.statusCode == 200 && infoResponse.data is Map<String, dynamic>) {
         final data = infoResponse.data as Map<String, dynamic>;
         return DeviceInfo.fromDeviceInfoJson(data, bacnetName: bacnetName);
       }
     } catch (e) {
-      _logger.w('_getDeviceInfoV1: /info/device error: $e');
+      logger.w('_getDeviceInfoV1: /info/device error: $e');
     }
 
     // Fallback si les deux endpoints échouent
@@ -490,11 +488,11 @@ class ConnectedApiClient {
   /// Récupère l'heure de l'automate via API V2
   Future<ControllerTime> _getControllerTimeV2() async {
     final url = '$baseUrl/api/rest/v2/services/platform/time';
-    _logger.i('_getControllerTimeV2: GET $url');
+    logger.i('_getControllerTimeV2: GET $url');
 
     try {
       final response = await _dio.get(url, options: _authOptions);
-      _logger.d(() => '_getControllerTimeV2: response=${response.data}');
+      logger.d(() => '_getControllerTimeV2: response=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -520,13 +518,13 @@ class ConnectedApiClient {
         }
       }
     } catch (e) {
-      _logger.w('_getControllerTimeV2: error: $e');
+      logger.w('_getControllerTimeV2: error: $e');
     }
 
     // Essayer l'endpoint alternatif
     try {
       final altUrl = '$baseUrl/api/rest/v2/services/platform/time/date-time';
-      _logger.i('_getControllerTimeV2: trying alternate GET $altUrl');
+      logger.i('_getControllerTimeV2: trying alternate GET $altUrl');
       final response = await _dio.get(altUrl, options: _authOptions);
 
       if (response.statusCode == 200 && response.data != null) {
@@ -537,7 +535,7 @@ class ConnectedApiClient {
         }
       }
     } catch (e) {
-      _logger.w('_getControllerTimeV2: alternate endpoint error: $e');
+      logger.w('_getControllerTimeV2: alternate endpoint error: $e');
     }
 
     throw Exception('Impossible de récupérer l\'heure de l\'automate');
@@ -546,7 +544,7 @@ class ConnectedApiClient {
   /// Récupère l'heure de l'automate via API V1 (BACnet Device object)
   Future<ControllerTime> _getControllerTimeV1() async {
     final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
-    _logger.i('_getControllerTimeV1: POST $rpmUrl');
+    logger.i('_getControllerTimeV1: POST $rpmUrl');
 
     try {
       // Lire localTime et localDate depuis l'objet Device
@@ -564,7 +562,7 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.d(() => '_getControllerTimeV1: response=${response.data}');
+      logger.d(() => '_getControllerTimeV1: response=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         String? localTime;
@@ -592,7 +590,7 @@ class ConnectedApiClient {
           }
         }
 
-        _logger.i('_getControllerTimeV1: localDate=$localDate, localTime=$localTime');
+        logger.i('_getControllerTimeV1: localDate=$localDate, localTime=$localTime');
 
         if (localDate != null && localTime != null) {
           // Parser les formats BACnet
@@ -605,7 +603,7 @@ class ConnectedApiClient {
         }
       }
     } catch (e) {
-      _logger.w('_getControllerTimeV1: error: $e');
+      logger.w('_getControllerTimeV1: error: $e');
     }
 
     throw Exception('Impossible de récupérer l\'heure de l\'automate V1');
@@ -627,7 +625,7 @@ class ConnectedApiClient {
   /// POST /api/rest/v1/system/date-time
   Future<bool> _setControllerTimeV1(DateTime dateTime) async {
     final url = '$baseUrl/api/rest/v1/system/date-time';
-    _logger.i('_setControllerTimeV1: POST $url');
+    logger.i('_setControllerTimeV1: POST $url');
 
     // Format attendu par l'API V1:
     // - date: "MM-dd-yyyy" (ex: "12-10-2025")
@@ -644,7 +642,7 @@ class ConnectedApiClient {
       'time': timeStr,
     };
 
-    _logger.d(() => '_setControllerTimeV1: body=$body');
+    logger.d(() => '_setControllerTimeV1: body=$body');
 
     try {
       final response = await _dio.post(
@@ -659,18 +657,18 @@ class ConnectedApiClient {
         ),
       );
 
-      _logger.i('_setControllerTimeV1: response status=${response.statusCode}');
+      logger.i('_setControllerTimeV1: response status=${response.statusCode}');
 
       // Succès si status 200 ou 204
       if (response.statusCode == 200 || response.statusCode == 204) {
-        _logger.i('_setControllerTimeV1: Heure mise à jour avec succès');
+        logger.i('_setControllerTimeV1: Heure mise à jour avec succès');
         return true;
       }
 
-      _logger.w('_setControllerTimeV1: Échec, status=${response.statusCode}');
+      logger.w('_setControllerTimeV1: Échec, status=${response.statusCode}');
       return false;
     } catch (e) {
-      _logger.e('_setControllerTimeV1: Erreur: $e');
+      logger.e('_setControllerTimeV1: Erreur: $e');
       rethrow;
     }
   }
@@ -691,7 +689,7 @@ class ConnectedApiClient {
   /// Récupère les infos réseau pour API V1
   Future<NetworkInfo?> _getNetworkInfoV1() async {
     final url = '$baseUrl/api/rest/v1/info/network/adapters/ethernet';
-    _logger.i('_getNetworkInfoV1: GET $url');
+    logger.i('_getNetworkInfoV1: GET $url');
 
     try {
       final response = await _dio.get(
@@ -704,8 +702,8 @@ class ConnectedApiClient {
         ),
       );
 
-      _logger.i('_getNetworkInfoV1: status=${response.statusCode}');
-      _logger.d(() => '_getNetworkInfoV1: data=${response.data}');
+      logger.i('_getNetworkInfoV1: status=${response.statusCode}');
+      logger.d(() => '_getNetworkInfoV1: data=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -716,7 +714,7 @@ class ConnectedApiClient {
 
       return null;
     } catch (e) {
-      _logger.w('_getNetworkInfoV1: Erreur: $e');
+      logger.w('_getNetworkInfoV1: Erreur: $e');
       return null;
     }
   }
@@ -725,7 +723,7 @@ class ConnectedApiClient {
   /// Récupère toutes les interfaces : bridge, primary, secondary, wireless
   Future<NetworkInfo?> _getNetworkInfoV2() async {
     final url = '$baseUrl/api/rest/v2/services/platform/network/interfaces';
-    _logger.i('_getNetworkInfoV2: GET $url');
+    logger.i('_getNetworkInfoV2: GET $url');
 
     try {
       final response = await _dio.get(
@@ -738,8 +736,8 @@ class ConnectedApiClient {
         ),
       );
 
-      _logger.i('_getNetworkInfoV2: status=${response.statusCode}');
-      _logger.d(() => '_getNetworkInfoV2: data=${response.data}');
+      logger.i('_getNetworkInfoV2: status=${response.statusCode}');
+      logger.d(() => '_getNetworkInfoV2: data=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -750,7 +748,7 @@ class ConnectedApiClient {
 
       return null;
     } catch (e) {
-      _logger.w('_getNetworkInfoV2: Erreur: $e');
+      logger.w('_getNetworkInfoV2: Erreur: $e');
       return null;
     }
   }
@@ -804,7 +802,7 @@ class ConnectedApiClient {
 
       return date;
     } catch (e) {
-      _logger.w('_parseBacnetDateTime: error parsing $dateStr $timeStr: $e');
+      logger.w('_parseBacnetDateTime: error parsing $dateStr $timeStr: $e');
       return null;
     }
   }
@@ -812,22 +810,22 @@ class ConnectedApiClient {
   /// Récupère le résumé des objets disponibles
   Future<ObjectsSummary> getObjectsSummary() async {
     final url = '$baseUrl$_bacnetBasePath/objects';
-    _logger.i('getObjectsSummary: GET $url');
+    logger.i('getObjectsSummary: GET $url');
 
     try {
       final response = await _dio.get(url, options: _authOptions);
-      _logger.i('getObjectsSummary: status=${response.statusCode}');
-      _logger.d(() => 'getObjectsSummary: data=${response.data}');
+      logger.i('getObjectsSummary: status=${response.statusCode}');
+      logger.d(() => 'getObjectsSummary: data=${response.data}');
       _throwIfAuthError(response);
 
       if (response.statusCode == 200 && response.data != null) {
         // Vérifier que la réponse est bien du JSON
         if (response.data is! Map<String, dynamic>) {
-          _logger.w('getObjectsSummary: réponse non-JSON: ${response.data.runtimeType}');
+          logger.w('getObjectsSummary: réponse non-JSON: ${response.data.runtimeType}');
           throw Exception('Réponse non-JSON reçue');
         }
         final data = response.data as Map<String, dynamic>;
-        _logger.i('getObjectsSummary: keys=${data.keys.toList()}');
+        logger.i('getObjectsSummary: keys=${data.keys.toList()}');
 
         // V1 format: {bacnetObjectTypes: [{href: "...", name: "analogValue"}, ...]}
         if (data.containsKey('bacnetObjectTypes')) {
@@ -849,7 +847,7 @@ class ConnectedApiClient {
         );
       }
     } catch (e) {
-      _logger.e('getObjectsSummary error: $e');
+      logger.e('getObjectsSummary error: $e');
       rethrow;
     }
 
@@ -858,7 +856,7 @@ class ConnectedApiClient {
 
   /// Parse le résumé des objets pour V1 via read-property-multiple (1 seule requête!)
   Future<ObjectsSummary> _getObjectsSummaryV1(Map<String, dynamic> data) async {
-    _logger.i('_getObjectsSummaryV1: using read-property-multiple');
+    logger.i('_getObjectsSummaryV1: using read-property-multiple');
 
     // Utiliser read-property-multiple avec instance=-1 pour récupérer TOUS les objets de chaque type
     final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
@@ -879,19 +877,19 @@ class ConnectedApiClient {
       'propertyReferences': propertyRefs,
     };
 
-    _logger.i('_getObjectsSummaryV1: POST $rpmUrl with ${propertyRefs.length} types');
+    logger.i('_getObjectsSummaryV1: POST $rpmUrl with ${propertyRefs.length} types');
 
     Response response;
     try {
       response = await _postJson(rpmUrl, body);
     } catch (e) {
-      _logger.w('_getObjectsSummaryV1: read-property-multiple failed: $e');
+      logger.w('_getObjectsSummaryV1: read-property-multiple failed: $e');
       // Fallback: compter depuis la liste des types
       return _getObjectsSummaryV1Fallback(data);
     }
 
-    _logger.d(() => '_getObjectsSummaryV1: response status=${response.statusCode}');
-    _logger.d(() => '_getObjectsSummaryV1: response data=${response.data}');
+    logger.d(() => '_getObjectsSummaryV1: response status=${response.statusCode}');
+    logger.d(() => '_getObjectsSummaryV1: response data=${response.data}');
     _throwIfAuthError(response);
 
     if (response.statusCode == 200 && response.data != null) {
@@ -899,7 +897,7 @@ class ConnectedApiClient {
     }
 
     // Statut inattendu : ne pas renvoyer un résumé vide (il écraserait le cache)
-    _logger.w('_getObjectsSummaryV1: RPM status=${response.statusCode}, using fallback');
+    logger.w('_getObjectsSummaryV1: RPM status=${response.statusCode}, using fallback');
     return _getObjectsSummaryV1Fallback(data);
   }
 
@@ -943,13 +941,13 @@ class ConnectedApiClient {
     }
 
     final counts = instancesByType.map((type, set) => MapEntry(type, set.length));
-    _logger.i(() => 'parseObjectsSummaryFromRpm: ${counts.entries.map((e) => '${e.key.name}=${e.value}').join(', ')}');
+    logger.i(() => 'parseObjectsSummaryFromRpm: ${counts.entries.map((e) => '${e.key.name}=${e.value}').join(', ')}');
     return _summaryFromCounts(counts);
   }
 
   /// Fallback: compter les objets via requêtes individuelles (si RPM échoue)
   Future<ObjectsSummary> _getObjectsSummaryV1Fallback(Map<String, dynamic> data) async {
-    _logger.i('_getObjectsSummaryV1Fallback: using individual requests');
+    logger.i('_getObjectsSummaryV1Fallback: using individual requests');
     final objectTypes = data['bacnetObjectTypes'] as List? ?? [];
     final counts = <BacnetObjectType, int>{};
 
@@ -1078,7 +1076,7 @@ class ConnectedApiClient {
       }
     } catch (e) {
       // Ignorer les erreurs pour les objets individuels
-      _logger.d(() => 'getObjectDetails ${type.apiName}:$instance error: $e');
+      logger.d(() => 'getObjectDetails ${type.apiName}:$instance error: $e');
     }
     return null;
   }
@@ -1124,7 +1122,7 @@ class ConnectedApiClient {
 
   /// Récupère tous les points V1 via read-property-multiple en une seule requête
   Future<List<BacnetObject>> _getAllPointsV1Optimized() async {
-    _logger.i('_getAllPointsV1Optimized: fetching all points with read-property-multiple');
+    logger.i('_getAllPointsV1Optimized: fetching all points with read-property-multiple');
 
     // Types de points qu'on veut récupérer (en camelCase comme attendu par l'API)
     const pointTypes = [
@@ -1231,7 +1229,7 @@ class ConnectedApiClient {
       }
     }
 
-    _logger.i('_getAllPointsV1Optimized: requesting ${propertyRefs.length} property references');
+    logger.i('_getAllPointsV1Optimized: requesting ${propertyRefs.length} property references');
 
     // Faire la requête read-property-multiple
     final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
@@ -1246,27 +1244,27 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.d(() => '_getAllPointsV1Optimized: response status=${rpmResponse.statusCode}');
+      logger.d(() => '_getAllPointsV1Optimized: response status=${rpmResponse.statusCode}');
       _throwIfAuthError(rpmResponse);
 
       if (rpmResponse.statusCode == 200 && rpmResponse.data != null) {
         return _parsePointsFromRpm(rpmResponse.data);
       }
-      _logger.w('_getAllPointsV1Optimized: RPM status=${rpmResponse.statusCode}');
+      logger.w('_getAllPointsV1Optimized: RPM status=${rpmResponse.statusCode}');
     } on ApiAuthException {
       rethrow;
     } catch (e) {
-      _logger.e('_getAllPointsV1Optimized: read-property-multiple failed: $e');
+      logger.e('_getAllPointsV1Optimized: read-property-multiple failed: $e');
     }
 
     // En cas d'échec, on fallback sur la méthode classique
-    _logger.i('_getAllPointsV1Optimized: falling back to getAllObjects()');
+    logger.i('_getAllPointsV1Optimized: falling back to getAllObjects()');
     return getAllObjects();
   }
 
   /// Récupère tous les points V2 via batch API
   Future<List<BacnetObject>> _getAllPointsV2Optimized() async {
-    _logger.i('_getAllPointsV2Optimized: fetching all points with batch API');
+    logger.i('_getAllPointsV2Optimized: fetching all points with batch API');
 
     // Types de points à récupérer (format V2 kebab-case)
     const pointTypes = [
@@ -1286,7 +1284,7 @@ class ConnectedApiClient {
     }
 
     final batchUrl = '$baseUrl${ApiConstants.v2Batch}';
-    _logger.i('_getAllPointsV2Optimized: POST $batchUrl with ${requests.length} requests');
+    logger.i('_getAllPointsV2Optimized: POST $batchUrl with ${requests.length} requests');
 
     try {
       final response = await _dio.post(
@@ -1295,27 +1293,27 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.d(() => '_getAllPointsV2Optimized: response status=${response.statusCode}');
+      logger.d(() => '_getAllPointsV2Optimized: response status=${response.statusCode}');
       _throwIfAuthError(response);
 
       if (response.statusCode == 200 && response.data != null) {
         return _parsePointsFromBatchV2(response.data);
       }
-      _logger.w('_getAllPointsV2Optimized: batch status=${response.statusCode}');
+      logger.w('_getAllPointsV2Optimized: batch status=${response.statusCode}');
     } on ApiAuthException {
       rethrow;
     } catch (e) {
-      _logger.e('_getAllPointsV2Optimized: batch API failed: $e');
+      logger.e('_getAllPointsV2Optimized: batch API failed: $e');
     }
 
     // En cas d'échec, fallback sur la méthode classique
-    _logger.i('_getAllPointsV2Optimized: falling back to getAllObjects()');
+    logger.i('_getAllPointsV2Optimized: falling back to getAllObjects()');
     return getAllObjects();
   }
 
   /// Parse la réponse batch V2 pour construire les objets BACnet
   List<BacnetObject> _parsePointsFromBatchV2(dynamic data) {
-    _logger.d(() => '_parsePointsFromBatchV2: data type=${data.runtimeType}');
+    logger.d(() => '_parsePointsFromBatchV2: data type=${data.runtimeType}');
 
     final results = <BacnetObject>[];
 
@@ -1328,13 +1326,13 @@ class ConnectedApiClient {
       final responsesList = data['responses'];
       if (responsesList is List) {
         responses = responsesList;
-        _logger.d(() => '_parsePointsFromBatchV2: extracted ${responses.length} responses from wrapper');
+        logger.d(() => '_parsePointsFromBatchV2: extracted ${responses.length} responses from wrapper');
       } else {
-        _logger.w('_parsePointsFromBatchV2: no responses key found, keys=${data.keys.toList()}');
+        logger.w('_parsePointsFromBatchV2: no responses key found, keys=${data.keys.toList()}');
         return results;
       }
     } else {
-      _logger.w('_parsePointsFromBatchV2: expected List or Map, got ${data.runtimeType}');
+      logger.w('_parsePointsFromBatchV2: expected List or Map, got ${data.runtimeType}');
       return results;
     }
 
@@ -1349,7 +1347,7 @@ class ConnectedApiClient {
 
       // Statut par sous-requête : un type en échec est signalé, pas ignoré en silence
       if (status is int && status != 200) {
-        _logger.w('_parsePointsFromBatchV2: sub-request "$id" failed with status $status');
+        logger.w('_parsePointsFromBatchV2: sub-request "$id" failed with status $status');
         _recordStatus(status, id);
         continue;
       }
@@ -1426,12 +1424,12 @@ class ConnectedApiClient {
       }
     }
 
-    _logger.i('_parsePointsFromBatchV2: parsed ${results.length} objects');
+    logger.i('_parsePointsFromBatchV2: parsed ${results.length} objects');
 
     // Log des points forcés pour debug
     final overriddenCount = results.where((p) => p.isOverridden).length;
     if (overriddenCount > 0) {
-      _logger.i('_parsePointsFromBatchV2: $overriddenCount points are overridden');
+      logger.i('_parsePointsFromBatchV2: $overriddenCount points are overridden');
     }
 
     return results;
@@ -1493,14 +1491,14 @@ class ConnectedApiClient {
 
       return DateTime(year as int, month as int, day as int, hour, minute, second);
     } catch (e) {
-      _logger.w('_parseAlarmTimestamp: failed to parse: $e');
+      logger.w('_parseAlarmTimestamp: failed to parse: $e');
       return null;
     }
   }
 
   /// Parse la réponse read-property-multiple pour construire les objets BACnet
   List<BacnetObject> _parsePointsFromRpm(dynamic data) {
-    _logger.d(() => '_parsePointsFromRpm: data type=${data.runtimeType}');
+    logger.d(() => '_parsePointsFromRpm: data type=${data.runtimeType}');
 
     final objects = <String, Map<String, dynamic>>{};
 
@@ -1509,9 +1507,9 @@ class ConnectedApiClient {
       refs = data;
     } else if (data is Map<String, dynamic>) {
       refs = data['propertyReferences'] as List? ?? [];
-      _logger.d(() => '_parsePointsFromRpm: found ${refs.length} propertyReferences');
+      logger.d(() => '_parsePointsFromRpm: found ${refs.length} propertyReferences');
     } else {
-      _logger.w('_parsePointsFromRpm: unexpected data format');
+      logger.w('_parsePointsFromRpm: unexpected data format');
       return [];
     }
 
@@ -1536,7 +1534,7 @@ class ConnectedApiClient {
       objects[key]![property] = value;
     }
 
-    _logger.d(() => '_parsePointsFromRpm: grouped into ${objects.length} objects');
+    logger.d(() => '_parsePointsFromRpm: grouped into ${objects.length} objects');
 
     // Convertir en liste de BacnetObject
     final result = <BacnetObject>[];
@@ -1596,12 +1594,12 @@ class ConnectedApiClient {
       }
     }
 
-    _logger.i('_parsePointsFromRpm: parsed ${result.length} objects');
+    logger.i('_parsePointsFromRpm: parsed ${result.length} objects');
 
     // Log des points forcés pour debug
     final overriddenCount = result.where((p) => p.isOverridden).length;
     if (overriddenCount > 0) {
-      _logger.i('_parsePointsFromRpm: $overriddenCount points are overridden');
+      logger.i('_parsePointsFromRpm: $overriddenCount points are overridden');
     }
 
     return result;
@@ -1760,7 +1758,7 @@ class ConnectedApiClient {
       ],
     };
 
-    _logger.i('_writePropertyV1: POST $url property=$property, value=$value');
+    logger.i('_writePropertyV1: POST $url property=$property, value=$value');
 
     try {
       final response = await _dio.post(
@@ -1769,10 +1767,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_writePropertyV1: status=${response.statusCode}');
+      logger.i('_writePropertyV1: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_writePropertyV1 error: $e');
+      logger.e('_writePropertyV1 error: $e');
       return false;
     }
   }
@@ -1795,7 +1793,7 @@ class ConnectedApiClient {
       ],
     };
 
-    _logger.i('_writePropertyV2: POST $url property=$property, value=$value');
+    logger.i('_writePropertyV2: POST $url property=$property, value=$value');
 
     try {
       final response = await _dio.post(
@@ -1804,10 +1802,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_writePropertyV2: status=${response.statusCode}');
+      logger.i('_writePropertyV2: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_writePropertyV2 error: $e');
+      logger.e('_writePropertyV2 error: $e');
       return false;
     }
   }
@@ -1843,7 +1841,7 @@ class ConnectedApiClient {
       'propertyReferences': [propertyRef],
     };
 
-    _logger.i('_writeValueV1: POST $url with priority=$priority, value=$formattedValue');
+    logger.i('_writeValueV1: POST $url with priority=$priority, value=$formattedValue');
 
     try {
       final response = await _dio.post(
@@ -1852,11 +1850,11 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_writeValueV1: status=${response.statusCode}');
-      _logger.d(() => '_writeValueV1: response=${response.data}');
+      logger.i('_writeValueV1: status=${response.statusCode}');
+      logger.d(() => '_writeValueV1: response=${response.data}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_writeValueV1 error: $e');
+      logger.e('_writeValueV1 error: $e');
       return false;
     }
   }
@@ -1879,7 +1877,7 @@ class ConnectedApiClient {
       ],
     };
 
-    _logger.i('_releaseOverrideV1: POST $url with priority=$priority, value=Null');
+    logger.i('_releaseOverrideV1: POST $url with priority=$priority, value=Null');
 
     try {
       final response = await _dio.post(
@@ -1888,10 +1886,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_releaseOverrideV1: status=${response.statusCode}');
+      logger.i('_releaseOverrideV1: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_releaseOverrideV1 error: $e');
+      logger.e('_releaseOverrideV1 error: $e');
       return false;
     }
   }
@@ -1935,7 +1933,7 @@ class ConnectedApiClient {
       'propertyReferences': propertyRefs,
     };
 
-    _logger.i('_emergencyReleaseV1: releasing all priorities for $typeName:$instance');
+    logger.i('_emergencyReleaseV1: releasing all priorities for $typeName:$instance');
 
     try {
       final response = await _dio.post(
@@ -1944,10 +1942,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_emergencyReleaseV1: status=${response.statusCode}');
+      logger.i('_emergencyReleaseV1: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_emergencyReleaseV1 error: $e');
+      logger.e('_emergencyReleaseV1 error: $e');
       return false;
     }
   }
@@ -1960,21 +1958,21 @@ class ConnectedApiClient {
     final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
     final body = buildForceInputV1Body(type, instance, value);
 
-    _logger.i('_forceInputV1: out-of-service=true + present-value for ${ApiTypeNames.v1Name(type)}:$instance');
+    logger.i('_forceInputV1: out-of-service=true + present-value for ${ApiTypeNames.v1Name(type)}:$instance');
 
     int? status;
     try {
       final response = await _postJson(url, body);
       status = response.statusCode;
-      _logger.i('_forceInputV1: status=$status');
+      logger.i('_forceInputV1: status=$status');
       if (isHttpOk(status)) return true;
     } catch (e) {
-      _logger.e('_forceInputV1 error: $e');
+      logger.e('_forceInputV1 error: $e');
     }
 
     // 401/403 : rien n'a été écrit, pas de compensation
     if (status != 401 && status != 403) {
-      _logger.w('_forceInputV1: failed, releasing out-of-service (compensation)');
+      logger.w('_forceInputV1: failed, releasing out-of-service (compensation)');
       await _releaseInputV1(type, instance);
     }
     return false;
@@ -2019,7 +2017,7 @@ class ConnectedApiClient {
       ],
     };
 
-    _logger.i('_releaseInputV1: Setting out-of-service=false for $typeName:$instance');
+    logger.i('_releaseInputV1: Setting out-of-service=false for $typeName:$instance');
 
     try {
       final response = await _dio.post(
@@ -2028,10 +2026,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_releaseInputV1: status=${response.statusCode}');
+      logger.i('_releaseInputV1: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_releaseInputV1 error: $e');
+      logger.e('_releaseInputV1 error: $e');
       return false;
     }
   }
@@ -2045,7 +2043,7 @@ class ConnectedApiClient {
 
     final formattedValue = _formatValueForWrite(type, value);
 
-    _logger.i('_writeValueV2: POST $url with value=$formattedValue');
+    logger.i('_writeValueV2: POST $url with value=$formattedValue');
 
     try {
       final response = await _dio.post(
@@ -2054,10 +2052,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_writeValueV2: status=${response.statusCode}');
+      logger.i('_writeValueV2: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_writeValueV2 error: $e');
+      logger.e('_writeValueV2 error: $e');
       return false;
     }
   }
@@ -2069,7 +2067,7 @@ class ConnectedApiClient {
 
     final formattedValue = _formatValueForWrite(type, value);
 
-    _logger.i('_writeOverrideV2: POST $url with value=$formattedValue, priority=$priority');
+    logger.i('_writeOverrideV2: POST $url with value=$formattedValue, priority=$priority');
 
     try {
       final response = await _dio.post(
@@ -2081,10 +2079,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_writeOverrideV2: status=${response.statusCode}');
+      logger.i('_writeOverrideV2: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_writeOverrideV2 error: $e');
+      logger.e('_writeOverrideV2 error: $e');
       return false;
     }
   }
@@ -2094,7 +2092,7 @@ class ConnectedApiClient {
     final typePath = ApiTypeNames.v2Path(type);
     final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/set-value-at';
 
-    _logger.i('_releaseOverrideV2: POST $url with value=null, priority=$priority');
+    logger.i('_releaseOverrideV2: POST $url with value=null, priority=$priority');
 
     try {
       final response = await _dio.post(
@@ -2106,10 +2104,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_releaseOverrideV2: status=${response.statusCode}');
+      logger.i('_releaseOverrideV2: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_releaseOverrideV2 error: $e');
+      logger.e('_releaseOverrideV2 error: $e');
       return false;
     }
   }
@@ -2119,7 +2117,7 @@ class ConnectedApiClient {
     final typePath = ApiTypeNames.v2Path(type);
     final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/emergency-auto';
 
-    _logger.i('_emergencyReleaseV2: POST $url');
+    logger.i('_emergencyReleaseV2: POST $url');
 
     try {
       final response = await _dio.post(
@@ -2128,10 +2126,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_emergencyReleaseV2: status=${response.statusCode}');
+      logger.i('_emergencyReleaseV2: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_emergencyReleaseV2 error: $e');
+      logger.e('_emergencyReleaseV2 error: $e');
       return false;
     }
   }
@@ -2145,36 +2143,36 @@ class ConnectedApiClient {
 
     // Étape 1: Mettre out-of-service à true via POST sur la propriété
     final oosUrl = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/out-of-service';
-    _logger.i('_forceInputV2: Setting out-of-service=true for $typePath/$instance');
+    logger.i('_forceInputV2: Setting out-of-service=true for $typePath/$instance');
 
     try {
       final oosResponse = await _postJson(oosUrl, {'\$value': true});
       if (!isHttpOk(oosResponse.statusCode)) {
-        _logger.e('_forceInputV2: Failed to set out-of-service, status=${oosResponse.statusCode}');
+        logger.e('_forceInputV2: Failed to set out-of-service, status=${oosResponse.statusCode}');
         return false;
       }
     } catch (e) {
-      _logger.e('_forceInputV2: out-of-service error: $e');
+      logger.e('_forceInputV2: out-of-service error: $e');
       return false;
     }
 
     // Étape 2: Écrire present-value via POST sur la propriété
     final pvUrl = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/present-value';
-    _logger.i('_forceInputV2: Writing present-value=$formattedValue for $typePath/$instance');
+    logger.i('_forceInputV2: Writing present-value=$formattedValue for $typePath/$instance');
 
     try {
       final pvResponse = await _postJson(pvUrl, {'\$value': formattedValue});
-      _logger.i('_forceInputV2: status=${pvResponse.statusCode}');
+      logger.i('_forceInputV2: status=${pvResponse.statusCode}');
       if (isHttpOk(pvResponse.statusCode)) return true;
     } catch (e) {
-      _logger.e('_forceInputV2: present-value error: $e');
+      logger.e('_forceInputV2: present-value error: $e');
     }
 
     // Compensation : ne pas laisser l'entrée hors service à une valeur obsolète
-    _logger.w('_forceInputV2: present-value write failed, releasing out-of-service (compensation)');
+    logger.w('_forceInputV2: present-value write failed, releasing out-of-service (compensation)');
     final released = await _releaseInputV2(type, instance);
     if (!released) {
-      _logger.e('_forceInputV2: compensation failed, $typePath/$instance may stay out-of-service');
+      logger.e('_forceInputV2: compensation failed, $typePath/$instance may stay out-of-service');
     }
     return false;
   }
@@ -2184,7 +2182,7 @@ class ConnectedApiClient {
     final typePath = ApiTypeNames.v2Path(type);
     final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/out-of-service';
 
-    _logger.i('_releaseInputV2: Setting out-of-service=false for $typePath/$instance');
+    logger.i('_releaseInputV2: Setting out-of-service=false for $typePath/$instance');
 
     try {
       final response = await _dio.post(
@@ -2193,10 +2191,10 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_releaseInputV2: status=${response.statusCode}');
+      logger.i('_releaseInputV2: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_releaseInputV2 error: $e');
+      logger.e('_releaseInputV2 error: $e');
       return false;
     }
   }
@@ -2246,20 +2244,20 @@ class ConnectedApiClient {
 
   /// Récupère les trend-logs V1
   Future<List<Map<String, dynamic>>> _getTrendLogsV1() async {
-    _logger.i('_getTrendLogsV1: fetching trend-logs');
+    logger.i('_getTrendLogsV1: fetching trend-logs');
 
     final url = '$baseUrl$_bacnetBasePath/objects/trendLog';
 
     try {
       final response = await _dio.get(url, options: _authOptions);
-      _logger.d(() => '_getTrendLogsV1: status=${response.statusCode}');
+      logger.d(() => '_getTrendLogsV1: status=${response.statusCode}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
         final trendLogs = <Map<String, dynamic>>[];
 
         if (data is List) {
-          _logger.d(() => '_getTrendLogsV1: data is List with ${data.length} items');
+          logger.d(() => '_getTrendLogsV1: data is List with ${data.length} items');
           // Liste d'objets ou d'IDs
           for (final item in data) {
             int? instance;
@@ -2300,11 +2298,11 @@ class ConnectedApiClient {
           }
         }
 
-        _logger.i(() => '_getTrendLogsV1: parsed ${trendLogs.length} trend-logs: ${trendLogs.map((t) => t['instance']).toList()}');
+        logger.i(() => '_getTrendLogsV1: parsed ${trendLogs.length} trend-logs: ${trendLogs.map((t) => t['instance']).toList()}');
         return trendLogs;
       }
     } catch (e) {
-      _logger.e('_getTrendLogsV1 error: $e');
+      logger.e('_getTrendLogsV1 error: $e');
     }
 
     return [];
@@ -2312,7 +2310,7 @@ class ConnectedApiClient {
 
   /// Récupère les trend-logs V2
   Future<List<Map<String, dynamic>>> _getTrendLogsV2() async {
-    _logger.i('_getTrendLogsV2: fetching trend-logs');
+    logger.i('_getTrendLogsV2: fetching trend-logs');
 
     try {
       final data = await _fetchTrendLogsRawV2();
@@ -2339,7 +2337,7 @@ class ConnectedApiClient {
 
       return trendLogs;
     } catch (e) {
-      _logger.e('_getTrendLogsV2 error: $e');
+      logger.e('_getTrendLogsV2 error: $e');
     }
 
     return [];
@@ -2363,7 +2361,7 @@ class ConnectedApiClient {
     return _dedup('GET trend-logs', () async {
       final url = '$baseUrl$_bacnetBasePath/objects/trend-logs';
       final response = await _dio.get(url, options: _authOptions);
-      _logger.d(() => '_fetchTrendLogsRawV2: status=${response.statusCode}');
+      logger.d(() => '_fetchTrendLogsRawV2: status=${response.statusCode}');
       if (response.statusCode != 200 || response.data == null) return null;
       _trendLogsRawV2 = response.data;
       _trendLogsRawV2At = DateTime.now();
@@ -2387,7 +2385,7 @@ class ConnectedApiClient {
   /// Essaie d'abord une seule requête (instance=-1 = tous les trend-logs), puis
   /// l'ancienne méthode (liste puis RPM) si elle ne donne rien.
   Future<Map<String, int>> _getTrendLogMappingV1() async {
-    _logger.i('_getTrendLogMappingV1: loading trend log mapping');
+    logger.i('_getTrendLogMappingV1: loading trend log mapping');
 
     final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
 
@@ -2407,19 +2405,19 @@ class ConnectedApiClient {
       if (response.statusCode == 200 && response.data != null) {
         final mapping = parseTrendLogMappingV1(response.data);
         if (mapping.isNotEmpty) {
-          _logger.i('_getTrendLogMappingV1: found ${mapping.length} mappings (single request)');
+          logger.i('_getTrendLogMappingV1: found ${mapping.length} mappings (single request)');
           return mapping;
         }
       }
     } catch (e) {
-      _logger.w('_getTrendLogMappingV1: wildcard RPM failed: $e');
+      logger.w('_getTrendLogMappingV1: wildcard RPM failed: $e');
     }
 
     // Repli : récupérer la liste des trend-logs puis leurs propriétés
     final trendLogs = await _getTrendLogsV1();
-    _logger.i('_getTrendLogMappingV1: got ${trendLogs.length} trend-logs');
+    logger.i('_getTrendLogMappingV1: got ${trendLogs.length} trend-logs');
     if (trendLogs.isEmpty) {
-      _logger.w('_getTrendLogMappingV1: no trend-logs found, returning empty mapping');
+      logger.w('_getTrendLogMappingV1: no trend-logs found, returning empty mapping');
       return {};
     }
 
@@ -2430,7 +2428,7 @@ class ConnectedApiClient {
       'arrayIndex': -1,
     }).toList();
 
-    _logger.d(() => '_getTrendLogMappingV1: requesting ${propertyRefs.length} properties');
+    logger.d(() => '_getTrendLogMappingV1: requesting ${propertyRefs.length} properties');
 
     var mapping = <String, int>{};
     try {
@@ -2439,16 +2437,16 @@ class ConnectedApiClient {
         'propertyReferences': propertyRefs,
       });
 
-      _logger.d(() => '_getTrendLogMappingV1: status=${response.statusCode}');
+      logger.d(() => '_getTrendLogMappingV1: status=${response.statusCode}');
 
       if (response.statusCode == 200 && response.data != null) {
         mapping = parseTrendLogMappingV1(response.data);
       }
     } catch (e) {
-      _logger.e('_getTrendLogMappingV1 error: $e');
+      logger.e('_getTrendLogMappingV1 error: $e');
     }
 
-    _logger.i('_getTrendLogMappingV1: found ${mapping.length} mappings');
+    logger.i('_getTrendLogMappingV1: found ${mapping.length} mappings');
     return mapping;
   }
 
@@ -2484,7 +2482,7 @@ class ConnectedApiClient {
 
   /// Récupère le mapping V2 (réutilise la collection trend-logs mise en cache)
   Future<Map<String, int>> _getTrendLogMappingV2() async {
-    _logger.i('_getTrendLogMappingV2: loading trend log mapping');
+    logger.i('_getTrendLogMappingV2: loading trend log mapping');
 
     var mapping = <String, int>{};
     try {
@@ -2493,10 +2491,10 @@ class ConnectedApiClient {
         mapping = parseTrendLogMappingV2(data);
       }
     } catch (e) {
-      _logger.e('_getTrendLogMappingV2 error: $e');
+      logger.e('_getTrendLogMappingV2 error: $e');
     }
 
-    _logger.i('_getTrendLogMappingV2: found ${mapping.length} mappings');
+    logger.i('_getTrendLogMappingV2: found ${mapping.length} mappings');
     return mapping;
   }
 
@@ -2557,7 +2555,7 @@ class ConnectedApiClient {
   /// Si allData=true, ne met pas de limite de temps (récupère tout)
   /// Doc: https://wiki.distech-controls.com/RestAPI/Protocols/BACnet/Local/Objects/ObjectType/ObjectInstance/Trend/GET-trend
   Future<Object?> _getTrendLogBufferV1(int trendLogInstance, {int? maxRecords, bool allData = false}) async {
-    _logger.i('_getTrendLogBufferV1: fetching trend data for trend-log $trendLogInstance, allData=$allData');
+    logger.i('_getTrendLogBufferV1: fetching trend data for trend-log $trendLogInstance, allData=$allData');
 
     // D'abord, récupérer les infos du trend-log pour trouver l'objet source
     String? sourceObjectType;
@@ -2566,18 +2564,18 @@ class ConnectedApiClient {
     // Méthode 1: Essayer de récupérer les infos du trend-log directement
     try {
       final infoUrl = '$baseUrl$_bacnetBasePath/objects/trendLog/$trendLogInstance';
-      _logger.d(() => '_getTrendLogBufferV1: fetching trend-log info from $infoUrl');
+      logger.d(() => '_getTrendLogBufferV1: fetching trend-log info from $infoUrl');
       final infoResponse = await _dio.get(infoUrl, options: _authOptions);
 
       if (infoResponse.statusCode == 200 && infoResponse.data is Map<String, dynamic>) {
         final data = infoResponse.data as Map<String, dynamic>;
-        _logger.d(() => '_getTrendLogBufferV1: trend-log response keys: ${data.keys.toList()}');
+        logger.d(() => '_getTrendLogBufferV1: trend-log response keys: ${data.keys.toList()}');
 
         final recordCount = data['record-count'] ?? data['recordCount'];
         final bufferSize = data['buffer-size'] ?? data['bufferSize'];
         final logInterval = data['log-interval'] ?? data['logInterval'];
         final logProp = data['log-device-object-property']?.toString() ?? data['logDeviceObjectProperty']?.toString();
-        _logger.i('_getTrendLogBufferV1: trend-log info: recordCount=$recordCount, bufferSize=$bufferSize, logInterval=$logInterval, logProp=$logProp');
+        logger.i('_getTrendLogBufferV1: trend-log info: recordCount=$recordCount, bufferSize=$bufferSize, logInterval=$logInterval, logProp=$logProp');
 
         // Parser l'objet source depuis log-device-object-property
         // Format: "[Analog Input 101,Present Value,,]"
@@ -2586,12 +2584,12 @@ class ConnectedApiClient {
           if (match != null) {
             sourceObjectType = match.group(1)?.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-');
             sourceObjectInstance = match.group(2);
-            _logger.i('_getTrendLogBufferV1: source object from logProp: $sourceObjectType/$sourceObjectInstance');
+            logger.i('_getTrendLogBufferV1: source object from logProp: $sourceObjectType/$sourceObjectInstance');
           }
         }
       }
     } catch (e) {
-      _logger.w('_getTrendLogBufferV1: failed to get trend-log info: $e');
+      logger.w('_getTrendLogBufferV1: failed to get trend-log info: $e');
     }
 
     // Méthode 2: Si pas trouvé, essayer de déduire l'objet source depuis l'instance du trend-log
@@ -2624,7 +2622,7 @@ class ConnectedApiClient {
         sourceObjectInstance = suffix.replaceFirst(RegExp(r'^0+'), ''); // Enlever les zéros en tête
         if (sourceObjectInstance.isEmpty) sourceObjectInstance = '0';
 
-        _logger.i('_getTrendLogBufferV1: deduced source object from instance: $sourceObjectType/$sourceObjectInstance (prefix=$prefix)');
+        logger.i('_getTrendLogBufferV1: deduced source object from instance: $sourceObjectType/$sourceObjectInstance (prefix=$prefix)');
       }
     }
 
@@ -2638,7 +2636,7 @@ class ConnectedApiClient {
         // Pas de limite de temps - récupérer tout l'historique
         trendUrl = '$baseUrl$_bacnetBasePath/objects/$sourceObjectType/$sourceObjectInstance/trend'
             '?dataOnly=true&iso8601=true&limit=$limit';
-        _logger.i('_getTrendLogBufferV1: fetching ALL data from /trend endpoint');
+        logger.i('_getTrendLogBufferV1: fetching ALL data from /trend endpoint');
       } else {
         // Limiter aux 30 derniers jours
         final start = now.subtract(const Duration(days: 30));
@@ -2646,11 +2644,11 @@ class ConnectedApiClient {
         final stopMs = now.millisecondsSinceEpoch;
         trendUrl = '$baseUrl$_bacnetBasePath/objects/$sourceObjectType/$sourceObjectInstance/trend'
             '?dataOnly=true&iso8601=true&start=$startMs&stop=$stopMs&limit=$limit';
-        _logger.i('_getTrendLogBufferV1: fetching 30 days from /trend endpoint');
-        _logger.d(() => '_getTrendLogBufferV1: time range: ${start.toIso8601String()} -> ${now.toIso8601String()}');
+        logger.i('_getTrendLogBufferV1: fetching 30 days from /trend endpoint');
+        logger.d(() => '_getTrendLogBufferV1: time range: ${start.toIso8601String()} -> ${now.toIso8601String()}');
       }
 
-      _logger.i('_getTrendLogBufferV1: URL=$trendUrl');
+      logger.i('_getTrendLogBufferV1: URL=$trendUrl');
 
       try {
         final response = await _dio.get(
@@ -2662,41 +2660,41 @@ class ConnectedApiClient {
           ),
         );
 
-        _logger.i('_getTrendLogBufferV1: /trend response status=${response.statusCode}, dataType=${response.data?.runtimeType}');
+        logger.i('_getTrendLogBufferV1: /trend response status=${response.statusCode}, dataType=${response.data?.runtimeType}');
 
         if (response.statusCode == 200 && response.data != null) {
           // La réponse est une liste JSON de records
           if (response.data is List) {
             final records = response.data as List;
-            _logger.i('_getTrendLogBufferV1: got ${records.length} records from /trend endpoint');
+            logger.i('_getTrendLogBufferV1: got ${records.length} records from /trend endpoint');
 
             // Log le premier record pour debug
             if (records.isNotEmpty) {
-              _logger.d(() => '_getTrendLogBufferV1: first record: ${records.first}');
+              logger.d(() => '_getTrendLogBufferV1: first record: ${records.first}');
             }
 
             // Données déjà décodées par Dio : pas de ré-encodage
             return records;
           } else if (response.data is Map) {
             // Parfois la réponse est dans un wrapper
-            _logger.d(() => '_getTrendLogBufferV1: response is Map with keys: ${(response.data as Map).keys}');
+            logger.d(() => '_getTrendLogBufferV1: response is Map with keys: ${(response.data as Map).keys}');
             return response.data as Map;
           } else {
-            _logger.w('_getTrendLogBufferV1: unexpected response type: ${response.data.runtimeType}');
+            logger.w('_getTrendLogBufferV1: unexpected response type: ${response.data.runtimeType}');
           }
         } else {
-          _logger.w('_getTrendLogBufferV1: /trend returned status=${response.statusCode}');
+          logger.w('_getTrendLogBufferV1: /trend returned status=${response.statusCode}');
         }
       } catch (e, st) {
-        _logger.e('_getTrendLogBufferV1: /trend endpoint failed: $e');
-        _logger.d(() => '_getTrendLogBufferV1: stacktrace: $st');
+        logger.e('_getTrendLogBufferV1: /trend endpoint failed: $e');
+        logger.d(() => '_getTrendLogBufferV1: stacktrace: $st');
       }
     } else {
-      _logger.w('_getTrendLogBufferV1: source object not found (type=$sourceObjectType, instance=$sourceObjectInstance)');
+      logger.w('_getTrendLogBufferV1: source object not found (type=$sourceObjectType, instance=$sourceObjectInstance)');
     }
 
     // Fallback: essayer le logBuffer directement (moins fiable)
-    _logger.w('_getTrendLogBufferV1: falling back to logBuffer property');
+    logger.w('_getTrendLogBufferV1: falling back to logBuffer property');
     final logBufferUrl = '$baseUrl$_bacnetBasePath/objects/trendLog/$trendLogInstance/properties/logBuffer';
 
     try {
@@ -2717,22 +2715,22 @@ class ConnectedApiClient {
         }
 
         if (value != null && value.isNotEmpty) {
-          _logger.i('_getTrendLogBufferV1: got ${value.length} chars from logBuffer');
+          logger.i('_getTrendLogBufferV1: got ${value.length} chars from logBuffer');
           return value;
         }
       }
     } catch (e) {
-      _logger.e('_getTrendLogBufferV1: logBuffer fallback failed: $e');
+      logger.e('_getTrendLogBufferV1: logBuffer fallback failed: $e');
     }
 
-    _logger.e('_getTrendLogBufferV1: all attempts failed for trend-log $trendLogInstance');
+    logger.e('_getTrendLogBufferV1: all attempts failed for trend-log $trendLogInstance');
     return null;
   }
 
   /// Récupère le log buffer V2 via l'API history
   /// Si allData=true, récupère tout l'historique (depuis 10 ans)
   Future<Object?> _getTrendLogBufferV2(int trendLogInstance, {bool allData = false}) async {
-    _logger.i('_getTrendLogBufferV2: fetching history for trend-log $trendLogInstance, allData=$allData');
+    logger.i('_getTrendLogBufferV2: fetching history for trend-log $trendLogInstance, allData=$allData');
 
     // D'abord récupérer le nom de l'historique depuis le trend-log
     String? historyName;
@@ -2747,15 +2745,15 @@ class ConnectedApiClient {
         final trendLogResponse = await _dio.get(trendLogUrl, options: _authOptions);
         if (trendLogResponse.statusCode == 200 && trendLogResponse.data is Map<String, dynamic>) {
           historyName = trendLogResponse.data['history']?.toString();
-          _logger.d(() => '_getTrendLogBufferV2: got history name: $historyName');
+          logger.d(() => '_getTrendLogBufferV2: got history name: $historyName');
         }
       } catch (e) {
-        _logger.w('_getTrendLogBufferV2: failed to get history name: $e');
+        logger.w('_getTrendLogBufferV2: failed to get history name: $e');
       }
     }
 
     if (historyName == null || historyName.isEmpty) {
-      _logger.w('_getTrendLogBufferV2: no history name found for trend-log $trendLogInstance');
+      logger.w('_getTrendLogBufferV2: no history name found for trend-log $trendLogInstance');
       return null;
     }
 
@@ -2780,15 +2778,15 @@ class ConnectedApiClient {
     }
     final timeRange = '${formatDate(startDate)}/${formatDate(now)}';
 
-    _logger.i('_getTrendLogBufferV2: ${allData ? "fetching ALL data" : "fetching 30 days"}');
+    logger.i('_getTrendLogBufferV2: ${allData ? "fetching ALL data" : "fetching 30 days"}');
 
     final requestData = {
       'history': historyName,
       'time-range': timeRange,
       'limit': 0, // 0 = pas de limite, retourne toutes les données
     };
-    _logger.d(() => '_getTrendLogBufferV2: POST $url');
-    _logger.d(() => '_getTrendLogBufferV2: body=$requestData');
+    logger.d(() => '_getTrendLogBufferV2: POST $url');
+    logger.d(() => '_getTrendLogBufferV2: body=$requestData');
 
     try {
       // get-table avec limit=0 sur une longue période : timeout long (comme en V1)
@@ -2801,7 +2799,7 @@ class ConnectedApiClient {
         ),
       );
 
-      _logger.d(() => '_getTrendLogBufferV2: status=${response.statusCode}, response=${response.data}');
+      logger.d(() => '_getTrendLogBufferV2: status=${response.statusCode}, response=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         // Format V2: {columns: [...], rows: [...]} déjà décodé par Dio
@@ -2811,7 +2809,7 @@ class ConnectedApiClient {
         return response.data.toString();
       }
     } catch (e) {
-      _logger.e('_getTrendLogBufferV2 error: $e');
+      logger.e('_getTrendLogBufferV2 error: $e');
     }
 
     return null;
@@ -2829,14 +2827,14 @@ class ConnectedApiClient {
 
   /// Récupère les schedules V1
   Future<List<ScheduleSummary>> _getSchedulesV1() async {
-    _logger.i('_getSchedulesV1: fetching schedules');
+    logger.i('_getSchedulesV1: fetching schedules');
 
     // D'abord récupérer la liste des instances
     final listUrl = '$baseUrl$_bacnetBasePath/objects/schedule';
 
     try {
       final listResponse = await _dio.get(listUrl, options: _authOptions);
-      _logger.d(() => '_getSchedulesV1: list status=${listResponse.statusCode}');
+      logger.d(() => '_getSchedulesV1: list status=${listResponse.statusCode}');
 
       if (listResponse.statusCode != 200 || listResponse.data == null) {
         return [];
@@ -2863,7 +2861,7 @@ class ConnectedApiClient {
         }
       }
 
-      _logger.i('_getSchedulesV1: found ${instances.length} schedules: $instances');
+      logger.i('_getSchedulesV1: found ${instances.length} schedules: $instances');
 
       // Utiliser read-property-multiple pour récupérer les infos de base
       if (instances.isNotEmpty) {
@@ -2941,43 +2939,43 @@ class ConnectedApiClient {
 
       return schedules;
     } catch (e) {
-      _logger.e('_getSchedulesV1 error: $e');
+      logger.e('_getSchedulesV1 error: $e');
       return [];
     }
   }
 
   /// Récupère les schedules V2
   Future<List<ScheduleSummary>> _getSchedulesV2() async {
-    _logger.i('_getSchedulesV2: fetching schedules');
+    logger.i('_getSchedulesV2: fetching schedules');
 
     final url = '$baseUrl$_bacnetBasePath/objects/schedules';
 
     try {
       final response = await _dio.get(url, options: _authOptions);
-      _logger.d(() => '_getSchedulesV2: status=${response.statusCode}');
-      _logger.d(() => '_getSchedulesV2: response type=${response.data.runtimeType}');
-      _logger.d(() => '_getSchedulesV2: response data=${response.data}');
+      logger.d(() => '_getSchedulesV2: status=${response.statusCode}');
+      logger.d(() => '_getSchedulesV2: response type=${response.data.runtimeType}');
+      logger.d(() => '_getSchedulesV2: response data=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final schedules = <ScheduleSummary>[];
 
         if (response.data is Map<String, dynamic>) {
           final data = response.data as Map<String, dynamic>;
-          _logger.d(() => '_getSchedulesV2: data keys=${data.keys.toList()}');
+          logger.d(() => '_getSchedulesV2: data keys=${data.keys.toList()}');
           data.forEach((key, value) {
             final instance = int.tryParse(key);
-            _logger.d(() => '_getSchedulesV2: key=$key, instance=$instance, value type=${value.runtimeType}');
+            logger.d(() => '_getSchedulesV2: key=$key, instance=$instance, value type=${value.runtimeType}');
             if (instance != null && value is Map<String, dynamic>) {
               schedules.add(ScheduleSummary.fromV2(instance, value));
             }
           });
         }
 
-        _logger.i('_getSchedulesV2: found ${schedules.length} schedules');
+        logger.i('_getSchedulesV2: found ${schedules.length} schedules');
         return schedules;
       }
     } catch (e) {
-      _logger.e('_getSchedulesV2 error: $e');
+      logger.e('_getSchedulesV2 error: $e');
     }
 
     return [];
@@ -2993,7 +2991,7 @@ class ConnectedApiClient {
 
   /// Récupère un schedule V1
   Future<Schedule?> _getScheduleDetailV1(int instance) async {
-    _logger.i('_getScheduleDetailV1: fetching schedule $instance');
+    logger.i('_getScheduleDetailV1: fetching schedule $instance');
 
     try {
       // Récupérer les propriétés principales via read-property-multiple
@@ -3026,7 +3024,7 @@ class ConnectedApiClient {
         WeeklySchedule.fromV1,
       );
       if (weeklySchedule == null) {
-        _logger.e('_getScheduleDetailV1: weekly-schedule unreadable '
+        logger.e('_getScheduleDetailV1: weekly-schedule unreadable '
             '(status=${weeklyResponse.statusCode}), schedule $instance not returned');
         return null;
       }
@@ -3075,7 +3073,7 @@ class ConnectedApiClient {
         scheduleDefault: scheduleDefault,
       );
     } catch (e) {
-      _logger.e('_getScheduleDetailV1 error: $e');
+      logger.e('_getScheduleDetailV1 error: $e');
       return null;
     }
   }
@@ -3091,7 +3089,7 @@ class ConnectedApiClient {
     try {
       return parse(data);
     } catch (e) {
-      _logger.e('parseWeeklyScheduleResponse: invalid weekly-schedule: $e');
+      logger.e('parseWeeklyScheduleResponse: invalid weekly-schedule: $e');
       return null;
     }
   }
@@ -3106,7 +3104,7 @@ class ConnectedApiClient {
       final url = '$baseUrl$_bacnetBasePath/objects/schedule/$instance/properties/schedule-state-text';
       final response = await _dio.get(url, options: _authOptions);
 
-      _logger.d(() => '_getScheduleStateTextsV1: response=${response.data}');
+      logger.d(() => '_getScheduleStateTextsV1: response=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -3132,7 +3130,7 @@ class ConnectedApiClient {
         }
       }
     } catch (e) {
-      _logger.w('_getScheduleStateTextsV1: error fetching state texts: $e');
+      logger.w('_getScheduleStateTextsV1: error fetching state texts: $e');
     }
 
     // Si pas de state-texts, retourner des valeurs par défaut pour boolean
@@ -3178,7 +3176,7 @@ class ConnectedApiClient {
             // Remplacer les underscores par des espaces dans le label
             final displayLabel = label.replaceAll('_', ' ');
             stateTexts.add(ScheduleStateText(index: index, text: displayLabel));
-            _logger.d(() => '_parseScheduleStateTextV1: parsed state $index = "$displayLabel"');
+            logger.d(() => '_parseScheduleStateTextV1: parsed state $index = "$displayLabel"');
           }
         }
       }
@@ -3192,7 +3190,7 @@ class ConnectedApiClient {
 
   /// Récupère un schedule V2
   Future<Schedule?> _getScheduleDetailV2(int instance) async {
-    _logger.i('_getScheduleDetailV2: fetching schedule $instance');
+    logger.i('_getScheduleDetailV2: fetching schedule $instance');
 
     try {
       // Récupérer les propriétés principales (sans $select qui cause des problèmes)
@@ -3217,13 +3215,13 @@ class ConnectedApiClient {
         WeeklySchedule.fromV2,
       );
       if (weeklySchedule == null) {
-        _logger.e('_getScheduleDetailV2: weekly-schedule unreadable '
+        logger.e('_getScheduleDetailV2: weekly-schedule unreadable '
             '(status=${weeklyResponse.statusCode}), schedule $instance not returned');
         return null;
       }
 
       final data = response.data as Map<String, dynamic>;
-      _logger.d(() => '_getScheduleDetailV2: data keys=${data.keys.toList()}');
+      logger.d(() => '_getScheduleDetailV2: data keys=${data.keys.toList()}');
 
       final objectName = data['object-name']?.toString() ?? 'Schedule $instance';
       final description = data['description']?.toString();
@@ -3233,7 +3231,7 @@ class ConnectedApiClient {
       // Parser les state-texts (V2 utilise 'schedule-state-text')
       final stateTexts = <ScheduleStateText>[];
       final stateTextData = data['schedule-state-text'];
-      _logger.d(() => '_getScheduleDetailV2: schedule-state-text=$stateTextData');
+      logger.d(() => '_getScheduleDetailV2: schedule-state-text=$stateTextData');
 
       if (stateTextData is List) {
         // V2: [{string: "Hors gel", value: 1}, {string: "Vacances", value: 2}, ...]
@@ -3256,7 +3254,7 @@ class ConnectedApiClient {
         });
       }
 
-      _logger.d(() => '_getScheduleDetailV2: parsed stateTexts=${stateTexts.length}');
+      logger.d(() => '_getScheduleDetailV2: parsed stateTexts=${stateTexts.length}');
 
       // Valeurs par défaut si vide
       if (stateTexts.isEmpty) {
@@ -3275,7 +3273,7 @@ class ConnectedApiClient {
         scheduleDefault: scheduleDefault,
       );
     } catch (e) {
-      _logger.e('_getScheduleDetailV2 error: $e');
+      logger.e('_getScheduleDetailV2 error: $e');
       return null;
     }
   }
@@ -3290,12 +3288,12 @@ class ConnectedApiClient {
 
   /// Écrit le weekly-schedule V1
   Future<bool> _writeWeeklyScheduleV1(int instance, WeeklySchedule weeklySchedule) async {
-    _logger.i('_writeWeeklyScheduleV1: writing schedule $instance');
+    logger.i('_writeWeeklyScheduleV1: writing schedule $instance');
 
     final url = '$baseUrl$_bacnetBasePath/objects/schedule/$instance/properties/weekly-schedule';
     final body = weeklySchedule.toV1Json();
 
-    _logger.d(() => '_writeWeeklyScheduleV1: body=$body');
+    logger.d(() => '_writeWeeklyScheduleV1: body=$body');
 
     try {
       final response = await _dio.post(
@@ -3304,23 +3302,23 @@ class ConnectedApiClient {
         options: _jsonOptions,
       );
 
-      _logger.i('_writeWeeklyScheduleV1: status=${response.statusCode}');
+      logger.i('_writeWeeklyScheduleV1: status=${response.statusCode}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
-      _logger.e('_writeWeeklyScheduleV1 error: $e');
+      logger.e('_writeWeeklyScheduleV1 error: $e');
       return false;
     }
   }
 
   /// Écrit le weekly-schedule V2
   Future<bool> _writeWeeklyScheduleV2(int instance, WeeklySchedule weeklySchedule) async {
-    _logger.i('_writeWeeklyScheduleV2: writing schedule $instance');
+    logger.i('_writeWeeklyScheduleV2: writing schedule $instance');
 
     final url = '$baseUrl$_bacnetBasePath/objects/schedules/$instance/weekly-schedule';
     final body = weeklySchedule.toV2Json();
 
-    _logger.d(() => '_writeWeeklyScheduleV2: url=$url');
-    _logger.d(() => '_writeWeeklyScheduleV2: body=$body');
+    logger.d(() => '_writeWeeklyScheduleV2: url=$url');
+    logger.d(() => '_writeWeeklyScheduleV2: body=$body');
 
     try {
       final response = await _dio.post(
@@ -3335,20 +3333,20 @@ class ConnectedApiClient {
         ),
       );
 
-      _logger.i('_writeWeeklyScheduleV2: status=${response.statusCode}');
+      logger.i('_writeWeeklyScheduleV2: status=${response.statusCode}');
 
       if (response.statusCode == 400) {
-        _logger.e('_writeWeeklyScheduleV2: 400 Bad Request - response=${response.data}');
+        logger.e('_writeWeeklyScheduleV2: 400 Bad Request - response=${response.data}');
         return false;
       }
 
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
       if (e is DioException) {
-        _logger.e('_writeWeeklyScheduleV2 DioException: ${e.message}');
-        _logger.e('_writeWeeklyScheduleV2 response: ${e.response?.data}');
+        logger.e('_writeWeeklyScheduleV2 DioException: ${e.message}');
+        logger.e('_writeWeeklyScheduleV2 response: ${e.response?.data}');
       } else {
-        _logger.e('_writeWeeklyScheduleV2 error: $e');
+        logger.e('_writeWeeklyScheduleV2 error: $e');
       }
       return false;
     }
@@ -3364,7 +3362,7 @@ class ConnectedApiClient {
   Future<Map<String, BacnetObject>> readMultiplePoints(List<String> pointRefs) async {
     if (pointRefs.isEmpty) return {};
 
-    _logger.i('readMultiplePoints: reading ${pointRefs.length} points');
+    logger.i('readMultiplePoints: reading ${pointRefs.length} points');
 
     if (apiVersion == 'V2') {
       return _readMultiplePointsV2(pointRefs);
@@ -3387,7 +3385,7 @@ class ConnectedApiClient {
   /// Lecture batch V1 via read-property-multiple
   Future<Map<String, BacnetObject>> _readMultiplePointsV1(List<String> pointRefs) async {
     final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
-    _logger.i('_readMultiplePointsV1: POST $rpmUrl for ${pointRefs.length} points');
+    logger.i('_readMultiplePointsV1: POST $rpmUrl for ${pointRefs.length} points');
 
     // Construire les propertyReferences pour chaque point
     final propertyRefs = <Map<String, dynamic>>[];
@@ -3398,7 +3396,7 @@ class ConnectedApiClient {
       // Parser le pointRef (format: "analog-value:1" ou "AV:1")
       final parsed = _parsePointRef(ref);
       if (parsed == null) {
-        _logger.w('_readMultiplePointsV1: invalid pointRef format: $ref');
+        logger.w('_readMultiplePointsV1: invalid pointRef format: $ref');
         continue;
       }
 
@@ -3434,7 +3432,7 @@ class ConnectedApiClient {
 
     if (propertyRefs.isEmpty) return {};
 
-    _logger.d(() => '_readMultiplePointsV1: ${propertyRefs.length} refs (${cachedKeys.length} points with cached static props)');
+    logger.d(() => '_readMultiplePointsV1: ${propertyRefs.length} refs (${cachedKeys.length} points with cached static props)');
 
     try {
       final response = await _postJson(rpmUrl, {
@@ -3442,7 +3440,7 @@ class ConnectedApiClient {
         'propertyReferences': propertyRefs,
       });
 
-      _logger.d(() => '_readMultiplePointsV1: status=${response.statusCode}, data=${response.data}');
+      logger.d(() => '_readMultiplePointsV1: status=${response.statusCode}, data=${response.data}');
       if (response.statusCode == 200 && response.data != null) {
         final grouped = groupRpmPropertiesByObject(response.data);
         for (final entry in grouped.entries) {
@@ -3463,7 +3461,7 @@ class ConnectedApiClient {
         return buildMultiplePointsFromGrouped(grouped, pointRefs);
       }
     } catch (e) {
-      _logger.e('_readMultiplePointsV1 error: $e');
+      logger.e('_readMultiplePointsV1 error: $e');
     }
 
     return {};
@@ -3483,7 +3481,7 @@ class ConnectedApiClient {
     if (result != null) return result;
     if (useSelect) {
       // $select refusé par ce firmware : relire sans et ne plus l'utiliser
-      _logger.w('_readMultiplePointsV2: \$select rejected, retrying without it');
+      logger.w('_readMultiplePointsV2: \$select rejected, retrying without it');
       _v2SelectUnsupported = true;
       return await _readMultiplePointsV2Batch(pointRefs, useSelect: false) ?? {};
     }
@@ -3497,7 +3495,7 @@ class ConnectedApiClient {
     required bool useSelect,
   }) async {
     final batchUrl = '$baseUrl${ApiConstants.v2Batch}';
-    _logger.i('_readMultiplePointsV2: POST $batchUrl for ${pointRefs.length} points (select=$useSelect)');
+    logger.i('_readMultiplePointsV2: POST $batchUrl for ${pointRefs.length} points (select=$useSelect)');
 
     // Construire les requêtes batch
     final requests = <Map<String, dynamic>>[];
@@ -3519,20 +3517,20 @@ class ConnectedApiClient {
     }
 
     if (requests.isEmpty) {
-      _logger.w('_readMultiplePointsV2: no valid requests built');
+      logger.w('_readMultiplePointsV2: no valid requests built');
       return {};
     }
 
     try {
       final response = await _postJson(batchUrl, {'requests': requests});
 
-      _logger.d(() => '_readMultiplePointsV2: status=${response.statusCode}, data=${response.data}');
+      logger.d(() => '_readMultiplePointsV2: status=${response.statusCode}, data=${response.data}');
       if (response.statusCode == 200 && response.data != null) {
         if (useSelect && _allSubRequestsRejected(response.data)) return null;
         return _parseMultiplePointsFromBatchV2(response.data);
       }
     } catch (e) {
-      _logger.e('_readMultiplePointsV2 error: $e');
+      logger.e('_readMultiplePointsV2 error: $e');
     }
 
     return {};
@@ -3561,7 +3559,7 @@ class ConnectedApiClient {
     // Mapper le nom du type (supporte tous les formats, y compris "multistateValue")
     final type = BacnetObjectType.fromAnyName(typePart) ?? ApiTypeNames.fromV1Name(typePart);
     if (type == null) {
-      _logger.w('_parsePointRef: unknown type "$typePart" in "$pointRef"');
+      logger.w('_parsePointRef: unknown type "$typePart" in "$pointRef"');
       return null;
     }
 
@@ -3667,11 +3665,11 @@ class ConnectedApiClient {
     } else if (data is Map<String, dynamic>) {
       responses = data['responses'] as List? ?? [];
     } else {
-      _logger.w('_parseMultiplePointsFromBatchV2: unexpected data type: ${data.runtimeType}');
+      logger.w('_parseMultiplePointsFromBatchV2: unexpected data type: ${data.runtimeType}');
       return results;
     }
 
-    _logger.d(() => '_parseMultiplePointsFromBatchV2: responses.length=${responses.length}');
+    logger.d(() => '_parseMultiplePointsFromBatchV2: responses.length=${responses.length}');
 
     for (final batchResponse in responses) {
       if (batchResponse is! Map<String, dynamic>) continue;
@@ -3680,7 +3678,7 @@ class ConnectedApiClient {
       final body = batchResponse['body'];
       final statusCode = batchResponse['status'] as int?;
 
-      _logger.d(() => '_parseMultiplePointsFromBatchV2: id=$id, status=$statusCode');
+      logger.d(() => '_parseMultiplePointsFromBatchV2: id=$id, status=$statusCode');
 
       if (id == null || body == null || statusCode != 200) continue;
       if (body is! Map<String, dynamic>) continue;

@@ -1,13 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../domain/models/multi_curve_chart.dart';
 import '../../domain/models/trend_log.dart';
 import '../../domain/models/bacnet_object.dart';
 import 'active_connection_provider.dart';
 import 'trend_log_provider.dart';
 import 'points_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// État du viewer multi-courbes
 class MultiCurveViewerState {
@@ -167,12 +165,12 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
   Future<void> addCurve(int trendLogInstance,
       {String? name, String? units}) async {
     if (!state.canAddCurve) {
-      _logger.w('addCurve: maximum 8 curves reached');
+      logger.w('addCurve: maximum 8 curves reached');
       return;
     }
 
     if (state.selectedTrendLogInstances.contains(trendLogInstance)) {
-      _logger.w('addCurve: instance $trendLogInstance already exists');
+      logger.w('addCurve: instance $trendLogInstance already exists');
       return;
     }
 
@@ -204,7 +202,7 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
   /// Supprime une courbe du graphique
   void removeCurve(int trendLogInstance) {
     if (!state.canRemoveCurve) {
-      _logger.w('removeCurve: minimum 2 curves required');
+      logger.w('removeCurve: minimum 2 curves required');
       return;
     }
 
@@ -279,7 +277,7 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
     if (_lastConnectionWasBacnet != null &&
         (_lastConnectionWasBacnet != currentIsBacnet ||
             _lastConnectionId != currentConnectionId)) {
-      _logger.i('loadData: connection changed, invalidating cache');
+      logger.i('loadData: connection changed, invalidating cache');
       _cachedTrendLogData.clear();
       forceRefresh = true;
     }
@@ -338,7 +336,7 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
         loadingMessage: null,
       );
     } catch (e) {
-      _logger.e('loadData error: $e');
+      logger.e('loadData error: $e');
       if (!mounted || requestId != _requestId) return;
       state = state.copyWith(
         isLoading: false,
@@ -370,7 +368,7 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
   /// Returns an error message, or null on success.
   Future<String?> _loadSingleCurveData(int trendLogInstance, {bool forceRefresh = false}) async {
     final period = state.selectedPeriod;
-    _logger.i('_loadSingleCurveData: loading instance $trendLogInstance (period=$period, forceRefresh=$forceRefresh)');
+    logger.i('_loadSingleCurveData: loading instance $trendLogInstance (period=$period, forceRefresh=$forceRefresh)');
 
     try {
       final loader = _loaderFor(trendLogInstance);
@@ -388,14 +386,14 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
           viewerState.data!.records.isEmpty) {
         _cachedTrendLogData.remove(trendLogInstance);
         final error = viewerState.error ?? 'Aucune donnée';
-        _logger.w('_loadSingleCurveData: instance $trendLogInstance -> error: $error');
+        logger.w('_loadSingleCurveData: instance $trendLogInstance -> error: $error');
         return error;
       }
 
       _cachedTrendLogData[trendLogInstance] = viewerState.data!;
       return null;
     } catch (e, stack) {
-      _logger.e('_loadSingleCurveData error for instance $trendLogInstance: $e\n$stack');
+      logger.e('_loadSingleCurveData error for instance $trendLogInstance: $e\n$stack');
       _cachedTrendLogData.remove(trendLogInstance);
       return 'Erreur: $e';
     }
@@ -406,7 +404,7 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
     if (!mounted) return;
 
     if (_cachedTrendLogData.isEmpty) {
-      _logger.w('_rebuildMultiCurveData: cache is empty!');
+      logger.w('_rebuildMultiCurveData: cache is empty!');
       // copyWith cannot reset data to null: rebuild the state explicitly
       state = MultiCurveViewerState(
         isLoading: state.isLoading,
@@ -450,7 +448,7 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
       visibility: state.curveVisibility,
     );
 
-    _logger.i('_rebuildMultiCurveData: ${dataList.length} curves');
+    logger.i('_rebuildMultiCurveData: ${dataList.length} curves');
 
     state = state.copyWith(data: multiCurveData, error: state.error, loadingMessage: state.loadingMessage);
   }

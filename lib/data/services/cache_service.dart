@@ -1,9 +1,7 @@
 import 'package:drift/drift.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../database/app_database.dart';
 import '../../domain/models/bacnet_object.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Service de gestion du cache local
 /// Gère la mise en cache des données statiques pour améliorer les performances
@@ -28,16 +26,16 @@ class CacheService {
           .map((p) => p.cachedAt)
           .reduce((a, b) => a.isBefore(b) ? a : b);
       if (!isCacheFresh(oldest, AppDatabase.pointsCacheMaxAge)) {
-        _logger.d('Points cache expired for connection $connectionId');
+        logger.d('Points cache expired for connection $connectionId');
         return null;
       }
 
-      _logger.i('Loaded ${cachedPoints.length} points from cache');
+      logger.i('Loaded ${cachedPoints.length} points from cache');
       return {for (var p in cachedPoints) p.pointRef: p};
     } catch (e, st) {
       // Treated as an empty cache, but logged with stack trace so a DB/migration
       // failure is not silently hidden.
-      _logger.e('Error loading points cache', error: e, stackTrace: st);
+      logger.e('Error loading points cache', e, st);
       return null;
     }
   }
@@ -61,9 +59,9 @@ class CacheService {
           )).toList();
 
       await _database.replaceCachedPoints(connectionId, cacheEntries);
-      _logger.i('Cached ${cacheEntries.length} points for connection $connectionId');
+      logger.i('Cached ${cacheEntries.length} points for connection $connectionId');
     } catch (e, st) {
-      _logger.e('Error caching points', error: e, stackTrace: st);
+      logger.e('Error caching points', e, st);
     }
   }
 
@@ -121,7 +119,7 @@ class CacheService {
         return null;
       }
 
-      _logger.i('Loaded device info from cache: ${cached.objectName}');
+      logger.i('Loaded device info from cache: ${cached.objectName}');
       return DeviceInfo(
         objectName: cached.objectName,
         modelName: cached.modelName,
@@ -135,7 +133,7 @@ class CacheService {
         deviceInstance: cached.deviceInstance,
       );
     } catch (e) {
-      _logger.e('Error loading device info cache: $e');
+      logger.e('Error loading device info cache: $e');
       return null;
     }
   }
@@ -157,9 +155,9 @@ class CacheService {
         deviceInstance: Value(info.deviceInstance),
         cachedAt: Value(DateTime.now()),
       ));
-      _logger.i('Cached device info for connection $connectionId');
+      logger.i('Cached device info for connection $connectionId');
     } catch (e) {
-      _logger.e('Error caching device info: $e');
+      logger.e('Error caching device info: $e');
     }
   }
 
@@ -173,10 +171,10 @@ class CacheService {
       final mapping = await _database.getCachedTrendLogMapping(connectionId);
       if (mapping == null) return null;
 
-      _logger.i('Loaded trend log mapping from cache: ${mapping.length} entries');
+      logger.i('Loaded trend log mapping from cache: ${mapping.length} entries');
       return mapping;
     } catch (e) {
-      _logger.e('Error loading trend log mapping cache: $e');
+      logger.e('Error loading trend log mapping cache: $e');
       return null;
     }
   }
@@ -185,9 +183,9 @@ class CacheService {
   Future<void> cacheTrendLogMapping(int connectionId, Map<String, int> mapping) async {
     try {
       await _database.cacheTrendLogMapping(connectionId, mapping);
-      _logger.i('Cached trend log mapping: ${mapping.length} entries');
+      logger.i('Cached trend log mapping: ${mapping.length} entries');
     } catch (e) {
-      _logger.e('Error caching trend log mapping: $e');
+      logger.e('Error caching trend log mapping: $e');
     }
   }
 
@@ -201,7 +199,7 @@ class CacheService {
       final cached = await _database.getCachedObjectsSummary(connectionId);
       if (cached == null) return null;
 
-      _logger.i('Loaded objects summary from cache');
+      logger.i('Loaded objects summary from cache');
       return ObjectsSummary(
         analogInputs: cached.analogInputs,
         analogOutputs: cached.analogOutputs,
@@ -215,7 +213,7 @@ class CacheService {
         schedules: cached.schedules,
       );
     } catch (e) {
-      _logger.e('Error loading objects summary cache: $e');
+      logger.e('Error loading objects summary cache: $e');
       return null;
     }
   }
@@ -237,9 +235,9 @@ class CacheService {
         schedules: Value(summary.schedules),
         cachedAt: Value(DateTime.now()),
       ));
-      _logger.i('Cached objects summary');
+      logger.i('Cached objects summary');
     } catch (e) {
-      _logger.e('Error caching objects summary: $e');
+      logger.e('Error caching objects summary: $e');
     }
   }
 
@@ -250,13 +248,13 @@ class CacheService {
   /// Supprime tout le cache pour une connexion
   Future<void> clearAllCache(int connectionId) async {
     await _database.clearAllCache(connectionId);
-    _logger.i('Cleared all cache for connection $connectionId');
+    logger.i('Cleared all cache for connection $connectionId');
   }
 
   /// Supprime le cache expiré (maintenance)
   Future<void> clearExpiredCache() async {
     await _database.clearExpiredCache();
-    _logger.i('Cleared expired cache');
+    logger.i('Cleared expired cache');
   }
 
   /// Statistiques du cache pour une connexion

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../data/database/app_database.dart';
 import '../../data/database/tables/synoptic_bindings_table.dart';
 import 'database_provider.dart';
@@ -10,8 +10,6 @@ import 'active_connection_provider.dart';
 import 'bacnet_provider.dart';
 import 'bacnet_type_codes.dart';
 import 'points_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Bibliothèque des SVG disponibles dans les assets
 class SvgAssetInfo {
@@ -248,7 +246,7 @@ class SynopticLiveNotifier extends StateNotifier<SynopticLiveState> {
     _bindingsSub = database.watchBindingsForSynoptic(_synopticId).listen(
       _onBindings,
       onError: (Object e) {
-        _logger.e('Error watching synoptic bindings: $e');
+        logger.e('Error watching synoptic bindings: $e');
         if (mounted) state = state.copyWith(error: e.toString());
       },
     );
@@ -312,7 +310,7 @@ class SynopticLiveNotifier extends StateNotifier<SynopticLiveState> {
     try {
       newValues.addAll(await _readLiveValues(pointRefs));
     } catch (e) {
-      _logger.e('Error refreshing synoptic values: $e');
+      logger.e('Error refreshing synoptic values: $e');
       error = e.toString();
     } finally {
       _isRefreshing = false;
@@ -408,11 +406,11 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
         connectionId: Value(connectionId),
       ));
 
-      _logger.i('Created synoptic: $name (id: $id)');
+      logger.i('Created synoptic: $name (id: $id)');
       state = const AsyncValue.data(null);
       return id;
     } catch (e, st) {
-      _logger.e('Error creating synoptic: $e');
+      logger.e('Error creating synoptic: $e');
       state = AsyncValue.error(e, st);
       return null;
     }
@@ -437,11 +435,11 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
         connectionId: connectionId,
       );
 
-      _logger.i('Updated synoptic: $synopticId');
+      logger.i('Updated synoptic: $synopticId');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('Error updating synoptic: $e');
+      logger.e('Error updating synoptic: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
@@ -456,11 +454,11 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
 
       await database.deleteSynoptic(synopticId);
 
-      _logger.i('Deleted synoptic: $synopticId');
+      logger.i('Deleted synoptic: $synopticId');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('Error deleting synoptic: $e');
+      logger.e('Error deleting synoptic: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
@@ -490,11 +488,11 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
       ));
 
       _ref.invalidate(bindingsCountProvider(synopticId));
-      _logger.i('Upserted binding: $svgElementId -> $pointRef');
+      logger.i('Upserted binding: $svgElementId -> $pointRef');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('Error upserting binding: $e');
+      logger.e('Error upserting binding: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
@@ -510,11 +508,11 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
       await database.deleteBindingByElement(synopticId, svgElementId);
 
       _ref.invalidate(bindingsCountProvider(synopticId));
-      _logger.i('Deleted binding: $svgElementId');
+      logger.i('Deleted binding: $svgElementId');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('Error deleting binding: $e');
+      logger.e('Error deleting binding: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
