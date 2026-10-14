@@ -96,9 +96,17 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
   ActiveConnectionNotifier(this._ref) : super(const ActiveConnectionState());
 
+  /// Connection token, bumped on every connect()/disconnect(). Any async
+  /// result (connect in flight, background loading) started with an older
+  /// token belongs to a previous connection and must be ignored.
+  int _connectionToken = 0;
+
+  bool _isCurrent(int token) => mounted && token == _connectionToken;
+
   /// Se connecte à un automate (connexion rapide, données en arrière-plan)
   Future<bool> connect(int connectionId) async {
     _logger.i('connect: connectionId=$connectionId');
+    final token = ++_connectionToken;
 
     // Dispose de l'ancien client avant de créer un nouveau (éviter les memory leaks)
     final oldClient = state.client;
@@ -117,6 +125,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       // Récupérer les infos de connexion
       final database = _ref.read(databaseProvider);
       final connection = await database.getConnectionById(connectionId);
+      if (!_isCurrent(token)) return false;
 
       if (connection == null) {
         _logger.e('connect: connexion introuvable');
@@ -133,15 +142,16 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       // CONNEXION BACNET NATIVE
       // ========================================
       if (connection.connectionType == 'bacnet') {
-        return _connectBacnet(connection);
+        return await _connectBacnet(connection, token);
       }
 
       // ========================================
       // CONNEXION API DISTECH (comportement existant)
       // ========================================
-      return _connectDistechApi(connection);
+      return await _connectDistechApi(connection, token);
     } catch (e) {
       _logger.e('connect: error: $e');
+      if (!_isCurrent(token)) return false;
       state = state.copyWith(
         isConnecting: false,
         error: 'Erreur de connexion: $e',
@@ -151,7 +161,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   }
 
   /// Connexion BACnet native
-  Future<bool> _connectBacnet(Connection connection) async {
+  Future<bool> _connectBacnet(Connection connection, int token) async {
     _logger.i('_connectBacnet: connecting to ${connection.host}:${connection.port}');
 
     final bacnetService = _ref.read(bacnetServiceProvider);
@@ -168,6 +178,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
         port: connection.port,
         timeout: const Duration(seconds: 3),
       );
+      if (!_isCurrent(token)) return false;
 
       if (devices.isEmpty) {
         _logger.e('_connectBacnet: no BACnet device responded');
@@ -184,6 +195,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
     // Mettre à jour la date de dernière connexion
     await database.updateLastConnectedAt(connection.id);
+    if (!_isCurrent(token)) return false;
 
     // Mettre à jour le provider BACnet actif
     _ref.read(activeBacnetConnectionProvider.notifier).state = ActiveBacnetConnection(
@@ -207,13 +219,14 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     );
 
     // Charger les données BACnet en arrière-plan
-    _loadBacnetDataInBackground(connection, deviceId);
+    _loadBacnetDataInBackground(connection, deviceId, token);
 
     return true;
   }
 
   /// Charge les données BACnet en arrière-plan
-  void _loadBacnetDataInBackground(Connection connection, int deviceId) async {
+  /// [token] identifies the connection; results are dropped if it changed.
+  void _loadBacnetDataInBackground(Connection connection, int deviceId, int token) async {
     final bacnetService = _ref.read(bacnetServiceProvider);
 
     try {
@@ -257,7 +270,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
         modelName = modelResult.value as String;
       }
 
-      if (mounted) {
+      if (_isCurrent(token)) {
         state = state.copyWith(
           deviceInfo: DeviceInfo(
             objectName: deviceName,
@@ -272,7 +285,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       _logger.i('_loadBacnetDataInBackground: deviceInfo loaded: $deviceName');
     } catch (e) {
       _logger.w('_loadBacnetDataInBackground: failed to load device info: $e');
-      if (mounted) {
+      if (_isCurrent(token)) {
         state = state.copyWith(
           deviceInfo: DeviceInfo(objectName: connection.name, deviceInstance: deviceId),
           isLoadingDeviceInfo: false,
@@ -282,7 +295,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
     // Pour l'instant, objectsSummary n'est pas disponible via BACnet natif
     // On pourrait le calculer en lisant object-list mais c'est lent
-    if (mounted) {
+    if (_isCurrent(token)) {
       state = state.copyWith(
         objectsSummary: ObjectsSummary(), // Vide pour l'instant
         isLoadingSummary: false,
@@ -291,12 +304,13 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   }
 
   /// Connexion API Distech
-  Future<bool> _connectDistechApi(Connection connection) async {
+  Future<bool> _connectDistechApi(Connection connection, int token) async {
     _logger.i('_connectDistechApi: connecting to ${connection.host}:${connection.port}');
 
     // Récupérer le mot de passe
     final secureStorage = _ref.read(secureStorageProvider);
     final password = await secureStorage.read(key: connection.passwordKey);
+    if (!_isCurrent(token)) return false;
 
     if (password == null) {
       _logger.e('_connectDistechApi: mot de passe introuvable');
@@ -322,9 +336,21 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       apiVersion: apiVersion,
     );
 
-    // Mettre à jour la date de dernière connexion
-    final database = _ref.read(databaseProvider);
-    await database.updateLastConnectedAt(connection.id);
+    // Not a BACnet connection: clear any previous native BACnet target
+    _ref.read(activeBacnetConnectionProvider.notifier).state = null;
+
+    try {
+      // Mettre à jour la date de dernière connexion
+      final database = _ref.read(databaseProvider);
+      await database.updateLastConnectedAt(connection.id);
+      if (!_isCurrent(token)) {
+        client.dispose();
+        return false;
+      }
+    } catch (e) {
+      client.dispose();
+      rethrow;
+    }
 
     // CONNEXION IMMÉDIATE - L'UI peut naviguer maintenant!
     _logger.i('_connectDistechApi: connected! Loading cache first, then fresh data...');
@@ -333,6 +359,10 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     final cacheService = _ref.read(cacheServiceProvider);
     final cachedDeviceInfo = await cacheService.getCachedDeviceInfo(connection.id);
     final cachedSummary = await cacheService.getCachedObjectsSummary(connection.id);
+    if (!_isCurrent(token)) {
+      client.dispose();
+      return false;
+    }
 
     if (cachedDeviceInfo != null) {
       _logger.i('_connectDistechApi: deviceInfo loaded from cache: ${cachedDeviceInfo.objectName}');
@@ -361,19 +391,22 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
     // CHARGER LES DONNÉES FRAÎCHES EN ARRIÈRE-PLAN (sans bloquer)
     // Cela mettra à jour le cache et l'UI
-    _loadDataInBackground(client, connection.id, connection.name);
+    _loadDataInBackground(client, connection.id, connection.name, token);
 
     return true;
   }
 
   /// Charge les données en arrière-plan sans bloquer l'UI
   /// Met également à jour le cache local
-  void _loadDataInBackground(ConnectedApiClient client, int connectionId, String fallbackName) {
+  /// [token] identifies the connection; results are dropped if it changed
+  /// (another automate connected meanwhile, or disconnected).
+  void _loadDataInBackground(ConnectedApiClient client, int connectionId, String fallbackName, int token) {
     final cacheService = _ref.read(cacheServiceProvider);
 
     // Charger deviceInfo (en arrière-plan)
     client.getDeviceInfo().then((deviceInfo) {
       _logger.i('Background: deviceInfo loaded: ${deviceInfo.objectName}');
+      if (!_isCurrent(token)) return;
 
       // Mettre à jour le cache
       cacheService.cacheDeviceInfo(connectionId, deviceInfo);
@@ -385,7 +418,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
         _logger.i('Background: modelName saved to DB: ${deviceInfo.modelName}');
       }
 
-      if (mounted) {
+      if (_isCurrent(token)) {
         state = state.copyWith(
           deviceInfo: deviceInfo,
           isLoadingDeviceInfo: false,
@@ -394,7 +427,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       }
     }).catchError((e) {
       _logger.w('Background: getDeviceInfo failed: $e');
-      if (mounted) {
+      if (_isCurrent(token)) {
         // Si on a des données du cache, on les garde
         if (state.deviceInfo == null) {
           state = state.copyWith(
@@ -410,11 +443,12 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     // Charger objectsSummary (en arrière-plan)
     client.getObjectsSummary().then((summary) {
       _logger.i('Background: objectsSummary loaded: ${summary.total} objets');
+      if (!_isCurrent(token)) return;
 
       // Mettre à jour le cache
       cacheService.cacheObjectsSummary(connectionId, summary);
 
-      if (mounted) {
+      if (_isCurrent(token)) {
         state = state.copyWith(
           objectsSummary: summary,
           isLoadingSummary: false,
@@ -423,7 +457,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       }
     }).catchError((e) {
       _logger.w('Background: getObjectsSummary failed: $e');
-      if (mounted) {
+      if (_isCurrent(token)) {
         // Si on a des données du cache, on les garde
         if (state.objectsSummary == null) {
           state = state.copyWith(
@@ -440,7 +474,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     client.getControllerTime().then((controllerTime) {
       _logger.i('Background: controllerTime loaded: ${controllerTime.formattedDateTime}, offset=${controllerTime.offsetDescription}');
 
-      if (mounted) {
+      if (_isCurrent(token)) {
         state = state.copyWith(controllerTime: controllerTime);
       }
     }).catchError((e) {
@@ -452,7 +486,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     client.getNetworkInfo().then((networkInfo) {
       if (networkInfo != null) {
         _logger.i('Background: networkInfo loaded: $networkInfo');
-        if (mounted) {
+        if (_isCurrent(token)) {
           state = state.copyWith(networkInfo: networkInfo);
         }
       }
@@ -465,7 +499,9 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   /// Se déconnecte et réinitialise tous les providers de données
   void disconnect() {
     _logger.i('disconnect: clearing all data providers');
+    _connectionToken++;
     state.client?.dispose();
+    _ref.read(activeBacnetConnectionProvider.notifier).state = null;
 
     // Réinitialiser tous les providers de données pour éviter
     // d'afficher les données de l'ancien automate
@@ -494,14 +530,33 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   Future<void> refresh({bool forceRefresh = false}) async {
     if (!state.isConnected) return;
 
-    final connectionId = state.connection!.id;
+    final token = _connectionToken;
+    final connection = state.connection!;
+    final connectionId = connection.id;
 
     // Si forceRefresh, vider le cache d'abord
     if (forceRefresh) {
       final cacheService = _ref.read(cacheServiceProvider);
       await cacheService.clearAllCache(connectionId);
       _logger.i('refresh: cache cleared for connection $connectionId');
+      if (!_isCurrent(token)) return;
     }
+
+    // Connexion BACnet native : pas de client API
+    if (state.isBacnetConnection) {
+      final deviceId = state.bacnetDeviceId;
+      if (deviceId == null) return;
+      state = state.copyWith(
+        isLoadingDeviceInfo: true,
+        isLoadingSummary: true,
+        error: null,
+      );
+      _loadBacnetDataInBackground(connection, deviceId, token);
+      return;
+    }
+
+    final client = state.client;
+    if (client == null) return;
 
     state = state.copyWith(
       isLoadingDeviceInfo: true,
@@ -510,7 +565,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     );
 
     // Recharger en arrière-plan
-    _loadDataInBackground(state.client!, connectionId, state.connection?.name ?? 'Automate');
+    _loadDataInBackground(client, connectionId, connection.name, token);
   }
 
   @override
@@ -530,15 +585,17 @@ final activeConnectionProvider =
 final objectsByTypeProvider =
     FutureProvider.family<List<BacnetObject>, BacnetObjectType>((ref, type) async {
   final state = ref.watch(activeConnectionProvider);
-  if (!state.isConnected) return [];
+  final client = state.client;
+  if (!state.isConnected || client == null) return [];
 
-  return state.client!.getObjectsByType(type);
+  return client.getObjectsByType(type);
 });
 
 /// Provider pour récupérer tous les objets
 final allObjectsProvider = FutureProvider<List<BacnetObject>>((ref) async {
   final state = ref.watch(activeConnectionProvider);
-  if (!state.isConnected) return [];
+  final client = state.client;
+  if (!state.isConnected || client == null) return [];
 
-  return state.client!.getAllObjects();
+  return client.getAllObjects();
 });

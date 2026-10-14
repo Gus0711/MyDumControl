@@ -16,19 +16,16 @@ enum AlarmSortOption {
 }
 
 /// Provider qui filtre les points en alarme depuis le pointsProvider
+/// Only watches the points list (not search/sort/category changes).
 final alarmsProvider = Provider<List<BacnetObject>>((ref) {
-  final pointsState = ref.watch(pointsProvider);
-  return pointsState.points.where((p) => p.inAlarm).toList();
+  final points = ref.watch(pointsProvider.select((s) => s.points));
+  return points.where((p) => p.inAlarm).toList();
 });
 
 /// Provider pour le nombre d'alarmes actives
+/// An int: watchers are only notified when the count actually changes.
 final alarmsCountProvider = Provider<int>((ref) {
   return ref.watch(alarmsProvider).length;
-});
-
-/// Provider pour vérifier s'il y a des alarmes
-final hasAlarmsProvider = Provider<bool>((ref) {
-  return ref.watch(alarmsCountProvider) > 0;
 });
 
 /// État des alarmes avec recherche et tri
