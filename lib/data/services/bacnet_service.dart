@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:logger/logger.dart';
 
 import 'bacnet/bacnet_constants.dart';
@@ -11,7 +12,8 @@ import '../../domain/models/network_interface_choice.dart';
 
 // Re-export pour usage externe
 export 'bacnet/bacnet_encoder.dart' show ReadRangeType, BacnetTimeValue, BacnetDailySchedule, BacnetWeeklySchedule, ScheduleValueTag;
-export 'bacnet/bacnet_decoder.dart' show TrendLogRecordData, ReadRangeResult, DecodedTimeValue, DecodedDailySchedule, DecodedWeeklySchedule, BacnetScheduleDecoder;
+export 'bacnet/bacnet_decoder.dart'
+    show TrendLogRecordData, ReadRangeResult, DecodedTimeValue, DecodedDailySchedule, DecodedWeeklySchedule, BacnetScheduleDecoder;
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
@@ -24,14 +26,7 @@ class BacnetConnectionResult {
   final String? modelName;
   final String? errorMessage;
 
-  BacnetConnectionResult({
-    required this.success,
-    this.deviceId,
-    this.deviceName,
-    this.vendorName,
-    this.modelName,
-    this.errorMessage,
-  });
+  BacnetConnectionResult({required this.success, this.deviceId, this.deviceName, this.vendorName, this.modelName, this.errorMessage});
 }
 
 /// Service BACnet/IP en Dart pur
@@ -56,9 +51,7 @@ class BacnetService {
   bool _isUsingStandardPort = false;
   int? _actualPort;
 
-  BacnetService({
-    Duration timeout = const Duration(seconds: 5),
-  }) : _timeout = timeout;
+  BacnetService({Duration timeout = const Duration(seconds: 5)}) : _timeout = timeout;
 
   /// Interface réseau actuellement utilisée (null = toutes)
   NetworkInterfaceChoice? get boundInterface => _boundInterface;
@@ -91,18 +84,12 @@ class BacnetService {
     _isInitializing = true;
 
     // Déterminer l'adresse de bind
-    final bindAddress = bindInterface != null
-        ? InternetAddress(bindInterface.address)
-        : InternetAddress.anyIPv4;
+    final bindAddress = bindInterface != null ? InternetAddress(bindInterface.address) : InternetAddress.anyIPv4;
 
     // Essayer d'abord le port BACnet standard 47808 (meilleure compatibilité)
     // Si déjà utilisé, fallback sur un port dynamique
     try {
-      _socket = await RawDatagramSocket.bind(
-        bindAddress,
-        standardBacnetPort,
-        reuseAddress: true,
-      );
+      _socket = await RawDatagramSocket.bind(bindAddress, standardBacnetPort, reuseAddress: true);
       _boundInterface = bindInterface;
       _isUsingStandardPort = true;
       _actualPort = standardBacnetPort;
@@ -284,10 +271,7 @@ class BacnetService {
 
       if (networks.isNotEmpty && !_routerController.isClosed) {
         _logger.i('I-Am-Router-To-Network from ${address.address}: networks=$networks');
-        _routerController.add(RouterInfo(
-          address: address,
-          networks: networks,
-        ));
+        _routerController.add(RouterInfo(address: address, networks: networks));
       }
     }
   }
@@ -314,8 +298,10 @@ class BacnetService {
       // Device ID déjà vu
       if (existingDevice.address.address != address.address) {
         // CONFLIT : Même deviceId, adresse IP différente
-        _logger.w('CONFLIT Device ID $deviceId: '
-            '${existingDevice.address.address} ET ${address.address}');
+        _logger.w(
+          'CONFLIT Device ID $deviceId: '
+          '${existingDevice.address.address} ET ${address.address}',
+        );
 
         // Mettre à jour le device existant avec le conflit
         final updatedDevice = existingDevice.withConflict(address);
@@ -323,12 +309,14 @@ class BacnetService {
 
         // Émettre l'alerte de conflit
         if (!_conflictController.isClosed) {
-          _conflictController.add(DeviceIdConflict(
-            deviceId: deviceId,
-            firstAddress: existingDevice.address,
-            secondAddress: address,
-            allAddresses: [existingDevice.address, ...updatedDevice.conflictingAddresses],
-          ));
+          _conflictController.add(
+            DeviceIdConflict(
+              deviceId: deviceId,
+              firstAddress: existingDevice.address,
+              secondAddress: address,
+              allAddresses: [existingDevice.address, ...updatedDevice.conflictingAddresses],
+            ),
+          );
         }
 
         // Émettre aussi sur iAmStream pour mise à jour UI
@@ -339,22 +327,14 @@ class BacnetService {
     }
 
     // Nouveau device
-    final newDevice = IAmInfo(
-      address: address,
-      deviceId: deviceId,
-    );
+    final newDevice = IAmInfo(address: address, deviceId: deviceId);
     _seenDevices[deviceId] = newDevice;
     _logger.d('_handleIAm: Emitting new device $deviceId to iAmStream');
     _iAmController.add(newDevice);
   }
 
   /// Envoie un paquet et attend la réponse
-  Future<BacnetResponse> _sendAndWait(
-    Uint8List packet,
-    String host,
-    int port,
-    int invokeId,
-  ) async {
+  Future<BacnetResponse> _sendAndWait(Uint8List packet, String host, int port, int invokeId) async {
     _ensureInitialized();
 
     final completer = Completer<BacnetResponse>();
@@ -389,11 +369,7 @@ class BacnetService {
   /// Test de connexion BACnet
   /// Essaie de lire les propriétés du device object
   /// Optimisé: utilise ReadPropertyMultiple pour une seule requête au lieu de 3
-  Future<BacnetConnectionResult> testConnection({
-    required String host,
-    required int port,
-    int? deviceId,
-  }) async {
+  Future<BacnetConnectionResult> testConnection({required String host, required int port, int? deviceId}) async {
     await init();
 
     try {
@@ -402,17 +378,10 @@ class BacnetService {
 
       if (deviceId == null) {
         // Envoyer Who-Is et attendre I-Am
-        final devices = await whoIs(
-          host: host,
-          port: port,
-          timeout: const Duration(seconds: 3),
-        );
+        final devices = await whoIs(host: host, port: port, timeout: const Duration(seconds: 3));
 
         if (devices.isEmpty) {
-          return BacnetConnectionResult(
-            success: false,
-            errorMessage: 'No BACnet device responded',
-          );
+          return BacnetConnectionResult(success: false, errorMessage: 'No BACnet device responded');
         }
 
         targetDeviceId = devices.first.deviceId;
@@ -426,11 +395,7 @@ class BacnetService {
           ReadPropertyMultipleItem(
             objectType: BacnetObjectTypeCode.device,
             objectInstance: targetDeviceId,
-            propertyIds: [
-              BacnetPropertyId.objectName,
-              BacnetPropertyId.vendorName,
-              BacnetPropertyId.modelName,
-            ],
+            propertyIds: [BacnetPropertyId.objectName, BacnetPropertyId.vendorName, BacnetPropertyId.modelName],
           ),
         ],
       );
@@ -497,10 +462,7 @@ class BacnetService {
         modelName: modelName,
       );
     } catch (e) {
-      return BacnetConnectionResult(
-        success: false,
-        errorMessage: e.toString(),
-      );
+      return BacnetConnectionResult(success: false, errorMessage: e.toString());
     }
   }
 
@@ -524,11 +486,7 @@ class BacnetService {
       final isBroadcast = host == '255.255.255.255' || host.endsWith('.255');
 
       // Construire et envoyer le paquet Who-Is
-      final packet = BacnetEncoder.encodeWhoIsRequest(
-        lowLimit: lowLimit,
-        highLimit: highLimit,
-        broadcast: isBroadcast,
-      );
+      final packet = BacnetEncoder.encodeWhoIsRequest(lowLimit: lowLimit, highLimit: highLimit, broadcast: isBroadcast);
 
       final address = InternetAddress(host);
       _socket!.send(packet, address, port);
@@ -657,11 +615,7 @@ class BacnetService {
         _logger.i('Phase 3: Who-Is to ${discoveredNetworks.length} remote networks...');
 
         for (final networkNumber in discoveredNetworks) {
-          final networkWhoIs = BacnetEncoder.encodeWhoIsToNetwork(
-            destinationNetwork: networkNumber,
-            lowLimit: 0,
-            highLimit: 4194303,
-          );
+          final networkWhoIs = BacnetEncoder.encodeWhoIsToNetwork(destinationNetwork: networkNumber, lowLimit: 0, highLimit: 4194303);
 
           for (final broadcastAddr in broadcastAddresses) {
             try {
@@ -715,9 +669,7 @@ class BacnetService {
     }
 
     // Vérifier que c'est le même sous-réseau /24
-    if (startParts[0] != endParts[0] ||
-        startParts[1] != endParts[1] ||
-        startParts[2] != endParts[2]) {
+    if (startParts[0] != endParts[0] || startParts[1] != endParts[1] || startParts[2] != endParts[2]) {
       throw ArgumentError('Start and end IP must be on the same /24 subnet');
     }
 
@@ -876,10 +828,7 @@ class BacnetService {
     await init();
 
     final invokeId = _nextInvokeId();
-    final packet = BacnetEncoder.encodeReadPropertyMultipleRequest(
-      invokeId: invokeId,
-      items: items,
-    );
+    final packet = BacnetEncoder.encodeReadPropertyMultipleRequest(invokeId: invokeId, items: items);
 
     return _sendAndWait(packet, host, port, invokeId);
   }
@@ -914,19 +863,12 @@ class BacnetService {
     final objectList = _parseObjectList(objectListResult.value);
 
     // 2. Filtrer si nécessaire
-    final filteredObjects = objectTypesFilter != null
-        ? objectList.where((o) => objectTypesFilter.contains(o.type)).toList()
-        : objectList;
+    final filteredObjects = objectTypesFilter != null ? objectList.where((o) => objectTypesFilter.contains(o.type)).toList() : objectList;
 
     // 3. Lire les propriétés de chaque objet
     for (final objInfo in filteredObjects) {
       try {
-        final obj = await _readObjectProperties(
-          host: host,
-          port: port,
-          objectType: objInfo.type,
-          objectInstance: objInfo.instance,
-        );
+        final obj = await _readObjectProperties(host: host, port: port, objectType: objInfo.type, objectInstance: objInfo.instance);
         if (obj != null) {
           objects.add(obj);
         }
@@ -956,10 +898,7 @@ class BacnetService {
             _logger.d('_parseObjectList: item[$i] = $item -> type=$type, instance=$instance');
           }
           if (type != null && instance != null) {
-            objects.add(_ObjectInfo(
-              type: type as int,
-              instance: instance as int,
-            ));
+            objects.add(_ObjectInfo(type: type as int, instance: instance as int));
           }
         } else {
           if (i < 5) {
@@ -973,10 +912,7 @@ class BacnetService {
       final type = value['type'] ?? value['objectType'];
       final instance = value['instance'] ?? value['objectInstance'];
       if (type != null && instance != null) {
-        objects.add(_ObjectInfo(
-          type: type as int,
-          instance: instance as int,
-        ));
+        objects.add(_ObjectInfo(type: type as int, instance: instance as int));
       }
     } else {
       _logger.w('_parseObjectList: unexpected value type: ${value.runtimeType}');
@@ -1006,10 +942,7 @@ class BacnetService {
     // Ajouter les propriétés spécifiques aux types
     final bacnetType = _objectTypeCodeToBacnetType(objectType);
     if (bacnetType?.isBinary == true) {
-      propertyIds.addAll([
-        BacnetPropertyId.activeText,
-        BacnetPropertyId.inactiveText,
-      ]);
+      propertyIds.addAll([BacnetPropertyId.activeText, BacnetPropertyId.inactiveText]);
     } else if (bacnetType?.isMultiState == true) {
       propertyIds.add(BacnetPropertyId.stateText);
     }
@@ -1023,35 +956,19 @@ class BacnetService {
     final rpmResult = await readPropertyMultiple(
       host: host,
       port: port,
-      items: [
-        ReadPropertyMultipleItem(
-          objectType: objectType,
-          objectInstance: objectInstance,
-          propertyIds: propertyIds,
-        ),
-      ],
+      items: [ReadPropertyMultipleItem(objectType: objectType, objectInstance: objectInstance, propertyIds: propertyIds)],
     );
 
     if (rpmResult.isSuccess && rpmResult.multipleResults != null) {
       final result = rpmResult.multipleResults!.first;
-      return _createBacnetObjectFromProperties(
-        objectType: objectType,
-        objectInstance: objectInstance,
-        properties: result.properties,
-      );
+      return _createBacnetObjectFromProperties(objectType: objectType, objectInstance: objectInstance, properties: result.properties);
     }
 
     // Fallback: lire les propriétés une par une
     final properties = <int, dynamic>{};
 
     for (final propId in propertyIds) {
-      final result = await readProperty(
-        host: host,
-        port: port,
-        objectType: objectType,
-        objectInstance: objectInstance,
-        propertyId: propId,
-      );
+      final result = await readProperty(host: host, port: port, objectType: objectType, objectInstance: objectInstance, propertyId: propId);
 
       if (result.isSuccess) {
         properties[propId] = result.value;
@@ -1060,11 +977,7 @@ class BacnetService {
 
     if (properties.isEmpty) return null;
 
-    return _createBacnetObjectFromPropertiesMap(
-      objectType: objectType,
-      objectInstance: objectInstance,
-      properties: properties,
-    );
+    return _createBacnetObjectFromPropertiesMap(objectType: objectType, objectInstance: objectInstance, properties: properties);
   }
 
   /// Crée un BacnetObject depuis les propriétés RPM
@@ -1078,11 +991,7 @@ class BacnetService {
       propMap[prop.propertyId] = prop.value;
     }
 
-    return _createBacnetObjectFromPropertiesMap(
-      objectType: objectType,
-      objectInstance: objectInstance,
-      properties: propMap,
-    );
+    return _createBacnetObjectFromPropertiesMap(objectType: objectType, objectInstance: objectInstance, properties: propMap);
   }
 
   /// Crée un BacnetObject depuis une map de propriétés
@@ -1109,8 +1018,7 @@ class BacnetService {
     return BacnetObject(
       type: bacnetType ?? BacnetObjectType.analogValue,
       instance: objectInstance,
-      objectName: properties[BacnetPropertyId.objectName]?.toString() ??
-                  '${BacnetObjectTypeCode.getName(objectType)}:$objectInstance',
+      objectName: properties[BacnetPropertyId.objectName]?.toString() ?? '${BacnetObjectTypeCode.getName(objectType)}:$objectInstance',
       description: properties[BacnetPropertyId.description]?.toString(),
       presentValue: properties[BacnetPropertyId.presentValue],
       units: _parseUnit(properties[BacnetPropertyId.units]),
@@ -1161,9 +1069,9 @@ class BacnetService {
     // Format entier (bitfield brut)
     if (statusFlags is int) {
       return (
-        inAlarm: (statusFlags & 0x01) != 0,      // Bit 0
-        fault: (statusFlags & 0x02) != 0,        // Bit 1
-        overridden: (statusFlags & 0x04) != 0,   // Bit 2
+        inAlarm: (statusFlags & 0x01) != 0, // Bit 0
+        fault: (statusFlags & 0x02) != 0, // Bit 1
+        overridden: (statusFlags & 0x04) != 0, // Bit 2
         outOfService: (statusFlags & 0x08) != 0, // Bit 3
       );
     }
@@ -1287,11 +1195,7 @@ class BacnetService {
     if (value == null) return null;
     if (value is List) {
       // Filtrer les valeurs nulles ou vides
-      final result = value
-          .where((e) => e != null)
-          .map((e) => e.toString())
-          .where((s) => s.isNotEmpty)
-          .toList();
+      final result = value.where((e) => e != null).map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
       return result.isEmpty ? null : result;
     }
     // Si c'est une seule chaîne, la retourner comme liste d'un élément
@@ -1310,12 +1214,7 @@ class BacnetService {
   }
 
   /// Lit et rafraîchit la valeur d'un point
-  Future<dynamic> refreshPointValue({
-    required String host,
-    required int port,
-    required int objectType,
-    required int objectInstance,
-  }) async {
+  Future<dynamic> refreshPointValue({required String host, required int port, required int objectType, required int objectInstance}) async {
     final result = await readProperty(
       host: host,
       port: port,
@@ -1372,13 +1271,7 @@ class BacnetService {
           final result = await readPropertyMultiple(
             host: host,
             port: port,
-            items: [
-              ReadPropertyMultipleItem(
-                objectType: point.objectType,
-                objectInstance: point.objectInstance,
-                propertyIds: propertyIds,
-              ),
-            ],
+            items: [ReadPropertyMultipleItem(objectType: point.objectType, objectInstance: point.objectInstance, propertyIds: propertyIds)],
           );
 
           if (result.isSuccess && result.multipleResults != null && result.multipleResults!.isNotEmpty) {
@@ -1394,8 +1287,12 @@ class BacnetService {
             }
 
             // Extraire et parser status-flags (pour alarmes)
-            ({bool inAlarm, bool fault, bool overridden, bool outOfService}) statusInfo =
-                (inAlarm: false, fault: false, overridden: false, outOfService: false);
+            ({bool inAlarm, bool fault, bool overridden, bool outOfService}) statusInfo = (
+              inAlarm: false,
+              fault: false,
+              overridden: false,
+              outOfService: false,
+            );
             for (final prop in props) {
               if (prop.propertyId == BacnetPropertyId.statusFlags) {
                 _logger.d('refreshMultiplePointValues: $key statusFlags=${prop.value}');
@@ -1408,8 +1305,7 @@ class BacnetService {
             }
 
             // Extraire et parser priority-array (pour commandables)
-            ({bool isOverridden, int? priority, dynamic value}) overrideInfo =
-                (isOverridden: false, priority: null, value: null);
+            ({bool isOverridden, int? priority, dynamic value}) overrideInfo = (isOverridden: false, priority: null, value: null);
 
             if (point.isCommandable) {
               for (final prop in props) {
@@ -1440,15 +1336,18 @@ class BacnetService {
               }
             }
 
-            return MapEntry(key, RefreshedPointData(
-              presentValue: presentValue,
-              isOverridden: overrideInfo.isOverridden,
-              overridePriority: overrideInfo.priority,
-              overrideValue: overrideInfo.value,
-              outOfService: outOfService,
-              inAlarm: statusInfo.inAlarm,
-              units: units,
-            ));
+            return MapEntry(
+              key,
+              RefreshedPointData(
+                presentValue: presentValue,
+                isOverridden: overrideInfo.isOverridden,
+                overridePriority: overrideInfo.priority,
+                overrideValue: overrideInfo.value,
+                outOfService: outOfService,
+                inAlarm: statusInfo.inAlarm,
+                units: units,
+              ),
+            );
           }
         } catch (e) {
           _logger.e('Error refreshing $key: $e');
@@ -1532,11 +1431,7 @@ class BacnetService {
   // =========================================================================
 
   /// Découvre les TrendLog d'un device BACnet
-  Future<List<BacnetTrendLog>> discoverTrendLogs({
-    required String host,
-    required int port,
-    required int deviceId,
-  }) async {
+  Future<List<BacnetTrendLog>> discoverTrendLogs({required String host, required int port, required int deviceId}) async {
     await init();
 
     final trendLogs = <BacnetTrendLog>[];
@@ -1578,11 +1473,7 @@ class BacnetService {
     // 2. Lire les propriétés de chaque TrendLog
     for (final obj in trendLogObjects) {
       try {
-        final trendLog = await _readTrendLogProperties(
-          host: host,
-          port: port,
-          objectInstance: obj.instance,
-        );
+        final trendLog = await _readTrendLogProperties(host: host, port: port, objectInstance: obj.instance);
         if (trendLog != null) {
           trendLogs.add(trendLog);
         }
@@ -1595,11 +1486,7 @@ class BacnetService {
   }
 
   /// Lit les propriétés d'un TrendLog
-  Future<BacnetTrendLog?> _readTrendLogProperties({
-    required String host,
-    required int port,
-    required int objectInstance,
-  }) async {
+  Future<BacnetTrendLog?> _readTrendLogProperties({required String host, required int port, required int objectInstance}) async {
     // Propriétés à lire pour un TrendLog
     final propertyIds = [
       BacnetPropertyId.objectName,
@@ -1616,20 +1503,13 @@ class BacnetService {
       host: host,
       port: port,
       items: [
-        ReadPropertyMultipleItem(
-          objectType: BacnetObjectTypeCode.trendLog,
-          objectInstance: objectInstance,
-          propertyIds: propertyIds,
-        ),
+        ReadPropertyMultipleItem(objectType: BacnetObjectTypeCode.trendLog, objectInstance: objectInstance, propertyIds: propertyIds),
       ],
     );
 
     if (rpmResult.isSuccess && rpmResult.multipleResults != null && rpmResult.multipleResults!.isNotEmpty) {
       final result = rpmResult.multipleResults!.first;
-      return _createTrendLogFromProperties(
-        objectInstance: objectInstance,
-        properties: result.properties,
-      );
+      return _createTrendLogFromProperties(objectInstance: objectInstance, properties: result.properties);
     }
 
     // Fallback: lire les propriétés une par une
@@ -1651,38 +1531,28 @@ class BacnetService {
 
     if (properties.isEmpty) return null;
 
-    return _createTrendLogFromPropertiesMap(
-      objectInstance: objectInstance,
-      properties: properties,
-    );
+    return _createTrendLogFromPropertiesMap(objectInstance: objectInstance, properties: properties);
   }
 
   /// Crée un BacnetTrendLog depuis les propriétés RPM
-  BacnetTrendLog _createTrendLogFromProperties({
-    required int objectInstance,
-    required List<PropertyResult> properties,
-  }) {
+  BacnetTrendLog _createTrendLogFromProperties({required int objectInstance, required List<PropertyResult> properties}) {
     final propMap = <int, dynamic>{};
     for (final prop in properties) {
       propMap[prop.propertyId] = prop.value;
     }
-    return _createTrendLogFromPropertiesMap(
-      objectInstance: objectInstance,
-      properties: propMap,
-    );
+    return _createTrendLogFromPropertiesMap(objectInstance: objectInstance, properties: propMap);
   }
 
   /// Crée un BacnetTrendLog depuis une map de propriétés
-  BacnetTrendLog _createTrendLogFromPropertiesMap({
-    required int objectInstance,
-    required Map<int, dynamic> properties,
-  }) {
+  BacnetTrendLog _createTrendLogFromPropertiesMap({required int objectInstance, required Map<int, dynamic> properties}) {
     _logger.d('_createTrendLogFromPropertiesMap: TrendLog $objectInstance, properties keys: ${properties.keys.toList()}');
     _logger.d('_createTrendLogFromPropertiesMap: all properties: $properties');
 
     // Parser log-device-object-property pour obtenir l'objet tracké
     final logDeviceObjectProperty = properties[BacnetPropertyId.logDeviceObjectProperty];
-    _logger.d('_createTrendLogFromPropertiesMap: logDeviceObjectProperty (propId=${BacnetPropertyId.logDeviceObjectProperty}) = $logDeviceObjectProperty (type: ${logDeviceObjectProperty.runtimeType})');
+    _logger.d(
+      '_createTrendLogFromPropertiesMap: logDeviceObjectProperty (propId=${BacnetPropertyId.logDeviceObjectProperty}) = $logDeviceObjectProperty (type: ${logDeviceObjectProperty.runtimeType})',
+    );
 
     String? trackedObjectType;
     int? trackedObjectInstance;
@@ -1819,9 +1689,7 @@ class BacnetService {
       );
 
       if (trcResponse.isSuccess && trcResponse.value != null) {
-        lastSeqNum = trcResponse.value is int
-            ? trcResponse.value as int
-            : int.tryParse(trcResponse.value.toString());
+        lastSeqNum = trcResponse.value is int ? trcResponse.value as int : int.tryParse(trcResponse.value.toString());
         _logger.i('readTrendLogBuffer: totalRecordCount=$lastSeqNum');
       }
 
@@ -1867,7 +1735,9 @@ class BacnetService {
       _logger.d('readTrendLogBuffer: response.type=${response.type}, isSuccess=${response.isSuccess}');
 
       if (!response.isSuccess) {
-        _logger.e('readTrendLogBuffer: Failed - ${response.errorMessage}, errorClass=${response.errorClass}, errorCode=${response.errorCode}');
+        _logger.e(
+          'readTrendLogBuffer: Failed - ${response.errorMessage}, errorClass=${response.errorClass}, errorCode=${response.errorCode}',
+        );
         break;
       }
 
@@ -1877,7 +1747,9 @@ class BacnetService {
       }
 
       final result = response.value as ReadRangeResult;
-      _logger.i('readTrendLogBuffer: received ${result.records.length} records, firstSeqNum=${result.firstSequenceNumber}, moreItems=${result.moreItems}');
+      _logger.i(
+        'readTrendLogBuffer: received ${result.records.length} records, firstSeqNum=${result.firstSequenceNumber}, moreItems=${result.moreItems}',
+      );
 
       if (result.records.isEmpty) {
         _logger.w('readTrendLogBuffer: no records returned, stopping');
@@ -1925,11 +1797,7 @@ class BacnetService {
   // =========================================================================
 
   /// Découvre les schedules d'un device BACnet
-  Future<List<BacnetScheduleInfo>> discoverSchedules({
-    required String host,
-    required int port,
-    required int deviceId,
-  }) async {
+  Future<List<BacnetScheduleInfo>> discoverSchedules({required String host, required int port, required int deviceId}) async {
     await init();
 
     final schedules = <BacnetScheduleInfo>[];
@@ -1959,11 +1827,7 @@ class BacnetService {
     // 2. Lire les propriétés de base de chaque schedule
     for (final obj in scheduleObjects) {
       try {
-        final scheduleInfo = await readScheduleBasicInfo(
-          host: host,
-          port: port,
-          scheduleInstance: obj.instance,
-        );
+        final scheduleInfo = await readScheduleBasicInfo(host: host, port: port, scheduleInstance: obj.instance);
         if (scheduleInfo != null) {
           schedules.add(scheduleInfo);
         }
@@ -1999,11 +1863,7 @@ class BacnetService {
       host: host,
       port: port,
       items: [
-        ReadPropertyMultipleItem(
-          objectType: BacnetObjectTypeCode.schedule,
-          objectInstance: scheduleInstance,
-          propertyIds: propertyIds,
-        ),
+        ReadPropertyMultipleItem(objectType: BacnetObjectTypeCode.schedule, objectInstance: scheduleInstance, propertyIds: propertyIds),
       ],
     );
 
@@ -2103,9 +1963,9 @@ class BacnetService {
 
     // Types Multi-state à chercher
     const multistateTypes = [
-      BacnetObjectTypeCode.multiStateInput,  // 13
+      BacnetObjectTypeCode.multiStateInput, // 13
       BacnetObjectTypeCode.multiStateOutput, // 14
-      BacnetObjectTypeCode.multiStateValue,  // 19
+      BacnetObjectTypeCode.multiStateValue, // 19
     ];
 
     final objectListResult = await readProperty(
@@ -2216,11 +2076,7 @@ class BacnetService {
   }
 
   /// Lit le weekly-schedule complet d'un objet Schedule BACnet
-  Future<DecodedWeeklySchedule?> readWeeklySchedule({
-    required String host,
-    required int port,
-    required int scheduleInstance,
-  }) async {
+  Future<DecodedWeeklySchedule?> readWeeklySchedule({required String host, required int port, required int scheduleInstance}) async {
     await init();
 
     _logger.i('readWeeklySchedule: reading schedule $scheduleInstance from $host:$port');
@@ -2270,21 +2126,12 @@ class BacnetService {
     int? deviceId,
   }) async {
     // Lire les infos de base
-    final basicInfo = await readScheduleBasicInfo(
-      host: host,
-      port: port,
-      scheduleInstance: scheduleInstance,
-      deviceId: deviceId,
-    );
+    final basicInfo = await readScheduleBasicInfo(host: host, port: port, scheduleInstance: scheduleInstance, deviceId: deviceId);
 
     if (basicInfo == null) return null;
 
     // Lire le weekly-schedule
-    final weeklySchedule = await readWeeklySchedule(
-      host: host,
-      port: port,
-      scheduleInstance: scheduleInstance,
-    );
+    final weeklySchedule = await readWeeklySchedule(host: host, port: port, scheduleInstance: scheduleInstance);
 
     return BacnetScheduleInfo(
       instance: basicInfo.instance,
@@ -2400,12 +2247,7 @@ class IAmInfo {
   /// Indique s'il y a un conflit de Device ID
   bool get hasConflict => conflictingAddresses.isNotEmpty;
 
-  IAmInfo({
-    required this.address,
-    required this.deviceId,
-    this.networkNumber,
-    this.conflictingAddresses = const [],
-  });
+  IAmInfo({required this.address, required this.deviceId, this.networkNumber, this.conflictingAddresses = const []});
 
   /// Crée une copie avec une adresse conflictuelle ajoutée
   IAmInfo withConflict(InternetAddress conflictAddress) {
@@ -2426,15 +2268,12 @@ class DeviceIdConflict {
   final List<InternetAddress> allAddresses;
   final DateTime detectedAt;
 
-  DeviceIdConflict({
-    required this.deviceId,
-    required this.firstAddress,
-    required this.secondAddress,
-    required this.allAddresses,
-  }) : detectedAt = DateTime.now();
+  DeviceIdConflict({required this.deviceId, required this.firstAddress, required this.secondAddress, required this.allAddresses})
+    : detectedAt = DateTime.now();
 
   @override
-  String toString() => 'DeviceIdConflict(id=$deviceId, '
+  String toString() =>
+      'DeviceIdConflict(id=$deviceId, '
       'addresses=${allAddresses.map((a) => a.address).join(", ")})';
 }
 
