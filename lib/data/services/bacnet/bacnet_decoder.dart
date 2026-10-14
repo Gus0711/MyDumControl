@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'bacnet_constants.dart';
 
@@ -5,54 +6,90 @@ import 'bacnet_constants.dart';
 class BacnetDecoder {
   /// Décode un paquet BACnet/IP complet
   static BacnetResponse decode(Uint8List data) {
-    if (data.length < 4) {
-      return BacnetResponse.error('Packet too short');
+    final frame = parseFrame(data);
+    if (frame == null) {
+      return BacnetResponse.error('Invalid BVLC/NPDU header');
     }
-
-    int offset = 0;
-
-    // 1. Décoder BVLC
-    final bvlc = _decodeBvlc(data, offset);
-    if (bvlc == null) {
-      return BacnetResponse.error('Invalid BVLC header');
-    }
-    offset += 4;
-
-    // Pour Forwarded-NPDU, skip l'adresse source (6 bytes)
-    if (bvlc.function == BvlcFunction.forwardedNpdu) {
-      offset += 6;
-    }
-
-    // 2. Décoder NPDU
-    final npdu = _decodeNpdu(data, offset);
-    if (npdu == null) {
-      return BacnetResponse.error('Invalid NPDU header');
-    }
-    offset += npdu.headerLength;
 
     // Si c'est un message réseau, pas d'APDU
-    if (npdu.isNetworkLayerMessage) {
+    if (frame.isNetworkLayerMessage) {
       return BacnetResponse.error('Network layer message not supported');
     }
 
-    // 3. Décoder APDU
-    return _decodeApdu(data, offset);
+    return decodeApdu(data, frame.apduOffset);
   }
 
-  // =========================================================================
-  // BVLC Decoding
-  // =========================================================================
+  /// Parses the BVLC and NPDU headers of a BACnet/IP datagram.
+  ///
+  /// Handles Forwarded-NPDU (BVLC 0x04, NPDU at offset 10 and original
+  /// B/IP address in bytes 4-9) and exposes the NPDU source specifier
+  /// (SNET/SADR) of routed messages. Returns null if the frame is invalid.
+  static BacnetFrame? parseFrame(Uint8List data) {
+    if (data.length < 6 || data[0] != bvlcTypeBacnetIp) return null;
 
-  static BvlcHeader? _decodeBvlc(Uint8List data, int offset) {
-    if (data[offset] != bvlcTypeBacnetIp) {
-      return null;
+    final function = data[1];
+    int offset = 4;
+    String? originAddress;
+    int? originPort;
+
+    if (function == BvlcFunction.forwardedNpdu) {
+      if (data.length < 12) return null;
+      originAddress = '${data[4]}.${data[5]}.${data[6]}.${data[7]}';
+      originPort = (data[8] << 8) | data[9];
+      offset = 10;
     }
 
-    return BvlcHeader(
-      type: data[offset],
-      function: data[offset + 1],
-      length: (data[offset + 2] << 8) | data[offset + 3],
+    final npdu = _decodeNpdu(data, offset);
+    if (npdu == null) return null;
+
+    return BacnetFrame(
+      bvlcFunction: function,
+      npduOffset: offset,
+      apduOffset: offset + npdu.headerLength,
+      npdu: npdu,
+      originAddress: originAddress,
+      originPort: originPort,
     );
+  }
+
+  /// Decodes an APDU starting at [offset] (no BVLC/NPDU in front of it).
+  static BacnetResponse decodeApdu(Uint8List data, int offset) {
+    try {
+      return _decodeApdu(data, offset);
+    } on RangeError {
+      return BacnetResponse.error('Truncated APDU');
+    }
+  }
+
+  /// Parses the header of a segmented ComplexACK (SEG bit set).
+  /// Layout: [0x38|MOR] [invokeId] [sequence] [proposed window] [service] data...
+  /// Returns null if the APDU at [offset] is not a segmented ComplexACK.
+  static SegmentHeader? parseSegmentHeader(Uint8List data, int offset) {
+    if (offset + 5 > data.length) return null;
+    final first = data[offset];
+    if ((first & 0xF0) != ApduType.complexAck || (first & 0x08) == 0) return null;
+    return SegmentHeader(
+      invokeId: data[offset + 1],
+      sequenceNumber: data[offset + 2],
+      proposedWindowSize: data[offset + 3],
+      serviceChoice: data[offset + 4],
+      moreFollows: (first & 0x04) != 0,
+      payloadOffset: offset + 5,
+    );
+  }
+
+  /// Decodes a ComplexACK rebuilt from the concatenated segment payloads.
+  static BacnetResponse decodeReassembledComplexAck({
+    required int invokeId,
+    required int serviceChoice,
+    required List<int> payload,
+  }) {
+    final apdu = Uint8List(3 + payload.length)
+      ..[0] = ApduType.complexAck
+      ..[1] = invokeId
+      ..[2] = serviceChoice
+      ..setRange(3, 3 + payload.length, payload);
+    return decodeApdu(apdu, 0);
   }
 
   // =========================================================================
@@ -60,7 +97,7 @@ class BacnetDecoder {
   // =========================================================================
 
   static NpduHeader? _decodeNpdu(Uint8List data, int offset) {
-    if (offset >= data.length) return null;
+    if (offset + 2 > data.length) return null;
 
     final version = data[offset];
     if (version != npduVersion) {
@@ -68,27 +105,39 @@ class BacnetDecoder {
     }
 
     final control = data[offset + 1];
-    int headerLength = 2;
+    int pos = offset + 2;
+    final hasDestination = (control & NpduControl.destinationSpecifier) != 0;
 
-    // Skip destination specifier if present
-    if ((control & NpduControl.destinationSpecifier) != 0) {
-      if (offset + headerLength + 3 > data.length) return null;
-      final dlen = data[offset + headerLength + 2];
-      headerLength += 3 + dlen + 1; // DNET(2) + DLEN(1) + DADR(dlen) + HopCount(1)
+    // Destination specifier: DNET(2) + DLEN(1) + DADR(dlen)
+    if (hasDestination) {
+      if (pos + 3 > data.length) return null;
+      final dlen = data[pos + 2];
+      pos += 3 + dlen;
     }
 
-    // Skip source specifier if present
+    // Source specifier: SNET(2) + SLEN(1) + SADR(slen)
+    int? sourceNetwork;
+    List<int>? sourceMac;
     if ((control & NpduControl.sourceSpecifier) != 0) {
-      if (offset + headerLength + 3 > data.length) return null;
-      final slen = data[offset + headerLength + 2];
-      headerLength += 3 + slen; // SNET(2) + SLEN(1) + SADR(slen)
+      if (pos + 3 > data.length) return null;
+      sourceNetwork = (data[pos] << 8) | data[pos + 1];
+      final slen = data[pos + 2];
+      if (pos + 3 + slen > data.length) return null;
+      sourceMac = data.sublist(pos + 3, pos + 3 + slen);
+      pos += 3 + slen;
     }
+
+    // Hop count follows the source specifier when DNET is present
+    if (hasDestination) pos += 1;
+    if (pos > data.length) return null;
 
     return NpduHeader(
       version: version,
       control: control,
-      headerLength: headerLength,
+      headerLength: pos - offset,
       isNetworkLayerMessage: (control & NpduControl.networkLayerMessage) != 0,
+      sourceNetwork: sourceNetwork,
+      sourceMac: sourceMac,
     );
   }
 
@@ -123,6 +172,14 @@ class BacnetDecoder {
 
   /// Décode un Complex ACK (réponse ReadProperty, etc.)
   static BacnetResponse _decodeComplexAck(Uint8List data, int offset) {
+    if ((data[offset] & 0x08) != 0) {
+      // Segmented: must be reassembled first (see parseSegmentHeader)
+      return BacnetResponse(
+        type: BacnetResponseType.parseError,
+        invokeId: data[offset + 1],
+        errorMessage: 'Segmented ComplexACK not reassembled',
+      );
+    }
     // Complex ACK header: PDU type, Invoke ID, Service ACK Choice
     final invokeId = data[offset + 1];
     final serviceChoice = data[offset + 2];
@@ -195,11 +252,18 @@ class BacnetDecoder {
       final values = <dynamic>[];
       while (offset < data.length && data[offset] != 0x3F) {
         final valueResult = _decodeApplicationValue(data, offset);
-        if (valueResult == null) {
+        if (valueResult != null) {
+          values.add(valueResult.value);
+          offset = valueResult.nextOffset;
+          continue;
+        }
+        // Constructed value (context tags), same handling as RPM
+        final structResult = _decodeConstructedValue(data, offset, 0x3F);
+        if (structResult == null || structResult.nextOffset <= offset) {
           break;
         }
-        values.add(valueResult.value);
-        offset = valueResult.nextOffset;
+        values.add(structResult.value);
+        offset = structResult.nextOffset;
       }
 
       // Return single value or list depending on count
@@ -298,25 +362,43 @@ class BacnetDecoder {
             finalValue = values;
           }
 
-          if (finalValue != null || hasStructuredValue) {
-            objectResults.add(PropertyResult(
-              propertyId: propId.value,
-              arrayIndex: arrayIndex,
-              value: finalValue,
-            ));
-          }
+          // Keep properties whose value is Null: "no value" is not "no property"
+          objectResults.add(PropertyResult(
+            propertyId: propId.value,
+            arrayIndex: arrayIndex,
+            value: hasStructuredValue || values.isNotEmpty ? finalValue : null,
+          ));
 
           if (offset < data.length && data[offset] == 0x4F) {
             offset++; // Skip closing tag
           }
         } else if (offset < data.length && data[offset] == 0x5E) {
-          // Opening tag [5]: Property Access Error
+          // Opening tag [5]: Property Access Error (error-class, error-code)
           offset++;
-          // Skip error details for now
+          final classResult = _decodeApplicationValue(data, offset);
+          int? errorClass;
+          int? errorCode;
+          if (classResult != null && classResult.value is int) {
+            errorClass = classResult.value as int;
+            offset = classResult.nextOffset;
+            final codeResult = _decodeApplicationValue(data, offset);
+            if (codeResult != null && codeResult.value is int) {
+              errorCode = codeResult.value as int;
+              offset = codeResult.nextOffset;
+            }
+          }
           while (offset < data.length && data[offset] != 0x5F) {
             offset++;
           }
           if (offset < data.length) offset++;
+          objectResults.add(PropertyResult(
+            propertyId: propId.value,
+            arrayIndex: arrayIndex,
+            error: 'class=$errorClass, code=$errorCode',
+          ));
+        } else {
+          // Neither [4] nor [5]: malformed, stop parsing this object
+          break;
         }
       }
 
@@ -470,19 +552,21 @@ class BacnetDecoder {
       offset = maybeArrayIndex.nextOffset;
     }
 
-    // Context tag [3]: Result Flags (BACnetResultFlags)
+    // Context tag [3]: Result Flags (BACnetResultFlags BIT STRING, MSB first):
+    // bit 0 first-item = 0x80, bit 1 last-item = 0x40, bit 2 more-items = 0x20
     int resultFlags = 0;
-    if (offset < data.length && (data[offset] & 0xF0) == 0x30) {
-      // Context 3 - result flags (bit string)
-      final len = data[offset] & 0x07;
+    if (offset < data.length && (data[offset] & 0xF8) == 0x38) {
+      int len = data[offset] & 0x07;
       offset++;
-      if (len > 0 && offset + len <= data.length) {
-        // Skip unused bits count and read flags
-        if (len >= 2) {
-          resultFlags = data[offset + 1];
-        }
-        offset += len;
+      if (len == 5 && offset < data.length) {
+        len = data[offset];
+        offset++;
       }
+      if (len >= 2 && offset + len <= data.length) {
+        // data[offset] = number of unused bits, data[offset + 1] = flags
+        resultFlags = data[offset + 1];
+      }
+      offset += len;
     }
 
     // Context tag [4]: Item Count
@@ -501,8 +585,8 @@ class BacnetDecoder {
       // Parse each log record
       while (offset < data.length && data[offset] != 0x5F) {
         final record = _decodeLogRecord(data, offset);
-        if (record != null) {
-          records.add(record.record);
+        if (record != null && record.nextOffset > offset) {
+          if (record.record != null) records.add(record.record!);
           offset = record.nextOffset;
         } else {
           // Skip unknown byte and continue
@@ -533,72 +617,60 @@ class BacnetDecoder {
       value: ReadRangeResult(
         itemCount: itemCount ?? records.length,
         firstSequenceNumber: firstSequenceNumber,
-        moreItems: (resultFlags & 0x01) != 0,
+        firstItem: (resultFlags & ReadRangeResult.firstItemFlag) != 0,
+        lastItem: (resultFlags & ReadRangeResult.lastItemFlag) != 0,
+        moreItems: (resultFlags & ReadRangeResult.moreItemsFlag) != 0,
         records: records,
       ),
     );
   }
 
   /// Décode un enregistrement de log (BACnetLogRecord)
+  ///
+  /// Returns null when the bytes at [offset] are not a log record. A record
+  /// with a missing or invalid timestamp is skipped (record == null) instead
+  /// of being stamped with the current time.
   static _LogRecordResult? _decodeLogRecord(Uint8List data, int offset) {
     // Un BACnetLogRecord est une séquence avec:
     // [0] timestamp (BACnetDateTime)
     // [1] logDatum (CHOICE)
     // [2] statusFlags (optional)
+    if (offset >= data.length || data[offset] != 0x0E) return null;
 
     DateTime? timestamp;
     dynamic logValue;
     int? statusFlags;
 
-    // Chercher le timestamp (context tag 0)
-    if (offset < data.length && (data[offset] & 0xF8) == 0x08) {
-      // Context 0 opening tag
-      if (data[offset] == 0x0E) {
-        offset++; // Skip opening tag
-
-        // Decode BACnetDateTime (Date + Time)
-        final dateResult = _decodeApplicationDate(data, offset);
-        if (dateResult != null) {
-          offset = dateResult.nextOffset;
-          final timeResult = _decodeApplicationTime(data, offset);
-          if (timeResult != null) {
-            offset = timeResult.nextOffset;
-            timestamp = DateTime(
-              dateResult.year,
-              dateResult.month,
-              dateResult.day,
-              timeResult.hour,
-              timeResult.minute,
-              timeResult.second,
-              timeResult.hundredths * 10,
-            );
-          }
-        }
-
-        // Skip to closing tag
-        while (offset < data.length && data[offset] != 0x0F) {
-          offset++;
-        }
-        if (offset < data.length) offset++; // Skip closing tag
+    // [0] timestamp
+    offset++; // Skip opening tag
+    final dateResult = _decodeApplicationDate(data, offset);
+    if (dateResult != null) {
+      offset = dateResult.nextOffset;
+      final timeResult = _decodeApplicationTime(data, offset);
+      if (timeResult != null) {
+        offset = timeResult.nextOffset;
+        timestamp = _toDateTime(dateResult, timeResult);
       }
     }
+    offset = _skipPastClosingTag(data, offset, 0);
 
-    // Chercher logDatum (context tag 1)
-    // logDatum est un CHOICE avec des context tags internes:
-    // [0] log-status, [1] boolean, [2] real, [3] enum, [4] unsigned, [5] signed, etc.
+    // [1] logDatum
+    // CHOICE: [0] log-status, [1] boolean, [2] real, [3] enum, [4] unsigned,
+    // [5] signed, [6] bitstring, [7] null, [8] failure, [9] time-change,
+    // [10] any-value
     if (offset < data.length && data[offset] == 0x1E) {
       offset++; // Skip opening tag
 
-      // Parse the CHOICE - le premier octet indique le type de valeur
       if (offset < data.length) {
         final tagByte = data[offset];
-        // Context tag: bit 3 = 1 (class = context)
-        // Format: [tag number (4 bits)] [class (1 bit)] [P/C (1 bit)] [length/type (2 bits)]
-        // Pour context primitive: tag << 4 | 0x08 | length (si length < 5)
         final isContext = (tagByte & 0x08) != 0;
+        final tagNumber = tagByte >> 4;
 
-        if (isContext) {
-          final tagNumber = tagByte >> 4;
+        if (isContext && (tagByte & 0x07) == 6) {
+          // Constructed choice: [8] failure (BACnetError) or [10] any-value.
+          // No usable numeric value: skip the whole construct.
+          offset = _skipPastClosingTag(data, offset + 1, tagNumber);
+        } else if (isContext) {
           final lenOrType = tagByte & 0x07;
 
           // Déterminer la longueur
@@ -620,85 +692,40 @@ class BacnetDecoder {
 
           // Décoder selon le type (tagNumber dans le CHOICE)
           switch (tagNumber) {
-            case 0: // log-status (BIT STRING)
-              // Skip for now
-              offset = dataStart + len;
-              break;
             case 1: // boolean-value
               if (len == 1 && dataStart < data.length) {
                 logValue = data[dataStart] != 0;
               }
-              offset = dataStart + len;
               break;
             case 2: // real-value (IEEE 754 float)
-              if (len == 4 && dataStart + 4 <= data.length) {
-                final bytes = ByteData.sublistView(
-                  Uint8List.fromList(data.sublist(dataStart, dataStart + 4)));
-                logValue = bytes.getFloat32(0, Endian.big);
-              }
-              offset = dataStart + len;
-              break;
-            case 3: // enumerated-value
-              if (dataStart + len <= data.length) {
-                int enumVal = 0;
-                for (int i = 0; i < len; i++) {
-                  enumVal = (enumVal << 8) | data[dataStart + i];
-                }
-                logValue = enumVal;
-              }
-              offset = dataStart + len;
-              break;
-            case 4: // unsigned-value
-              if (dataStart + len <= data.length) {
-                int unsignedVal = 0;
-                for (int i = 0; i < len; i++) {
-                  unsignedVal = (unsignedVal << 8) | data[dataStart + i];
-                }
-                logValue = unsignedVal;
-              }
-              offset = dataStart + len;
-              break;
-            case 5: // signed-value (INTEGER)
-              if (dataStart + len <= data.length) {
-                int signedVal = 0;
-                for (int i = 0; i < len; i++) {
-                  signedVal = (signedVal << 8) | data[dataStart + i];
-                }
-                // Handle sign extension
-                if (len > 0 && (data[dataStart] & 0x80) != 0) {
-                  signedVal = signedVal - (1 << (len * 8));
-                }
-                logValue = signedVal;
-              }
-              offset = dataStart + len;
-              break;
-            case 7: // null-value
-              logValue = null;
-              offset = dataStart + len;
-              break;
             case 9: // time-change (REAL)
               if (len == 4 && dataStart + 4 <= data.length) {
-                final bytes = ByteData.sublistView(
-                  Uint8List.fromList(data.sublist(dataStart, dataStart + 4)));
+                final bytes = ByteData.sublistView(data, dataStart, dataStart + 4);
                 logValue = bytes.getFloat32(0, Endian.big);
               }
-              offset = dataStart + len;
+              break;
+            case 3: // enumerated-value
+            case 4: // unsigned-value
+              if (dataStart + len <= data.length) {
+                logValue = _decodeUnsigned(data, dataStart, len);
+              }
+              break;
+            case 5: // signed-value (INTEGER)
+              logValue = _decodeSigned(data, dataStart, len);
               break;
             default:
-              // Unknown type, skip
-              offset = dataStart + len;
+              // [0] log-status, [6] bitstring, [7] null: no numeric value
+              break;
           }
+          offset = dataStart + len;
         }
       }
 
-      // Skip to closing tag 0x1F
-      while (offset < data.length && data[offset] != 0x1F) {
-        offset++;
-      }
-      if (offset < data.length) offset++; // Skip closing tag
+      offset = _skipPastClosingTag(data, offset, 1);
     }
 
-    // Chercher statusFlags (context tag 2, optional)
+    // [2] statusFlags (optional BIT STRING, raw MSB-first byte:
+    // in-alarm=0x80, fault=0x40, overridden=0x20, out-of-service=0x10)
     if (offset < data.length && (data[offset] & 0xF8) == 0x28) {
       final len = data[offset] & 0x07;
       offset++;
@@ -710,18 +737,78 @@ class BacnetDecoder {
       }
     }
 
-    if (timestamp == null && logValue == null) {
-      return null;
-    }
-
     return _LogRecordResult(
-      record: TrendLogRecordData(
-        timestamp: timestamp ?? DateTime.now(),
-        value: logValue,
-        statusFlags: statusFlags,
-      ),
+      record: timestamp == null
+          ? null
+          : TrendLogRecordData(
+              timestamp: timestamp,
+              value: logValue,
+              statusFlags: statusFlags,
+            ),
       nextOffset: offset,
     );
+  }
+
+  /// Builds a DateTime from a BACnet date/time, or null if a field is a
+  /// wildcard (255) or out of range.
+  static DateTime? _toDateTime(_DateResult d, _TimeResult t) {
+    if (d.year == 1900 + 255) return null;
+    if (d.month < 1 || d.month > 12) return null;
+    if (d.day < 1 || d.day > 31) return null;
+    if (t.hour > 23 || t.minute > 59 || t.second > 59) return null;
+    final hundredths = t.hundredths > 99 ? 0 : t.hundredths;
+    final dt = DateTime(d.year, d.month, d.day, t.hour, t.minute, t.second, hundredths * 10);
+    // Reject days that overflow into the next month (e.g. 31 February)
+    if (dt.month != d.month) return null;
+    return dt;
+  }
+
+  /// Skips tags until the closing tag of context [tagNumber] at the same
+  /// nesting level, and returns the offset just after it. Unlike a plain byte
+  /// scan, data bytes such as 0x0F inside a REAL are not mistaken for tags.
+  static int _skipPastClosingTag(Uint8List data, int offset, int tagNumber) {
+    final closing = (tagNumber << 4) | 0x0F;
+    int depth = 0;
+    while (offset < data.length) {
+      final b = data[offset];
+      final isContext = (b & 0x08) != 0;
+      // Extended tag number (>= 15): one extra byte after the tag byte
+      final headerLength = (b >> 4) == 0x0F ? 2 : 1;
+      if (isContext && (b & 0x07) == 6) {
+        depth++;
+        offset += headerLength;
+        continue;
+      }
+      if (isContext && (b & 0x07) == 7) {
+        if (depth == 0) {
+          return b == closing ? offset + headerLength : offset;
+        }
+        depth--;
+        offset += headerLength;
+        continue;
+      }
+      // Primitive tag: skip header + content
+      int len = b & 0x07;
+      offset += headerLength;
+      if (!isContext && (b >> 4) == ApplicationTag.boolean) {
+        len = 0; // Application boolean: value is in the tag byte
+      } else if (len == 5) {
+        if (offset >= data.length) return data.length;
+        len = data[offset];
+        offset++;
+        if (len == 254) {
+          if (offset + 2 > data.length) return data.length;
+          len = (data[offset] << 8) | data[offset + 1];
+          offset += 2;
+        } else if (len == 255) {
+          if (offset + 4 > data.length) return data.length;
+          len = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+          offset += 4;
+        }
+      }
+      offset += len;
+    }
+    return data.length;
   }
 
   /// Décode une date BACnet (Application tag 10)
@@ -912,13 +999,11 @@ class BacnetDecoder {
 
       case ApplicationTag.characterString:
         if (length > 0 && offset + length <= data.length) {
-          // First byte is encoding (0 = UTF-8)
-          final encoding = data[offset];
-          if (encoding == 0) {
-            value = String.fromCharCodes(data.sublist(offset + 1, offset + length));
-          } else {
-            value = String.fromCharCodes(data.sublist(offset + 1, offset + length));
-          }
+          // First byte is the character set (0 = UTF-8)
+          value = decodeCharacterString(
+            data[offset],
+            data.sublist(offset + 1, offset + length),
+          );
         }
         break;
 
@@ -969,6 +1054,37 @@ class BacnetDecoder {
     }
 
     return ValueResult(value: value, nextOffset: offset + length);
+  }
+
+  /// Decodes the octets of a BACnet CharacterString according to its
+  /// character set (ASHRAE 135 clause 20.2.9):
+  /// 0 = UTF-8, 3 = UCS-4 (big endian), 4 = UCS-2 (big endian),
+  /// 5 = ISO 8859-1. Other sets (DBCS, JIS) fall back to ISO 8859-1.
+  /// Invalid UTF-8 (devices sending Latin-1 with charset 0) is read as
+  /// ISO 8859-1 rather than producing replacement characters.
+  static String decodeCharacterString(int charset, List<int> bytes) {
+    switch (charset) {
+      case 0:
+        try {
+          return utf8.decode(bytes);
+        } on FormatException {
+          return latin1.decode(bytes);
+        }
+      case 3:
+        final codes = <int>[];
+        for (int i = 0; i + 3 < bytes.length; i += 4) {
+          codes.add((bytes[i] << 24) | (bytes[i + 1] << 16) | (bytes[i + 2] << 8) | bytes[i + 3]);
+        }
+        return String.fromCharCodes(codes);
+      case 4:
+        final units = <int>[];
+        for (int i = 0; i + 1 < bytes.length; i += 2) {
+          units.add((bytes[i] << 8) | bytes[i + 1]);
+        }
+        return String.fromCharCodes(units);
+      default:
+        return latin1.decode(bytes);
+    }
   }
 
   /// Décode un Object Identifier avec application tag
@@ -1297,16 +1413,45 @@ class BacnetDecoder {
 // Result Classes
 // =========================================================================
 
-/// Header BVLC décodé
-class BvlcHeader {
-  final int type;
-  final int function;
-  final int length;
+/// BVLC + NPDU headers of a BACnet/IP datagram
+class BacnetFrame {
+  final int bvlcFunction;
+  final int npduOffset;
+  final int apduOffset;
+  final NpduHeader npdu;
 
-  BvlcHeader({
-    required this.type,
-    required this.function,
-    required this.length,
+  /// Original B/IP address of a Forwarded-NPDU (null otherwise)
+  final String? originAddress;
+  final int? originPort;
+
+  BacnetFrame({
+    required this.bvlcFunction,
+    required this.npduOffset,
+    required this.apduOffset,
+    required this.npdu,
+    this.originAddress,
+    this.originPort,
+  });
+
+  bool get isNetworkLayerMessage => npdu.isNetworkLayerMessage;
+}
+
+/// Header of one segment of a segmented ComplexACK
+class SegmentHeader {
+  final int invokeId;
+  final int sequenceNumber;
+  final int proposedWindowSize;
+  final int serviceChoice;
+  final bool moreFollows;
+  final int payloadOffset;
+
+  SegmentHeader({
+    required this.invokeId,
+    required this.sequenceNumber,
+    required this.proposedWindowSize,
+    required this.serviceChoice,
+    required this.moreFollows,
+    required this.payloadOffset,
   });
 }
 
@@ -1317,11 +1462,17 @@ class NpduHeader {
   final int headerLength;
   final bool isNetworkLayerMessage;
 
+  /// SNET / SADR of a message coming from a remote BACnet network
+  final int? sourceNetwork;
+  final List<int>? sourceMac;
+
   NpduHeader({
     required this.version,
     required this.control,
     required this.headerLength,
     required this.isNetworkLayerMessage,
+    this.sourceNetwork,
+    this.sourceMac,
   });
 }
 
@@ -1338,6 +1489,9 @@ enum BacnetResponseType {
   iAm,
   unconfirmedRequest,
   parseError,
+
+  /// No answer received after all retries
+  timeout,
 }
 
 /// Réponse BACnet décodée
@@ -1377,6 +1531,20 @@ class BacnetResponse {
     );
   }
 
+  factory BacnetResponse.timeout([String message = 'Timeout waiting for response']) {
+    return BacnetResponse(
+      type: BacnetResponseType.timeout,
+      errorMessage: message,
+    );
+  }
+
+  /// True when the device answered with Error, Reject or Abort
+  /// (as opposed to a timeout or a local error).
+  bool get isDeviceError =>
+      type == BacnetResponseType.error ||
+      type == BacnetResponseType.reject ||
+      type == BacnetResponseType.abort;
+
   bool get isSuccess =>
       type == BacnetResponseType.readPropertyAck ||
       type == BacnetResponseType.readPropertyMultipleAck ||
@@ -1389,7 +1557,8 @@ class BacnetResponse {
       type == BacnetResponseType.error ||
       type == BacnetResponseType.reject ||
       type == BacnetResponseType.abort ||
-      type == BacnetResponseType.parseError;
+      type == BacnetResponseType.parseError ||
+      type == BacnetResponseType.timeout;
 }
 
 /// Résultat du décodage d'un Object Identifier
@@ -1451,14 +1620,28 @@ class ReadPropertyMultipleResult {
 
 /// Résultat d'un ReadRange
 class ReadRangeResult {
+  static const int firstItemFlag = 0x80;
+  static const int lastItemFlag = 0x40;
+  static const int moreItemsFlag = 0x20;
+
   final int itemCount;
   final int? firstSequenceNumber;
+
+  /// The response contains the first (oldest) item of the list
+  final bool firstItem;
+
+  /// The response contains the last (newest) item of the list
+  final bool lastItem;
+
+  /// More items matched the request but did not fit in the response
   final bool moreItems;
   final List<TrendLogRecordData> records;
 
   ReadRangeResult({
     required this.itemCount,
     this.firstSequenceNumber,
+    this.firstItem = false,
+    this.lastItem = false,
     this.moreItems = false,
     required this.records,
   });
@@ -1479,7 +1662,7 @@ class TrendLogRecordData {
 
 /// Résultat interne pour le parsing de log record
 class _LogRecordResult {
-  final TrendLogRecordData record;
+  final TrendLogRecordData? record;
   final int nextOffset;
 
   _LogRecordResult({required this.record, required this.nextOffset});

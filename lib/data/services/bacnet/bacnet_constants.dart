@@ -1,12 +1,6 @@
 /// Constantes du protocole BACnet/IP
 library;
 
-/// Port UDP par défaut pour BACnet/IP
-const int bacnetDefaultPort = 47808;
-
-/// Timeout par défaut pour les requêtes BACnet (ms)
-const int bacnetDefaultTimeout = 5000;
-
 /// Version du protocole NPDU
 const int npduVersion = 0x01;
 

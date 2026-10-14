@@ -35,6 +35,22 @@ class BacnetEncoder {
         .toBytes();
   }
 
+  /// Byte 0 of a Confirmed-Request: PDU type 0, SEG=0, MOR=0,
+  /// SA=1 (segmented-response-accepted).
+  static const int confirmedRequestHeader = ApduType.confirmedRequest | 0x02;
+
+  /// Byte 1 of a Confirmed-Request: max-segments-accepted = 7 (more than 64)
+  /// in bits 6-4, max-APDU-length-accepted = 5 (1476 octets) in bits 3-0.
+  static const int maxSegmentsAndApdu = 0x75;
+
+  /// Writes the 4-byte header of a Confirmed-Request APDU
+  static void _encodeConfirmedHeader(BytesBuilder builder, int invokeId, int serviceChoice) {
+    builder.addByte(confirmedRequestHeader);
+    builder.addByte(maxSegmentsAndApdu);
+    builder.addByte(invokeId & 0xFF);
+    builder.addByte(serviceChoice);
+  }
+
   // =========================================================================
   // Public API
   // =========================================================================
@@ -172,6 +188,24 @@ class BacnetEncoder {
     return packet;
   }
 
+  /// Encodes a SegmentACK sent by the client for a segmented ComplexACK.
+  /// [negative] = NAK (segment out of order: ask for retransmission after
+  /// [sequenceNumber]).
+  static Uint8List encodeSegmentAck({
+    required int invokeId,
+    required int sequenceNumber,
+    required int windowSize,
+    bool negative = false,
+  }) {
+    final apdu = Uint8List.fromList([
+      ApduType.segmentAck | (negative ? 0x02 : 0x00), // SRV = 0 (from client)
+      invokeId & 0xFF,
+      sequenceNumber & 0xFF,
+      windowSize & 0xFF,
+    ]);
+    return _assemblePacket(apdu: apdu, expectingReply: false);
+  }
+
   /// Encode un paquet ReadPropertyMultiple
   static Uint8List encodeReadPropertyMultipleRequest({
     required int invokeId,
@@ -239,20 +273,8 @@ class BacnetEncoder {
   }) {
     final builder = BytesBuilder();
 
-    // PDU Type + flags: Confirmed Request, no segmentation
-    // Bits: 0000 SEG MOR SA _
-    // Pour une requête simple: 0x00
-    builder.addByte(ApduType.confirmedRequest);
-
-    // Max response segments accepted (0 = no segmentation)
-    // Max APDU length accepted: 0x05 = 1476 octets
-    builder.addByte(0x05);
-
-    // Invoke ID
-    builder.addByte(invokeId & 0xFF);
-
-    // Service Choice: ReadProperty = 12
-    builder.addByte(ConfirmedService.readProperty);
+    // Confirmed Request header, ReadProperty = 12
+    _encodeConfirmedHeader(builder, invokeId, ConfirmedService.readProperty);
 
     // Context tag [0]: Object Identifier
     _encodeContextObjectId(builder, 0, objectType, objectInstance);
@@ -280,17 +302,8 @@ class BacnetEncoder {
   }) {
     final builder = BytesBuilder();
 
-    // PDU Type: Confirmed Request
-    builder.addByte(ApduType.confirmedRequest);
-
-    // Max segments + Max APDU size
-    builder.addByte(0x05);
-
-    // Invoke ID
-    builder.addByte(invokeId & 0xFF);
-
-    // Service Choice: WriteProperty = 15
-    builder.addByte(ConfirmedService.writeProperty);
+    // Confirmed Request header, WriteProperty = 15
+    _encodeConfirmedHeader(builder, invokeId, ConfirmedService.writeProperty);
 
     // Context tag [0]: Object Identifier
     _encodeContextObjectId(builder, 0, objectType, objectInstance);
@@ -329,13 +342,10 @@ class BacnetEncoder {
     // Service Choice: Who-Is = 8
     builder.addByte(UnconfirmedService.whoIs);
 
-    // Context tag [0]: Device Instance Range Low Limit (optional)
-    if (lowLimit != null) {
+    // Context tags [0] low limit and [1] high limit: the standard requires
+    // both or none, a single limit would be an invalid request
+    if (lowLimit != null && highLimit != null) {
       _encodeContextUnsigned(builder, 0, lowLimit);
-    }
-
-    // Context tag [1]: Device Instance Range High Limit (optional)
-    if (highLimit != null) {
       _encodeContextUnsigned(builder, 1, highLimit);
     }
 
@@ -349,11 +359,7 @@ class BacnetEncoder {
   }) {
     final builder = BytesBuilder();
 
-    // PDU Type: Confirmed Request
-    builder.addByte(ApduType.confirmedRequest);
-    builder.addByte(0x05); // Max segments + Max APDU
-    builder.addByte(invokeId & 0xFF);
-    builder.addByte(ConfirmedService.readPropertyMultiple);
+    _encodeConfirmedHeader(builder, invokeId, ConfirmedService.readPropertyMultiple);
 
     // Encode each read access specification
     for (final item in items) {
@@ -442,8 +448,12 @@ class BacnetEncoder {
     } else if (value is BacnetEnumerated) {
       _encodeApplicationEnumerated(builder, value.value);
     } else if (value is int) {
-      // Unsigned Integer
-      _encodeApplicationUnsigned(builder, value);
+      // Unsigned Integer (Signed Integer if negative)
+      if (value < 0) {
+        _encodeApplicationSigned(builder, value);
+      } else {
+        _encodeApplicationUnsigned(builder, value);
+      }
     } else if (value is double) {
       // Real (float32)
       _encodeApplicationReal(builder, value);
@@ -451,8 +461,7 @@ class BacnetEncoder {
       // Character String
       _encodeApplicationCharacterString(builder, value);
     } else {
-      // Fallback: try as unsigned
-      _encodeApplicationUnsigned(builder, value as int);
+      throw ArgumentError.value(value, 'value', 'Unsupported BACnet application value type ${value.runtimeType}');
     }
   }
 
@@ -573,11 +582,7 @@ class BacnetEncoder {
   }) {
     final builder = BytesBuilder();
 
-    // PDU Type: Confirmed Request
-    builder.addByte(ApduType.confirmedRequest);
-    builder.addByte(0x05); // Max segments + Max APDU
-    builder.addByte(invokeId & 0xFF);
-    builder.addByte(ConfirmedService.readRange); // 26
+    _encodeConfirmedHeader(builder, invokeId, ConfirmedService.readRange); // 26
 
     // Context tag [0]: Object Identifier
     _encodeContextObjectId(builder, 0, objectType, objectInstance);
@@ -740,37 +745,6 @@ class BacnetEncoder {
     _encodeScheduleValue(builder, tv.value, tv.valueTag);
   }
 
-  /// Encode un BACnetDailySchedule (SEQUENCE OF BACnetTimeValue)
-  static Uint8List encodeDailySchedule(BacnetDailySchedule dailySchedule) {
-    final builder = BytesBuilder();
-    for (final tv in dailySchedule.timeValues) {
-      _encodeTimeValue(builder, tv);
-    }
-    return builder.toBytes();
-  }
-
-  /// Encode un BACnetWeeklySchedule complet (ARRAY[7] OF BACnetDailySchedule)
-  /// Retourne les bytes à mettre dans le property value
-  static Uint8List encodeWeeklySchedule(BacnetWeeklySchedule weeklySchedule) {
-    final builder = BytesBuilder();
-
-    // Weekly_Schedule est un ARRAY de 7 éléments
-    // Chaque élément est un SEQUENCE OF BACnetTimeValue (DailySchedule)
-    // En BACnet, on encode chaque jour comme une séquence ouverte/fermée
-
-    for (int dayIndex = 0; dayIndex < 7; dayIndex++) {
-      final dailySchedule = weeklySchedule.days[dayIndex];
-
-      // Chaque DailySchedule est encodé comme une séquence (pas de tags de contexte ici)
-      // Les TimeValues sont juste concaténés
-      for (final tv in dailySchedule.timeValues) {
-        _encodeTimeValue(builder, tv);
-      }
-    }
-
-    return builder.toBytes();
-  }
-
   /// Encode un WriteProperty pour le weekly-schedule d'un objet Schedule
   /// [dayIndex]: 1-7 pour un jour spécifique (1=Lundi), null pour tous les jours
   static Uint8List encodeWriteWeeklyScheduleRequest({
@@ -781,11 +755,7 @@ class BacnetEncoder {
   }) {
     final builder = BytesBuilder();
 
-    // PDU Type: Confirmed Request
-    builder.addByte(ApduType.confirmedRequest);
-    builder.addByte(0x05); // Max segments + Max APDU
-    builder.addByte(invokeId & 0xFF);
-    builder.addByte(ConfirmedService.writeProperty);
+    _encodeConfirmedHeader(builder, invokeId, ConfirmedService.writeProperty);
 
     // Context tag [0]: Object Identifier (Schedule object)
     _encodeContextObjectId(builder, 0, BacnetObjectTypeCode.schedule, scheduleInstance);
@@ -801,30 +771,17 @@ class BacnetEncoder {
     // Context tag [3]: Property Value (opening tag)
     builder.addByte(0x3E);
 
-    if (dayIndex != null && dayIndex >= 1 && dayIndex <= 7) {
-      // Écrire un seul jour
-      final dailySchedule = weeklySchedule.days[dayIndex - 1];
-      // Encoder le DailySchedule directement (pas d'encapsulation supplémentaire pour un index)
+    // BACnetDailySchedule ::= SEQUENCE { day-schedule [0] SEQUENCE OF BACnetTimeValue }
+    // Each element of the array, including a single element written with
+    // an array index, is wrapped in context tag [0] (0x0E ... 0x0F).
+    final singleDay = dayIndex != null && dayIndex >= 1 && dayIndex <= 7;
+    final days = singleDay ? [weeklySchedule.days[dayIndex - 1]] : weeklySchedule.days.take(7);
+    for (final dailySchedule in days) {
+      builder.addByte(0x0E); // Opening tag context 0
       for (final tv in dailySchedule.timeValues) {
         _encodeTimeValue(builder, tv);
       }
-    } else {
-      // Écrire tous les 7 jours
-      // Chaque jour est encapsulé dans un opening/closing tag
-      for (int i = 0; i < 7; i++) {
-        final dailySchedule = weeklySchedule.days[i];
-
-        // Opening tag pour le jour (constructed, no context - juste une séquence)
-        // En BACnet, BACnetDailySchedule est SEQUENCE OF, donc on utilise des tags d'ouverture/fermeture
-        // Le tag 0 avec opening/closing pour chaque élément de l'array
-        builder.addByte(0x0E); // Opening tag context 0
-
-        for (final tv in dailySchedule.timeValues) {
-          _encodeTimeValue(builder, tv);
-        }
-
-        builder.addByte(0x0F); // Closing tag context 0
-      }
+      builder.addByte(0x0F); // Closing tag context 0
     }
 
     // Context tag [3]: Closing tag
