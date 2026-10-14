@@ -2,6 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'bacnet_constants.dart';
 
+/// Wraps an int so it is encoded as a BACnet Enumerated (tag 9)
+/// instead of Unsigned (e.g. present-value of binary objects).
+class BacnetEnumerated {
+  final int value;
+  const BacnetEnumerated(this.value);
+}
+
 /// Encodeur de paquets BACnet/IP
 class BacnetEncoder {
   // =========================================================================
@@ -432,6 +439,8 @@ class BacnetEncoder {
     } else if (value is bool) {
       // Boolean
       builder.addByte(value ? 0x11 : 0x10);
+    } else if (value is BacnetEnumerated) {
+      _encodeApplicationEnumerated(builder, value.value);
     } else if (value is int) {
       // Unsigned Integer
       _encodeApplicationUnsigned(builder, value);

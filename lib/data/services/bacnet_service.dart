@@ -1482,12 +1482,48 @@ class BacnetService {
       objectType: objectType,
       objectInstance: objectInstance,
       propertyId: BacnetPropertyId.presentValue,
-      value: value,
+      value: _toPresentValueDatatype(objectType, value),
       priority: priority,
     );
 
     if (!result.isSuccess) {
       throw Exception(result.errorMessage ?? 'Failed to write present-value');
+    }
+  }
+
+  /// Converts a UI value to the datatype required by the present-value
+  /// of the object type (ASHRAE 135): Real for analog, Enumerated for
+  /// binary, Unsigned for multi-state. null (relinquish) is kept as is.
+  static dynamic _toPresentValueDatatype(int objectType, dynamic value) {
+    if (value == null) return null;
+    switch (objectType) {
+      case BacnetObjectTypeCode.analogInput:
+      case BacnetObjectTypeCode.analogOutput:
+      case BacnetObjectTypeCode.analogValue:
+        if (value is num) return value.toDouble();
+        if (value is String) return double.tryParse(value.replaceAll(',', '.')) ?? value;
+        return value;
+      case BacnetObjectTypeCode.binaryInput:
+      case BacnetObjectTypeCode.binaryOutput:
+      case BacnetObjectTypeCode.binaryValue:
+        final bool active;
+        if (value is bool) {
+          active = value;
+        } else if (value is num) {
+          active = value != 0;
+        } else {
+          final lower = value.toString().toLowerCase();
+          active = lower == 'active' || lower == 'true' || lower == '1' || lower == 'on';
+        }
+        return BacnetEnumerated(active ? 1 : 0);
+      case BacnetObjectTypeCode.multiStateInput:
+      case BacnetObjectTypeCode.multiStateOutput:
+      case BacnetObjectTypeCode.multiStateValue:
+        if (value is num) return value.toInt();
+        if (value is String) return int.tryParse(value) ?? value;
+        return value;
+      default:
+        return value;
     }
   }
 
