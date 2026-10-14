@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/providers/schedule_provider.dart';
+import '../../../application/providers/settings_provider.dart';
 import '../../../domain/models/schedule.dart';
 import 'widgets/schedule_dialogs.dart';
 import 'widgets/schedule_colors.dart';
@@ -35,6 +36,8 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
   Widget build(BuildContext context) {
     final scheduleAsync = ref.watch(scheduleDetailProvider(widget.instance));
     final editState = ref.watch(scheduleEditProvider);
+    // Rebuild the times when the 12/24 h setting changes
+    ref.watch(settingsProvider.select((s) => s.use24HourFormat));
 
     // Écouter les messages de succès/erreur
     ref.listen(scheduleEditProvider, (previous, next) {

@@ -10,6 +10,7 @@ import '../providers/connection_providers.dart';
 import '../providers/database_provider.dart';
 import '../providers/folder_providers.dart';
 import '../../data/database/app_database.dart';
+import '../../domain/models/display_preferences.dart';
 
 /// Clés pour SharedPreferences
 class SettingsKeys {
@@ -82,6 +83,12 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   late final Future<void> _ready;
 
   SettingsNotifier(Ref ref) : super(const AppSettings()) {
+    // Keep the display preferences read by the models in sync
+    addListener((s) => DisplayPreferences.apply(
+          decimalPlaces: s.decimalPlaces,
+          temperatureUnit: s.temperatureUnit,
+          use24HourFormat: s.use24HourFormat,
+        ));
     _ready = _init();
   }
 

@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/trend_log_provider.dart';
+import '../../../application/providers/settings_provider.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../domain/models/display_preferences.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/trend_log_viewer.dart';
@@ -36,6 +38,8 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // Rebuild the values when the display settings change
+    ref.watch(settingsProvider.select((s) => (s.decimalPlaces, s.temperatureUnit)));
 
     // Parser l'ID du point (format: "type:instance")
     final parts = widget.pointId.split(':');
@@ -1174,11 +1178,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     }
 
     if (value is num) {
-      final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 2);
-      if (point.units != null && point.units!.isNotEmpty) {
-        return '$formatted ${point.units}';
-      }
-      return formatted;
+      return DisplayPreferences.formatAnalog(value, point.units);
     }
 
     return value.toString();

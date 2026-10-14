@@ -1,3 +1,4 @@
+import 'display_preferences.dart';
 import '../../../data/services/bacnet/bacnet_constants.dart';
 
 /// Types d'objets BACnet
@@ -225,9 +226,8 @@ class BacnetObject {
 
     // Valeurs analogiques avec unité
     if (presentValue is num) {
-      final value = presentValue as num;
-      final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 2);
-      return units != null ? '$formatted $units' : formatted;
+      // Decimal places / °F conversion from the display settings
+      return DisplayPreferences.formatAnalog(presentValue as num, units);
     }
 
     return presentValue.toString();
@@ -837,12 +837,9 @@ class ControllerTime {
   /// Indique si le décalage est critique (> 10 minutes)
   bool get hasCriticalOffset => absoluteOffsetMinutes > 10;
 
-  /// Heure formatée (HH:mm)
-  String get formattedTime {
-    final h = controllerDateTime.hour.toString().padLeft(2, '0');
-    final m = controllerDateTime.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
+  /// Heure formatée (HH:mm, ou h:mm AM/PM selon les réglages)
+  String get formattedTime =>
+      DisplayPreferences.formatHourMinute(controllerDateTime.hour, controllerDateTime.minute);
 
   /// Date formatée courte (JJ/MM)
   String get formattedDateShort {
@@ -856,9 +853,12 @@ class ControllerTime {
     final d = controllerDateTime.day.toString().padLeft(2, '0');
     final m = controllerDateTime.month.toString().padLeft(2, '0');
     final y = controllerDateTime.year;
+    final s = controllerDateTime.second.toString().padLeft(2, '0');
+    if (!DisplayPreferences.use24HourFormat) {
+      return '$d/$m/$y ${DisplayPreferences.formatHourMinute(controllerDateTime.hour, controllerDateTime.minute)}';
+    }
     final h = controllerDateTime.hour.toString().padLeft(2, '0');
     final min = controllerDateTime.minute.toString().padLeft(2, '0');
-    final s = controllerDateTime.second.toString().padLeft(2, '0');
     return '$d/$m/$y $h:$min:$s';
   }
 
