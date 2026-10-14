@@ -1,12 +1,13 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
-
 import 'package:logger/logger.dart';
 
 import 'bacnet/bacnet_constants.dart';
 import 'bacnet/bacnet_encoder.dart';
 import 'bacnet/bacnet_decoder.dart';
+import 'bacnet/bacnet_network.dart';
 import '../../domain/models/bacnet_object.dart';
 import '../../domain/models/network_interface_choice.dart';
 
@@ -33,11 +34,24 @@ class BacnetConnectionResult {
 /// Supporte ReadProperty, WriteProperty, ReadPropertyMultiple, Who-Is
 class BacnetService {
   RawDatagramSocket? _socket;
+  StreamSubscription<RawSocketEvent>? _socketSubscription;
   int _invokeId = 0;
-  final Map<int, Completer<BacnetResponse>> _pendingRequests = {};
+
+  /// Pending confirmed requests, keyed by "peerIp#invokeId"
+  final Map<String, _PendingRequest> _pendingRequests = {};
+
+  /// Per-device limit of simultaneous confirmed requests
+  final Map<String, _Semaphore> _deviceSemaphores = {};
+  static const int maxConcurrentRequestsPerDevice = 4;
+
+  /// Retries after a timeout (ASHRAE 135 Number_Of_APDU_Retries)
+  final int _retries;
+
   final Duration _timeout;
   bool _isInitialized = false;
-  bool _isInitializing = false; // Protection contre les initialisations concurrentes
+
+  /// Shared future of the init in progress (concurrent callers await it)
+  Future<void>? _initFuture;
 
   // Multi-homing : interface réseau sélectionnée
   NetworkInterfaceChoice? _boundInterface;
@@ -46,12 +60,22 @@ class BacnetService {
   final Map<int, IAmInfo> _seenDevices = {};
   final _conflictController = StreamController<DeviceIdConflict>.broadcast();
 
+  /// Every I-Am received, without de-duplication (used by whoIs)
+  final _rawIAmController = StreamController<IAmInfo>.broadcast();
+
+  /// Devices that rejected ReadPropertyMultiple (unrecognized-service)
+  final Set<String> _rpmUnsupportedHosts = {};
+
+  /// Short-lived object-list cache, keyed by "host:port:deviceId"
+  final Map<String, ({DateTime readAt, List<_ObjectInfo> objects})> _objectListCache = {};
+  static const Duration _objectListCacheTtl = Duration(minutes: 2);
+
   // Info port BACnet
   static const int standardBacnetPort = 47808;
   bool _isUsingStandardPort = false;
   int? _actualPort;
 
-  BacnetService({Duration timeout = const Duration(seconds: 5)}) : _timeout = timeout;
+  BacnetService({Duration timeout = const Duration(seconds: 5), int retries = 1}) : _timeout = timeout, _retries = retries;
 
   /// Interface réseau actuellement utilisée (null = toutes)
   NetworkInterfaceChoice? get boundInterface => _boundInterface;
@@ -69,55 +93,92 @@ class BacnetService {
   /// Initialise le socket UDP
   /// Utilise le port 47808 (BACnet standard) comme port source pour la découverte
   /// Certains devices ne répondent qu'aux requêtes venant de ce port
-  /// [bindInterface] : Si spécifié, bind uniquement sur cette interface réseau
-  Future<void> init({NetworkInterfaceChoice? bindInterface}) async {
-    if (_isInitialized) return;
+  /// [bindInterface] : Si spécifié, découverte limitée à cette interface réseau
+  ///
+  /// Concurrent calls share the same future; if the bind fails, every
+  /// caller gets the error and the next call tries again.
+  Future<void> init({NetworkInterfaceChoice? bindInterface}) {
+    if (_isInitialized) return Future.value();
+    final pending = _initFuture;
+    if (pending != null) return pending;
 
-    // Protection contre les appels concurrents
-    if (_isInitializing) {
-      // Attendre que l'initialisation en cours se termine
-      while (_isInitializing && !_isInitialized) {
-        await Future.delayed(const Duration(milliseconds: 50));
-      }
-      return;
-    }
-    _isInitializing = true;
+    final future = _doInit(bindInterface);
+    _initFuture = future;
+    return future.whenComplete(() {
+      if (identical(_initFuture, future)) _initFuture = null;
+    });
+  }
 
-    // Déterminer l'adresse de bind
-    final bindAddress = bindInterface != null ? InternetAddress(bindInterface.address) : InternetAddress.anyIPv4;
+  Future<void> _doInit(NetworkInterfaceChoice? bindInterface) async {
+    // Linux/macOS/Android: a socket bound to a unicast IP does not receive
+    // datagrams sent to the broadcast address (I-Am replies are often
+    // broadcast). Bind on 0.0.0.0 and use the selected interface only to
+    // choose the broadcast addresses. Windows delivers broadcasts to a socket
+    // bound to the interface IP, which also pins the outgoing interface.
+    final bindOnInterfaceIp = bindInterface != null && Platform.isWindows;
+    final bindAddress = bindOnInterfaceIp ? InternetAddress(bindInterface.address) : InternetAddress.anyIPv4;
 
     // Essayer d'abord le port BACnet standard 47808 (meilleure compatibilité)
     // Si déjà utilisé, fallback sur un port dynamique
+    RawDatagramSocket socket;
+    bool standardPort;
     try {
-      _socket = await RawDatagramSocket.bind(bindAddress, standardBacnetPort, reuseAddress: true);
-      _boundInterface = bindInterface;
-      _isUsingStandardPort = true;
-      _actualPort = standardBacnetPort;
-      _logger.i('BACnet service bound to ${bindInterface?.address ?? "0.0.0.0"}:$standardBacnetPort');
+      socket = await RawDatagramSocket.bind(bindAddress, standardBacnetPort, reuseAddress: true);
+      standardPort = true;
     } catch (e) {
       _logger.w('Could not bind to port $standardBacnetPort: $e. Using dynamic port.');
-      _socket = await RawDatagramSocket.bind(bindAddress, 0);
-      _boundInterface = bindInterface;
-      _isUsingStandardPort = false;
-      _actualPort = _socket!.port;
-      _logger.w('BACnet service using non-standard port ${_socket!.port} - some devices may not respond');
+      socket = await RawDatagramSocket.bind(bindAddress, 0);
+      standardPort = false;
+      _logger.w('BACnet service using non-standard port ${socket.port} - some devices may not respond');
     }
 
-    _socket!.broadcastEnabled = true; // Activer le broadcast pour Who-Is
-
-    // Essayer de joindre l'adresse broadcast pour recevoir les I-Am envoyés en broadcast
-    // Certains devices répondent à l'adresse broadcast plutôt qu'à l'IP source
-    try {
-      // Note: sur certaines plateformes, il faut être sur le port 47808 pour recevoir les broadcasts
-      _logger.d('Socket local address: ${_socket!.address.address}:${_socket!.port}');
-    } catch (e) {
-      _logger.w('Could not get socket info: $e');
-    }
-
-    _socket!.listen(_handleResponse);
+    socket.broadcastEnabled = true; // Activer le broadcast pour Who-Is
+    _socket = socket;
+    _boundInterface = bindInterface;
+    _isUsingStandardPort = standardPort;
+    _actualPort = socket.port;
+    _socketSubscription = socket.listen(_handleSocketEvent);
     _isInitialized = true;
-    _isInitializing = false;
-    _logger.i('BACnet service initialized on port ${_socket!.port}, broadcast enabled');
+    _logger.i(
+      'BACnet service bound to ${bindAddress.address}:${socket.port} '
+      '(interface: ${bindInterface?.address ?? "all"}), broadcast enabled',
+    );
+  }
+
+  /// Ferme le socket et fait échouer les requêtes en attente
+  Future<void> _closeSocket(String reason) async {
+    // Let an init in progress finish so its socket is closed too
+    final pendingInit = _initFuture;
+    if (pendingInit != null) {
+      try {
+        await pendingInit;
+      } catch (_) {
+        // Init failed: nothing to close
+      }
+    }
+
+    final subscription = _socketSubscription;
+    _socketSubscription = null;
+    _socket?.close();
+    _socket = null;
+    _isInitialized = false;
+    _boundInterface = null;
+    _isUsingStandardPort = false;
+    _actualPort = null;
+    _objectListCache.clear();
+    _failAllPending(reason);
+    await subscription?.cancel();
+  }
+
+  void _failAllPending(String reason) {
+    final pending = _pendingRequests.values.toList();
+    _pendingRequests.clear();
+    for (final request in pending) {
+      request.timer?.cancel();
+      if (!request.completer.isCompleted) {
+        request.completer.complete(BacnetResponse.error(reason));
+      }
+    }
   }
 
   /// Réinitialise le service sur une nouvelle interface réseau
@@ -126,38 +187,26 @@ class BacnetService {
     _logger.i('Rebinding BACnet service to ${newInterface?.address ?? "all interfaces"}');
 
     // Fermer seulement le socket, pas les controllers
-    _socket?.close();
-    _socket = null;
-    _isInitialized = false;
-    _isInitializing = false;
-    _boundInterface = null;
-    _isUsingStandardPort = false;
-    _actualPort = null;
-    _pendingRequests.clear();
-    // Ne pas fermer _iAmController et _conflictController !
-
+    await _closeSocket('Socket rebound to another interface');
     await init(bindInterface: newInterface);
   }
 
   /// Ferme le socket et libère les ressources
   void dispose() {
+    final subscription = _socketSubscription;
+    _socketSubscription = null;
+    subscription?.cancel();
     _socket?.close();
     _socket = null;
     _isInitialized = false;
-    _isInitializing = false;
     _boundInterface = null;
     _isUsingStandardPort = false;
     _actualPort = null;
-    _pendingRequests.clear();
+    _failAllPending('BACnet service disposed');
     _seenDevices.clear();
-    if (!_iAmController.isClosed) {
-      _iAmController.close();
-    }
-    if (!_routerController.isClosed) {
-      _routerController.close();
-    }
-    if (!_conflictController.isClosed) {
-      _conflictController.close();
+    _objectListCache.clear();
+    for (final controller in [_iAmController, _rawIAmController, _routerController, _conflictController]) {
+      if (!controller.isClosed) controller.close();
     }
     _logger.d('BACnet service disposed');
   }
@@ -175,98 +224,202 @@ class BacnetService {
     }
   }
 
-  /// Génère un nouvel Invoke ID
-  int _nextInvokeId() {
-    _invokeId = (_invokeId + 1) & 0xFF;
-    return _invokeId;
+  static String _requestKey(String ip, int invokeId) => '$ip#$invokeId';
+
+  /// Allocates an invoke ID that is not in use for this peer
+  int _nextInvokeId(String ip) {
+    for (int i = 0; i < 256; i++) {
+      _invokeId = (_invokeId + 1) & 0xFF;
+      if (!_pendingRequests.containsKey(_requestKey(ip, _invokeId))) {
+        return _invokeId;
+      }
+    }
+    throw StateError('No free invoke ID for $ip');
   }
 
-  /// Gère les réponses UDP entrantes
-  void _handleResponse(RawSocketEvent event) {
+  // =========================================================================
+  // Reception
+  // =========================================================================
+
+  void _handleSocketEvent(RawSocketEvent event) {
     if (event != RawSocketEvent.read) return;
 
-    // Protection: ignorer si le service est fermé ou en cours de fermeture
-    if (!_isInitialized || _socket == null) return;
+    // Read every queued datagram (a burst of I-Am can queue several)
+    while (true) {
+      final socket = _socket;
+      if (!_isInitialized || socket == null) return;
+      final datagram = socket.receive();
+      if (datagram == null) return;
+      _handleDatagram(datagram);
+    }
+  }
 
-    final datagram = _socket?.receive();
-    if (datagram == null) return;
+  /// Gère un datagramme UDP entrant
+  void _handleDatagram(Datagram datagram) {
+    final data = datagram.data;
 
-    // Filtre rapide: ignorer les paquets trop courts
-    if (datagram.data.length < 4) return;
+    // Filtre rapide: paquets trop courts ou non BACnet/IP
+    if (data.length < 6 || data[0] != bvlcTypeBacnetIp) return;
 
-    // Vérifier le type BVLC (0x81 = BACnet/IP)
-    if (datagram.data[0] != 0x81) return;
-
-    final bvlcFunc = datagram.data[1];
-
-    // Filtre: ignorer les messages BVLC qu'on ne traite pas
-    // 0x0a = Original-Unicast-NPDU (réponses directes) - GARDER
-    // 0x0b = Original-Broadcast-NPDU (broadcasts) - GARDER pour I-Am
-    // 0x04 = Forwarded-NPDU - GARDER pour I-Am depuis BBMD
-    // Autres (0x00, 0x01, etc.) = BVLC management, ignorer
-    if (bvlcFunc != 0x0a && bvlcFunc != 0x0b && bvlcFunc != 0x04) {
-      return; // Ignorer silencieusement les messages de gestion BVLC
+    // 0x0a = Original-Unicast-NPDU, 0x0b = Original-Broadcast-NPDU,
+    // 0x04 = Forwarded-NPDU (BBMD). Autres = gestion BVLC, ignorés
+    final bvlcFunc = data[1];
+    if (bvlcFunc != BvlcFunction.originalUnicastNpdu &&
+        bvlcFunc != BvlcFunction.originalBroadcastNpdu &&
+        bvlcFunc != BvlcFunction.forwardedNpdu) {
+      return;
     }
 
-    // Vérifier si c'est un Network Layer Message (I-Am-Router-To-Network)
-    if (datagram.data.length >= 7) {
-      final npduControl = datagram.data[5];
-      if ((npduControl & NpduControl.networkLayerMessage) != 0) {
-        _handleNetworkLayerMessage(datagram.data, datagram.address);
-        return;
-      }
-    }
-
+    final BacnetFrame? frame;
     try {
-      final response = BacnetDecoder.decode(datagram.data);
-
-      // Si c'est un I-Am, le traiter séparément (pas d'invokeId associé)
-      if (response.type == BacnetResponseType.iAm) {
-        _logger.i('I-Am received from ${datagram.address.address}:${datagram.port}, deviceId: ${response.objectInstance}');
-        _handleIAm(response, datagram.address);
-        return;
-      }
-
-      // Ignorer les autres unconfirmedRequests (COV notifications, Who-Is relayés, etc.)
-      if (response.type == BacnetResponseType.unconfirmedRequest) {
-        return; // Ignorer silencieusement
-      }
-
-      // Debug: si c'est une erreur, afficher les détails
-      if (response.isError) {
-        _logger.w('BACnet error response: class=${response.errorClass}, code=${response.errorCode}, msg=${response.errorMessage}');
-      }
-
-      // Trouver la requête en attente
-      if (response.invokeId != null) {
-        final completer = _pendingRequests.remove(response.invokeId);
-        if (completer != null && !completer.isCompleted) {
-          _logger.d('BACnet response for invokeId: ${response.invokeId}');
-          completer.complete(response);
-        }
-      }
+      frame = BacnetDecoder.parseFrame(data);
     } catch (e) {
-      // Ignorer les erreurs de décodage silencieusement pour les paquets malformés
-      // (on reçoit beaucoup de paquets sur le port 47808)
+      _logger.d('Malformed BACnet frame from ${datagram.address.address}: $e');
+      return;
     }
+    if (frame == null) return;
+
+    // A Forwarded-NPDU carries the address of the originating device
+    final sourceAddress = frame.originAddress != null ? InternetAddress(frame.originAddress!) : datagram.address;
+    final sourcePort = frame.originPort ?? datagram.port;
+
+    if (frame.isNetworkLayerMessage) {
+      _handleNetworkLayerMessage(data, frame.apduOffset, sourceAddress);
+      return;
+    }
+
+    final apduOffset = frame.apduOffset;
+    if (apduOffset >= data.length) return;
+    final pduType = data[apduOffset] & 0xF0;
+
+    if (pduType == ApduType.unconfirmedRequest) {
+      try {
+        final response = BacnetDecoder.decodeApdu(data, apduOffset);
+        if (response.type == BacnetResponseType.iAm) {
+          _logger.i('I-Am received from ${sourceAddress.address}:$sourcePort, deviceId: ${response.objectInstance}');
+          _handleIAm(response, sourceAddress, sourcePort, frame.npdu);
+        }
+        // Autres unconfirmedRequests (COV, Who-Is relayés...) ignorés
+      } catch (e) {
+        _logger.d('Failed to decode unconfirmed request from ${sourceAddress.address}: $e');
+      }
+      return;
+    }
+
+    // Confirmed service responses: correlate on (source address, invokeId)
+    if (pduType != ApduType.complexAck &&
+        pduType != ApduType.simpleAck &&
+        pduType != ApduType.error &&
+        pduType != ApduType.reject &&
+        pduType != ApduType.abort) {
+      return;
+    }
+    if (apduOffset + 1 >= data.length) return;
+    final invokeId = data[apduOffset + 1];
+    final request = _pendingRequests[_requestKey(sourceAddress.address, invokeId)];
+    if (request == null || request.completer.isCompleted) return;
+
+    if (pduType == ApduType.complexAck && (data[apduOffset] & 0x08) != 0) {
+      _handleSegment(request, data, apduOffset);
+      return;
+    }
+
+    BacnetResponse response;
+    try {
+      response = BacnetDecoder.decodeApdu(data, apduOffset);
+    } catch (e) {
+      response = BacnetResponse.error('Malformed response: $e');
+    }
+
+    if (response.isError) {
+      _logger.w(
+        'BACnet error response: type=${response.type}, class=${response.errorClass}, code=${response.errorCode}, msg=${response.errorMessage}',
+      );
+    }
+
+    // Abort out-of-resources: the device is busy, try again if allowed
+    if (response.type == BacnetResponseType.abort && response.errorCode == _abortOutOfResources && request.attempts <= _retries) {
+      _logger.d('Device busy (Abort out-of-resources), retrying invokeId $invokeId');
+      _transmit(request);
+      return;
+    }
+
+    _completeRequest(request, response);
+  }
+
+  static const int _abortOutOfResources = 9;
+
+  /// Handles one segment of a segmented ComplexACK and sends the SegmentACK.
+  /// The actual window size is 1: every segment is acknowledged.
+  void _handleSegment(_PendingRequest request, Uint8List data, int apduOffset) {
+    final header = BacnetDecoder.parseSegmentHeader(data, apduOffset);
+    if (header == null) return;
+
+    final socket = _socket;
+    if (socket == null) return;
+
+    if (request.segments == null) {
+      if (header.sequenceNumber != 0) {
+        return; // Wait for the first segment
+      }
+      request.segments = BytesBuilder(copy: false);
+      request.segmentServiceChoice = header.serviceChoice;
+      request.expectedSequence = 0;
+    }
+
+    final expected = request.expectedSequence;
+    if (header.sequenceNumber != expected) {
+      // Duplicate or out of order: NAK with the last segment received in order
+      socket.send(
+        BacnetEncoder.encodeSegmentAck(invokeId: header.invokeId, sequenceNumber: (expected - 1) & 0xFF, windowSize: 1, negative: true),
+        request.address,
+        request.port,
+      );
+      return;
+    }
+
+    request.segments!.add(data.sublist(header.payloadOffset));
+    request.expectedSequence = (expected + 1) & 0xFF;
+    socket.send(
+      BacnetEncoder.encodeSegmentAck(invokeId: header.invokeId, sequenceNumber: header.sequenceNumber, windowSize: 1),
+      request.address,
+      request.port,
+    );
+
+    if (header.moreFollows) {
+      // Wait for the next segment (restart the timeout)
+      _armTimer(request);
+      return;
+    }
+
+    final payload = request.segments!.takeBytes();
+    _logger.d('Segmented response reassembled: ${payload.length} bytes, invokeId ${header.invokeId}');
+    _completeRequest(
+      request,
+      BacnetDecoder.decodeReassembledComplexAck(
+        invokeId: header.invokeId,
+        serviceChoice: request.segmentServiceChoice ?? header.serviceChoice,
+        payload: payload,
+      ),
+    );
   }
 
   /// Gère les Network Layer Messages (I-Am-Router-To-Network, etc.)
-  void _handleNetworkLayerMessage(Uint8List data, InternetAddress address) {
-    // BVLC (4 bytes) + NPDU Version (1) + Control (1) + Message Type (1)
-    if (data.length < 7) return;
+  /// [offset] is the position of the message type, right after the NPDU header.
+  void _handleNetworkLayerMessage(Uint8List data, int offset, InternetAddress address) {
+    if (offset >= data.length) return;
 
-    final messageType = data[6];
+    final messageType = data[offset];
 
     // I-Am-Router-To-Network (0x01)
     if (messageType == NetworkLayerMessageType.iAmRouterToNetwork) {
       // Parse les numéros de réseau (2 bytes chacun)
       final networks = <int>[];
-      int offset = 7;
-      while (offset + 1 < data.length) {
-        final networkNumber = (data[offset] << 8) | data[offset + 1];
+      int pos = offset + 1;
+      while (pos + 1 < data.length) {
+        final networkNumber = (data[pos] << 8) | data[pos + 1];
         networks.add(networkNumber);
-        offset += 2;
+        pos += 2;
       }
 
       if (networks.isNotEmpty && !_routerController.isClosed) {
@@ -278,87 +431,166 @@ class BacnetService {
 
   /// Gère les messages I-Am (pour la découverte)
   final _iAmController = StreamController<IAmInfo>.broadcast();
+
+  /// I-Am of devices not seen since the last [clearSeenDevices], plus
+  /// updates when a Device ID conflict is detected.
   Stream<IAmInfo> get iAmStream => _iAmController.stream;
 
   /// Gère les messages I-Am-Router-To-Network
   final _routerController = StreamController<RouterInfo>.broadcast();
   Stream<RouterInfo> get routerStream => _routerController.stream;
 
-  void _handleIAm(BacnetResponse response, InternetAddress address) {
+  void _handleIAm(BacnetResponse response, InternetAddress address, int port, NpduHeader npdu) {
     if (response.objectInstance == null) return;
+
+    final deviceId = response.objectInstance!;
+    final info = IAmInfo(address: address, deviceId: deviceId, port: port, networkNumber: npdu.sourceNetwork, macAddress: npdu.sourceMac);
+
+    if (!_rawIAmController.isClosed) {
+      _rawIAmController.add(info);
+    }
+
     if (_iAmController.isClosed) {
-      _logger.w('_handleIAm: iAmController is CLOSED! Cannot emit device ${response.objectInstance}');
+      _logger.w('_handleIAm: iAmController is CLOSED! Cannot emit device $deviceId');
       return;
     }
 
-    final deviceId = response.objectInstance!;
     final existingDevice = _seenDevices[deviceId];
 
     if (existingDevice != null) {
-      // Device ID déjà vu
-      if (existingDevice.address.address != address.address) {
-        // CONFLIT : Même deviceId, adresse IP différente
-        _logger.w(
-          'CONFLIT Device ID $deviceId: '
-          '${existingDevice.address.address} ET ${address.address}',
+      // Device ID déjà vu: ignorer les I-Am répétés d'une adresse connue
+      if (existingDevice.knowsAddress(address)) return;
+
+      // CONFLIT : Même deviceId, adresse IP différente
+      _logger.w(
+        'CONFLIT Device ID $deviceId: '
+        '${existingDevice.address.address} ET ${address.address}',
+      );
+
+      final updatedDevice = existingDevice.withConflict(address);
+      _seenDevices[deviceId] = updatedDevice;
+
+      if (!_conflictController.isClosed) {
+        _conflictController.add(
+          DeviceIdConflict(
+            deviceId: deviceId,
+            firstAddress: existingDevice.address,
+            secondAddress: address,
+            allAddresses: updatedDevice.allAddresses,
+          ),
         );
-
-        // Mettre à jour le device existant avec le conflit
-        final updatedDevice = existingDevice.withConflict(address);
-        _seenDevices[deviceId] = updatedDevice;
-
-        // Émettre l'alerte de conflit
-        if (!_conflictController.isClosed) {
-          _conflictController.add(
-            DeviceIdConflict(
-              deviceId: deviceId,
-              firstAddress: existingDevice.address,
-              secondAddress: address,
-              allAddresses: [existingDevice.address, ...updatedDevice.conflictingAddresses],
-            ),
-          );
-        }
-
-        // Émettre aussi sur iAmStream pour mise à jour UI
-        _iAmController.add(updatedDevice);
       }
-      // Même adresse, même deviceId = juste un duplicate I-Am, ignorer
+
+      // Émettre aussi sur iAmStream pour mise à jour UI
+      _iAmController.add(updatedDevice);
       return;
     }
 
     // Nouveau device
-    final newDevice = IAmInfo(address: address, deviceId: deviceId);
-    _seenDevices[deviceId] = newDevice;
+    _seenDevices[deviceId] = info;
     _logger.d('_handleIAm: Emitting new device $deviceId to iAmStream');
-    _iAmController.add(newDevice);
+    _iAmController.add(info);
   }
 
-  /// Envoie un paquet et attend la réponse
-  Future<BacnetResponse> _sendAndWait(Uint8List packet, String host, int port, int invokeId) async {
-    _ensureInitialized();
+  // =========================================================================
+  // Emission / correlation
+  // =========================================================================
 
-    final completer = Completer<BacnetResponse>();
-    _pendingRequests[invokeId] = completer;
-
+  /// Sends a confirmed request and waits for its answer.
+  ///
+  /// [buildPacket] receives the invoke ID allocated for this peer. The
+  /// request is resent with the same invoke ID after a timeout ([_retries]
+  /// times). At most [maxConcurrentRequestsPerDevice] requests are in flight
+  /// per device. Never throws: failures are returned as a [BacnetResponse]
+  /// (type timeout when the device does not answer).
+  Future<BacnetResponse> _sendConfirmed(String host, int port, Uint8List Function(int invokeId) buildPacket) async {
     try {
-      final address = InternetAddress(host);
-      _socket!.send(packet, address, port);
-      _logger.d('BACnet request sent to $host:$port, invokeId: $invokeId');
-
-      // Attendre la réponse avec timeout
-      final response = await completer.future.timeout(
-        _timeout,
-        onTimeout: () {
-          _logger.w('BACnet TIMEOUT for invokeId: $invokeId (after ${_timeout.inSeconds}s)');
-          _pendingRequests.remove(invokeId);
-          return BacnetResponse.error('Timeout waiting for response');
-        },
-      );
-
-      return response;
+      await init();
+      _ensureInitialized();
     } catch (e) {
-      _pendingRequests.remove(invokeId);
+      return BacnetResponse.error('BACnet socket not available: $e');
+    }
+
+    final InternetAddress address;
+    try {
+      address = InternetAddress(host);
+    } catch (e) {
+      return BacnetResponse.error('Invalid address $host: $e');
+    }
+
+    final semaphore = _deviceSemaphores.putIfAbsent(address.address, () => _Semaphore(maxConcurrentRequestsPerDevice));
+    await semaphore.acquire();
+    try {
+      if (!_isInitialized || _socket == null) {
+        return BacnetResponse.error('BACnet socket closed');
+      }
+      final invokeId = _nextInvokeId(address.address);
+      final request = _PendingRequest(
+        key: _requestKey(address.address, invokeId),
+        invokeId: invokeId,
+        packet: buildPacket(invokeId),
+        address: address,
+        port: port,
+      );
+      _pendingRequests[request.key] = request;
+      _transmit(request);
+      return await request.completer.future;
+    } catch (e) {
       return BacnetResponse.error('Error sending request: $e');
+    } finally {
+      semaphore.release();
+    }
+  }
+
+  void _transmit(_PendingRequest request) {
+    final socket = _socket;
+    if (socket == null) {
+      _completeRequest(request, BacnetResponse.error('BACnet socket closed'));
+      return;
+    }
+    request.attempts++;
+    try {
+      socket.send(request.packet, request.address, request.port);
+      _logger.d(
+        'BACnet request sent to ${request.address.address}:${request.port}, '
+        'invokeId: ${request.invokeId}, attempt ${request.attempts}',
+      );
+    } catch (e) {
+      _completeRequest(request, BacnetResponse.error('Error sending request: $e'));
+      return;
+    }
+    _armTimer(request);
+  }
+
+  void _armTimer(_PendingRequest request) {
+    request.timer?.cancel();
+    request.timer = Timer(_timeout, () => _onTimeout(request));
+  }
+
+  void _onTimeout(_PendingRequest request) {
+    if (request.completer.isCompleted) return;
+    // Retry only if no segment has been received (otherwise the device's
+    // transaction state machine is mid-way and a resend would be ambiguous)
+    if (request.segments == null && request.attempts <= _retries) {
+      _logger.w('BACnet timeout for invokeId ${request.invokeId} to ${request.address.address}, retrying');
+      _transmit(request);
+      return;
+    }
+    _logger.w(
+      'BACnet TIMEOUT for invokeId: ${request.invokeId} to ${request.address.address} '
+      '(after ${request.attempts} attempt(s) of ${_timeout.inSeconds}s)',
+    );
+    _completeRequest(request, BacnetResponse.timeout());
+  }
+
+  void _completeRequest(_PendingRequest request, BacnetResponse response) {
+    request.timer?.cancel();
+    // Remove only this request (the key may have been reused afterwards)
+    if (identical(_pendingRequests[request.key], request)) {
+      _pendingRequests.remove(request.key);
+    }
+    if (!request.completer.isCompleted) {
+      request.completer.complete(response);
     }
   }
 
@@ -374,99 +606,63 @@ class BacnetService {
 
     try {
       // Si deviceId n'est pas fourni, essayer de le trouver via Who-Is
-      int targetDeviceId = deviceId ?? 0;
+      int? targetDeviceId = deviceId;
 
-      if (deviceId == null) {
+      if (targetDeviceId == null) {
         // Envoyer Who-Is et attendre I-Am
         final devices = await whoIs(host: host, port: port, timeout: const Duration(seconds: 3));
 
-        if (devices.isEmpty) {
-          return BacnetConnectionResult(success: false, errorMessage: 'No BACnet device responded');
-        }
-
-        targetDeviceId = devices.first.deviceId;
-      }
-
-      // Lire les 3 propriétés en une seule requête (optimisation 3x)
-      final rpmResult = await readPropertyMultiple(
-        host: host,
-        port: port,
-        items: [
-          ReadPropertyMultipleItem(
+        if (devices.isNotEmpty) {
+          targetDeviceId = devices.first.deviceId;
+        } else {
+          // Some devices do not answer a unicast Who-Is: read the
+          // object-identifier of the wildcard device instance 4194303
+          final idResult = await readProperty(
+            host: host,
+            port: port,
             objectType: BacnetObjectTypeCode.device,
-            objectInstance: targetDeviceId,
-            propertyIds: [BacnetPropertyId.objectName, BacnetPropertyId.vendorName, BacnetPropertyId.modelName],
-          ),
-        ],
-      );
-
-      String? deviceName;
-      String? vendorName;
-      String? modelName;
-
-      if (rpmResult.isSuccess && rpmResult.multipleResults != null && rpmResult.multipleResults!.isNotEmpty) {
-        final props = rpmResult.multipleResults!.first.properties;
-        for (final prop in props) {
-          switch (prop.propertyId) {
-            case BacnetPropertyId.objectName:
-              deviceName = prop.value?.toString();
-            case BacnetPropertyId.vendorName:
-              vendorName = prop.value?.toString();
-            case BacnetPropertyId.modelName:
-              modelName = prop.value?.toString();
+            objectInstance: _wildcardDeviceInstance,
+            propertyId: BacnetPropertyId.objectIdentifier,
+          );
+          final value = idResult.isSuccess ? idResult.value : null;
+          if (value is Map && value['instance'] is int) {
+            targetDeviceId = value['instance'] as int;
           }
         }
-      } else {
-        // Fallback: si RPM échoue, essayer les requêtes individuelles
-        _logger.w('testConnection: RPM failed, falling back to individual reads');
 
-        final nameResult = await readProperty(
-          host: host,
-          port: port,
-          objectType: BacnetObjectTypeCode.device,
-          objectInstance: targetDeviceId,
-          propertyId: BacnetPropertyId.objectName,
-        );
-        if (nameResult.isSuccess && nameResult.value is String) {
-          deviceName = nameResult.value as String;
-        }
-
-        final vendorResult = await readProperty(
-          host: host,
-          port: port,
-          objectType: BacnetObjectTypeCode.device,
-          objectInstance: targetDeviceId,
-          propertyId: BacnetPropertyId.vendorName,
-        );
-        if (vendorResult.isSuccess && vendorResult.value is String) {
-          vendorName = vendorResult.value as String;
-        }
-
-        final modelResult = await readProperty(
-          host: host,
-          port: port,
-          objectType: BacnetObjectTypeCode.device,
-          objectInstance: targetDeviceId,
-          propertyId: BacnetPropertyId.modelName,
-        );
-        if (modelResult.isSuccess && modelResult.value is String) {
-          modelName = modelResult.value as String;
+        if (targetDeviceId == null) {
+          return BacnetConnectionResult(success: false, errorMessage: 'No BACnet device responded');
         }
       }
+
+      // Lire les 3 propriétés en une seule requête (fallback ReadProperty si RPM refusé)
+      final props = await _readPropertiesWithFallback(
+        host: host,
+        port: port,
+        objectType: BacnetObjectTypeCode.device,
+        objectInstance: targetDeviceId,
+        propertyIds: [BacnetPropertyId.objectName, BacnetPropertyId.vendorName, BacnetPropertyId.modelName],
+      );
 
       return BacnetConnectionResult(
         success: true,
         deviceId: targetDeviceId,
-        deviceName: deviceName,
-        vendorName: vendorName,
-        modelName: modelName,
+        deviceName: props?[BacnetPropertyId.objectName]?.toString(),
+        vendorName: props?[BacnetPropertyId.vendorName]?.toString(),
+        modelName: props?[BacnetPropertyId.modelName]?.toString(),
       );
     } catch (e) {
       return BacnetConnectionResult(success: false, errorMessage: e.toString());
     }
   }
 
+  static const int _wildcardDeviceInstance = 4194303;
+
   /// Envoie Who-Is et collecte les I-Am
+  ///
+  /// Every I-Am received during [timeout] is considered (even from devices
+  /// already discovered). For a unicast Who-Is, only answers coming from
+  /// [host] are returned.
   Future<List<IAmInfo>> whoIs({
     required String host,
     required int port,
@@ -476,19 +672,22 @@ class BacnetService {
   }) async {
     await init();
 
+    // Détecter si c'est une adresse broadcast
+    final broadcastAddresses = await _getLocalBroadcastAddresses();
+    final isBroadcast = host == '255.255.255.255' || broadcastAddresses.contains(host);
+    final address = InternetAddress(host);
+
     final devices = <IAmInfo>[];
-    final subscription = iAmStream.listen((device) {
+    final subscription = _rawIAmController.stream.listen((device) {
+      if (!isBroadcast && device.address.address != address.address) return;
+      if (devices.any((d) => d.deviceId == device.deviceId)) return;
       devices.add(device);
     });
 
     try {
-      // Détecter si c'est une adresse broadcast
-      final isBroadcast = host == '255.255.255.255' || host.endsWith('.255');
-
       // Construire et envoyer le paquet Who-Is
       final packet = BacnetEncoder.encodeWhoIsRequest(lowLimit: lowLimit, highLimit: highLimit, broadcast: isBroadcast);
 
-      final address = InternetAddress(host);
       _socket!.send(packet, address, port);
       _logger.d('Who-Is sent to $host:$port (broadcast: $isBroadcast)');
 
@@ -549,6 +748,10 @@ class BacnetService {
       final broadcastAddresses = await _getLocalBroadcastAddresses();
       _logger.i('Broadcast addresses: $broadcastAddresses');
 
+      // 255.255.255.255 leaves through the default route only: when an
+      // interface is selected on a 0.0.0.0 socket, stick to its broadcast
+      final sendGlobalBroadcast = _boundInterface == null || Platform.isWindows;
+
       // === PHASE 1: Découverte des routeurs BACnet ===
       _logger.i('Phase 1: Discovering BACnet routers...');
       final whoIsRouterPacket = BacnetEncoder.encodeWhoIsRouterToNetwork();
@@ -561,11 +764,13 @@ class BacnetService {
           // Ignorer les erreurs
         }
       }
-      try {
-        final globalBroadcast = InternetAddress('255.255.255.255');
-        _socket!.send(whoIsRouterPacket, globalBroadcast, port);
-      } catch (e) {
-        // Ignorer
+      if (sendGlobalBroadcast) {
+        try {
+          final globalBroadcast = InternetAddress('255.255.255.255');
+          _socket!.send(whoIsRouterPacket, globalBroadcast, port);
+        } catch (e) {
+          // Ignorer
+        }
       }
 
       // Attendre les réponses des routeurs
@@ -602,11 +807,13 @@ class BacnetService {
           }
         }
 
-        try {
-          final globalBroadcast = InternetAddress('255.255.255.255');
-          _socket!.send(packet, globalBroadcast, port);
-        } catch (e) {
-          _logger.w('Failed to send global broadcast: $e');
+        if (sendGlobalBroadcast) {
+          try {
+            final globalBroadcast = InternetAddress('255.255.255.255');
+            _socket!.send(packet, globalBroadcast, port);
+          } catch (e) {
+            _logger.w('Failed to send global broadcast: $e');
+          }
         }
       }
 
@@ -643,122 +850,30 @@ class BacnetService {
     }
   }
 
-  /// Scan d'une plage d'adresses IP pour trouver des devices BACnet
-  /// Envoie un Who-Is unicast à chaque adresse de la plage
-  /// [startIp] et [endIp] doivent être sur le même sous-réseau /24
-  /// [onProgress] callback appelé avec (current, total) pour afficher la progression
-  /// [onDeviceFound] callback appelé immédiatement quand un device est trouvé
-  Future<List<IAmInfo>> scanIpRange({
-    required String startIp,
-    required String endIp,
-    int port = 47808,
-    Duration timeout = const Duration(milliseconds: 500),
-    void Function(int current, int total)? onProgress,
-    void Function(IAmInfo device)? onDeviceFound,
-  }) async {
-    await init();
-
-    final devices = <IAmInfo>[];
-
-    // Parser les IPs
-    final startParts = startIp.split('.').map(int.parse).toList();
-    final endParts = endIp.split('.').map(int.parse).toList();
-
-    if (startParts.length != 4 || endParts.length != 4) {
-      throw ArgumentError('Invalid IP address format');
-    }
-
-    // Vérifier que c'est le même sous-réseau /24
-    if (startParts[0] != endParts[0] || startParts[1] != endParts[1] || startParts[2] != endParts[2]) {
-      throw ArgumentError('Start and end IP must be on the same /24 subnet');
-    }
-
-    final baseIp = '${startParts[0]}.${startParts[1]}.${startParts[2]}';
-    final startHost = startParts[3];
-    final endHost = endParts[3];
-    final total = endHost - startHost + 1;
-
-    _logger.i('Scanning IP range: $startIp to $endIp ($total addresses)');
-
-    // Écouter les réponses I-Am
-    final subscription = iAmStream.listen((device) {
-      if (!devices.any((d) => d.deviceId == device.deviceId)) {
-        devices.add(device);
-        _logger.i('Scan found device ${device.deviceId} at ${device.address.address}');
-        onDeviceFound?.call(device);
-      }
-    });
-
-    try {
-      // Construire le paquet Who-Is unicast
-      final packet = BacnetEncoder.encodeWhoIsRequest(broadcast: false);
-
-      int scanned = 0;
-
-      // Scanner par batch pour ne pas surcharger le réseau
-      const batchSize = 10;
-
-      for (int i = startHost; i <= endHost; i += batchSize) {
-        final batchEnd = (i + batchSize - 1).clamp(startHost, endHost);
-
-        // Envoyer Who-Is à chaque IP du batch
-        for (int j = i; j <= batchEnd; j++) {
-          final ip = '$baseIp.$j';
-          try {
-            final address = InternetAddress(ip);
-            _socket!.send(packet, address, port);
-          } catch (e) {
-            // Ignorer les erreurs d'envoi
-          }
-          scanned++;
-          onProgress?.call(scanned, total);
-        }
-
-        // Attendre un peu pour recevoir les réponses du batch
-        await Future.delayed(timeout);
-      }
-
-      // Attendre un peu plus à la fin pour les dernières réponses
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      _logger.i('Scan completed: ${devices.length} devices found');
-      return devices;
-    } finally {
-      await subscription.cancel();
-    }
-  }
-
   /// Récupère les adresses de broadcast
   /// Si une interface est sélectionnée, utilise uniquement son broadcast
-  /// Sinon, retourne les broadcasts de toutes les interfaces
+  /// Sinon, retourne les broadcasts de toutes les interfaces physiques
+  /// (loopback et ponts Docker/VM exclus). Sous Linux, le broadcast est
+  /// calculé avec le vrai masque (`ip -o -4 addr`), sinon /24.
   Future<List<String>> _getLocalBroadcastAddresses() async {
+    final interfaces = await BacnetNetwork.listIpv4Interfaces();
+
     // Si une interface spécifique est sélectionnée, utiliser uniquement son broadcast
-    if (_boundInterface != null) {
-      _logger.d('Using bound interface broadcast: ${_boundInterface!.broadcastAddress}');
-      return [_boundInterface!.broadcastAddress];
+    final bound = _boundInterface;
+    if (bound != null) {
+      final match = interfaces.where((i) => i.address == bound.address).toList();
+      final broadcast = match.isNotEmpty ? match.first.broadcast : bound.broadcastAddress;
+      _logger.d('Using bound interface broadcast: $broadcast');
+      return [broadcast];
     }
 
-    // Sinon, scanner toutes les interfaces
     final broadcastAddresses = <String>[];
-
-    try {
-      final interfaces = await NetworkInterface.list();
-      for (final interface in interfaces) {
-        for (final addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4) {
-            // Calculer l'adresse de broadcast (simplification: /24)
-            final parts = addr.address.split('.');
-            if (parts.length == 4) {
-              final broadcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
-              if (!broadcastAddresses.contains(broadcast)) {
-                broadcastAddresses.add(broadcast);
-              }
-            }
-          }
-        }
+    for (final iface in interfaces) {
+      if (BacnetNetwork.isVirtualInterface(iface.name)) continue;
+      if (iface.address.startsWith('127.')) continue;
+      if (!broadcastAddresses.contains(iface.broadcast)) {
+        broadcastAddresses.add(iface.broadcast);
       }
-    } catch (e) {
-      _logger.e('Error getting network interfaces: $e');
     }
 
     // Fallback si aucune interface trouvée
@@ -780,16 +895,17 @@ class BacnetService {
   }) async {
     await init();
 
-    final invokeId = _nextInvokeId();
-    final packet = BacnetEncoder.encodeReadPropertyRequest(
-      invokeId: invokeId,
-      objectType: objectType,
-      objectInstance: objectInstance,
-      propertyId: propertyId,
-      arrayIndex: arrayIndex,
+    return _sendConfirmed(
+      host,
+      port,
+      (invokeId) => BacnetEncoder.encodeReadPropertyRequest(
+        invokeId: invokeId,
+        objectType: objectType,
+        objectInstance: objectInstance,
+        propertyId: propertyId,
+        arrayIndex: arrayIndex,
+      ),
     );
-
-    return _sendAndWait(packet, host, port, invokeId);
   }
 
   /// Écrit une propriété BACnet
@@ -805,18 +921,19 @@ class BacnetService {
   }) async {
     await init();
 
-    final invokeId = _nextInvokeId();
-    final packet = BacnetEncoder.encodeWritePropertyRequest(
-      invokeId: invokeId,
-      objectType: objectType,
-      objectInstance: objectInstance,
-      propertyId: propertyId,
-      value: value,
-      priority: priority,
-      arrayIndex: arrayIndex,
+    return _sendConfirmed(
+      host,
+      port,
+      (invokeId) => BacnetEncoder.encodeWritePropertyRequest(
+        invokeId: invokeId,
+        objectType: objectType,
+        objectInstance: objectInstance,
+        propertyId: propertyId,
+        value: value,
+        priority: priority,
+        arrayIndex: arrayIndex,
+      ),
     );
-
-    return _sendAndWait(packet, host, port, invokeId);
   }
 
   /// Lit plusieurs propriétés d'un ou plusieurs objets
@@ -827,10 +944,7 @@ class BacnetService {
   }) async {
     await init();
 
-    final invokeId = _nextInvokeId();
-    final packet = BacnetEncoder.encodeReadPropertyMultipleRequest(invokeId: invokeId, items: items);
-
-    return _sendAndWait(packet, host, port, invokeId);
+    return _sendConfirmed(host, port, (invokeId) => BacnetEncoder.encodeReadPropertyMultipleRequest(invokeId: invokeId, items: items));
   }
 
   /// Découvre les objets d'un device BACnet
@@ -843,10 +957,48 @@ class BacnetService {
   }) async {
     await init();
 
-    final objects = <BacnetObject>[];
-
     // 1. Lire la liste des objets (object-list)
-    final objectListResult = await readProperty(
+    final objectList = await _readObjectList(host: host, port: port, deviceId: deviceId);
+    if (objectList == null) {
+      _logger.e('Failed to read object-list of device $deviceId on $host');
+      return [];
+    }
+
+    // 2. Filtrer si nécessaire
+    final filteredObjects = objectTypesFilter != null ? objectList.where((o) => objectTypesFilter.contains(o.type)).toList() : objectList;
+
+    // 3. Lire les propriétés de chaque objet, en parallèle (le nombre de
+    // requêtes simultanées par device est borné par _sendConfirmed)
+    final objects = await Future.wait(
+      filteredObjects.map((objInfo) async {
+        try {
+          return await _readObjectProperties(host: host, port: port, objectType: objInfo.type, objectInstance: objInfo.instance);
+        } catch (e) {
+          _logger.e('Error reading object ${objInfo.type}:${objInfo.instance}: $e');
+          return null;
+        }
+      }),
+    );
+
+    return objects.whereType<BacnetObject>().toList();
+  }
+
+  /// Reads the object-list of a device.
+  ///
+  /// First as a whole (a large list arrives as a segmented response). If the
+  /// device refuses (Abort segmentation-not-supported / buffer-overflow,
+  /// Error, Reject), falls back to reading it element by element: index 0
+  /// gives the length, then 1..N. Returns null if the device does not answer.
+  /// The result is cached for a short time (discoverObjects, discoverTrendLogs
+  /// and discoverSchedules all need it).
+  Future<List<_ObjectInfo>?> _readObjectList({required String host, required int port, required int deviceId}) async {
+    final cacheKey = '$host:$port:$deviceId';
+    final cached = _objectListCache[cacheKey];
+    if (cached != null && DateTime.now().difference(cached.readAt) < _objectListCacheTtl) {
+      return cached.objects;
+    }
+
+    final whole = await readProperty(
       host: host,
       port: port,
       objectType: BacnetObjectTypeCode.device,
@@ -854,31 +1006,119 @@ class BacnetService {
       propertyId: BacnetPropertyId.objectList,
     );
 
-    if (!objectListResult.isSuccess) {
-      _logger.e('Failed to read object-list: ${objectListResult.errorMessage}');
-      return objects;
+    List<_ObjectInfo>? objects;
+    if (whole.isSuccess) {
+      objects = _parseObjectList(whole.value);
+    } else if (whole.isDeviceError) {
+      _logger.w('object-list read refused (${whole.errorMessage}), reading it element by element');
+      objects = await _readObjectListByIndex(host: host, port: port, deviceId: deviceId);
+    } else {
+      _logger.e('Failed to read object-list: ${whole.errorMessage}');
     }
 
-    // Parser la liste des objets
-    final objectList = _parseObjectList(objectListResult.value);
+    if (objects != null) {
+      _objectListCache[cacheKey] = (readAt: DateTime.now(), objects: objects);
+    }
+    return objects;
+  }
 
-    // 2. Filtrer si nécessaire
-    final filteredObjects = objectTypesFilter != null ? objectList.where((o) => objectTypesFilter.contains(o.type)).toList() : objectList;
+  Future<List<_ObjectInfo>?> _readObjectListByIndex({required String host, required int port, required int deviceId}) async {
+    final lengthResult = await readProperty(
+      host: host,
+      port: port,
+      objectType: BacnetObjectTypeCode.device,
+      objectInstance: deviceId,
+      propertyId: BacnetPropertyId.objectList,
+      arrayIndex: 0,
+    );
+    final length = lengthResult.isSuccess ? _toInt(lengthResult.value) : null;
+    if (length == null) {
+      _logger.e('Failed to read object-list length: ${lengthResult.errorMessage}');
+      return null;
+    }
+    _logger.i('object-list has $length elements, reading them by index');
 
-    // 3. Lire les propriétés de chaque objet
-    for (final objInfo in filteredObjects) {
-      try {
-        final obj = await _readObjectProperties(host: host, port: port, objectType: objInfo.type, objectInstance: objInfo.instance);
-        if (obj != null) {
-          objects.add(obj);
-        }
-      } catch (e) {
-        _logger.e('Error reading object ${objInfo.type}:${objInfo.instance}: $e');
+    final items = await Future.wait(
+      List.generate(
+        length,
+        (i) => readProperty(
+          host: host,
+          port: port,
+          objectType: BacnetObjectTypeCode.device,
+          objectInstance: deviceId,
+          propertyId: BacnetPropertyId.objectList,
+          arrayIndex: i + 1,
+        ),
+      ),
+    );
+
+    final objects = <_ObjectInfo>[];
+    int failures = 0;
+    for (final item in items) {
+      if (item.isSuccess) {
+        objects.addAll(_parseObjectList(item.value));
+      } else {
+        failures++;
+      }
+    }
+    if (failures > 0) {
+      _logger.w('object-list: $failures of $length elements could not be read');
+    }
+    return objects;
+  }
+
+  /// Reads several properties of one object: ReadPropertyMultiple first,
+  /// then one ReadProperty per property only if the device refused the RPM
+  /// (Error/Reject/Abort). A timeout does not trigger the fallback (the
+  /// device is unreachable, 1 + N more timeouts would only delay the
+  /// failure). Returns null if nothing could be read.
+  Future<Map<int, dynamic>?> _readPropertiesWithFallback({
+    required String host,
+    required int port,
+    required int objectType,
+    required int objectInstance,
+    required List<int> propertyIds,
+  }) async {
+    final hostKey = '$host:$port';
+    if (!_rpmUnsupportedHosts.contains(hostKey)) {
+      final rpm = await readPropertyMultiple(
+        host: host,
+        port: port,
+        items: [ReadPropertyMultipleItem(objectType: objectType, objectInstance: objectInstance, propertyIds: propertyIds)],
+      );
+
+      final results = rpm.multipleResults;
+      if (rpm.isSuccess && results != null && results.isNotEmpty) {
+        return {for (final prop in results.first.properties) prop.propertyId: prop.value};
+      }
+
+      if (!rpm.isDeviceError && !rpm.isSuccess) {
+        // Timeout / local error: no fallback cascade
+        return null;
+      }
+
+      if (rpm.type == BacnetResponseType.reject && rpm.errorCode == _rejectUnrecognizedService) {
+        _logger.w('$hostKey does not support ReadPropertyMultiple, using ReadProperty');
+        _rpmUnsupportedHosts.add(hostKey);
       }
     }
 
-    return objects;
+    // Fallback: lire les propriétés une par une
+    final properties = <int, dynamic>{};
+    for (final propId in propertyIds) {
+      final result = await readProperty(host: host, port: port, objectType: objectType, objectInstance: objectInstance, propertyId: propId);
+
+      if (result.isSuccess) {
+        properties[propId] = result.value;
+      } else if (result.type == BacnetResponseType.timeout) {
+        break; // Device unreachable: stop here
+      }
+    }
+
+    return properties.isEmpty ? null : properties;
   }
+
+  static const int _rejectUnrecognizedService = 9;
 
   /// Parse la valeur object-list en liste d'ObjectInfo
   List<_ObjectInfo> _parseObjectList(dynamic value) {
@@ -952,46 +1192,17 @@ class BacnetService {
       propertyIds.add(BacnetPropertyId.priorityArray);
     }
 
-    // Utiliser ReadPropertyMultiple si possible
-    final rpmResult = await readPropertyMultiple(
+    final properties = await _readPropertiesWithFallback(
       host: host,
       port: port,
-      items: [ReadPropertyMultipleItem(objectType: objectType, objectInstance: objectInstance, propertyIds: propertyIds)],
+      objectType: objectType,
+      objectInstance: objectInstance,
+      propertyIds: propertyIds,
     );
 
-    if (rpmResult.isSuccess && rpmResult.multipleResults != null) {
-      final result = rpmResult.multipleResults!.first;
-      return _createBacnetObjectFromProperties(objectType: objectType, objectInstance: objectInstance, properties: result.properties);
-    }
-
-    // Fallback: lire les propriétés une par une
-    final properties = <int, dynamic>{};
-
-    for (final propId in propertyIds) {
-      final result = await readProperty(host: host, port: port, objectType: objectType, objectInstance: objectInstance, propertyId: propId);
-
-      if (result.isSuccess) {
-        properties[propId] = result.value;
-      }
-    }
-
-    if (properties.isEmpty) return null;
+    if (properties == null) return null;
 
     return _createBacnetObjectFromPropertiesMap(objectType: objectType, objectInstance: objectInstance, properties: properties);
-  }
-
-  /// Crée un BacnetObject depuis les propriétés RPM
-  BacnetObject _createBacnetObjectFromProperties({
-    required int objectType,
-    required int objectInstance,
-    required List<PropertyResult> properties,
-  }) {
-    final propMap = <int, dynamic>{};
-    for (final prop in properties) {
-      propMap[prop.propertyId] = prop.value;
-    }
-
-    return _createBacnetObjectFromPropertiesMap(objectType: objectType, objectInstance: objectInstance, properties: propMap);
   }
 
   /// Crée un BacnetObject depuis une map de propriétés
@@ -1191,11 +1402,15 @@ class BacnetService {
   }
 
   /// Parse state-text en liste de strings
+  /// state-text is indexed by the multi-state value (1-based): empty labels
+  /// keep their position, only trailing empty labels are dropped.
   List<String>? _parseStateText(dynamic value) {
     if (value == null) return null;
     if (value is List) {
-      // Filtrer les valeurs nulles ou vides
-      final result = value.where((e) => e != null).map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+      final result = value.map((e) => e?.toString() ?? '').toList();
+      while (result.isNotEmpty && result.last.isEmpty) {
+        result.removeLast();
+      }
       return result.isEmpty ? null : result;
     }
     // Si c'est une seule chaîne, la retourner comme liste d'un élément
@@ -1230,140 +1445,172 @@ class BacnetService {
     throw Exception(result.errorMessage ?? 'Failed to read present-value');
   }
 
-  /// Rafraîchit les valeurs de plusieurs points en parallèle
+  /// Rafraîchit les valeurs de plusieurs points
   /// Retourne une Map avec objectId comme clé et les infos rafraîchies
+  ///
+  /// Points are grouped into ReadPropertyMultiple requests holding several
+  /// objects (sized to fit in a 1476-byte APDU). If the device refuses a
+  /// group (Error/Reject/Abort), its points are read one RPM per point. A
+  /// group that times out is skipped (points missing from the result).
+  /// [batchSize] is kept for compatibility and caps the objects per RPM.
   Future<Map<String, RefreshedPointData>> refreshMultiplePointValues({
     required String host,
     required int port,
     required List<({int objectType, int objectInstance, bool isCommandable, bool isInput})> points,
-    int batchSize = 10,
+    int batchSize = 25,
   }) async {
     await init();
 
+    final groups = groupPointsForRpm(points, maxObjects: batchSize);
     final results = <String, RefreshedPointData>{};
 
-    // Traiter les points par batch pour éviter de surcharger le réseau
-    for (int i = 0; i < points.length; i += batchSize) {
-      final batch = points.skip(i).take(batchSize).toList();
-
-      // Lancer les requêtes du batch en parallèle
-      final futures = batch.map((point) async {
-        final key = '${point.objectType}:${point.objectInstance}';
+    final groupResults = await Future.wait(
+      groups.map((group) async {
         try {
-          // Propriétés à lire
-          final propertyIds = [
-            BacnetPropertyId.presentValue,
-            BacnetPropertyId.statusFlags, // Pour détecter les alarmes
-            BacnetPropertyId.units, // Pour afficher les unités
-          ];
-
-          // Ajouter priority-array pour les objets commandables (AO, BO, MSO, AV, BV, MSV)
-          if (point.isCommandable) {
-            propertyIds.add(BacnetPropertyId.priorityArray);
-          }
-
-          // Ajouter out-of-service pour les entrées (AI, BI, MSI) - forçage via OOS
-          if (point.isInput) {
-            propertyIds.add(BacnetPropertyId.outOfService);
-          }
-
-          // Lire via ReadPropertyMultiple pour l'efficacité
-          final result = await readPropertyMultiple(
-            host: host,
-            port: port,
-            items: [ReadPropertyMultipleItem(objectType: point.objectType, objectInstance: point.objectInstance, propertyIds: propertyIds)],
-          );
-
-          if (result.isSuccess && result.multipleResults != null && result.multipleResults!.isNotEmpty) {
-            final props = result.multipleResults!.first.properties;
-
-            // Extraire present-value
-            dynamic presentValue;
-            for (final prop in props) {
-              if (prop.propertyId == BacnetPropertyId.presentValue) {
-                presentValue = prop.value;
-                break;
-              }
-            }
-
-            // Extraire et parser status-flags (pour alarmes)
-            ({bool inAlarm, bool fault, bool overridden, bool outOfService}) statusInfo = (
-              inAlarm: false,
-              fault: false,
-              overridden: false,
-              outOfService: false,
-            );
-            for (final prop in props) {
-              if (prop.propertyId == BacnetPropertyId.statusFlags) {
-                _logger.d('refreshMultiplePointValues: $key statusFlags=${prop.value}');
-                statusInfo = _parseStatusFlags(prop.value);
-                if (statusInfo.inAlarm) {
-                  _logger.i('refreshMultiplePointValues: ALARM on $key');
-                }
-                break;
-              }
-            }
-
-            // Extraire et parser priority-array (pour commandables)
-            ({bool isOverridden, int? priority, dynamic value}) overrideInfo = (isOverridden: false, priority: null, value: null);
-
-            if (point.isCommandable) {
-              for (final prop in props) {
-                if (prop.propertyId == BacnetPropertyId.priorityArray) {
-                  overrideInfo = _parsePriorityArray(prop.value);
-                  break;
-                }
-              }
-            }
-
-            // Extraire out-of-service (pour entrées)
-            bool? outOfService;
-            if (point.isInput) {
-              for (final prop in props) {
-                if (prop.propertyId == BacnetPropertyId.outOfService) {
-                  outOfService = prop.value as bool?;
-                  break;
-                }
-              }
-            }
-
-            // Extraire et parser les unités
-            String? units;
-            for (final prop in props) {
-              if (prop.propertyId == BacnetPropertyId.units) {
-                units = _parseUnit(prop.value);
-                break;
-              }
-            }
-
-            return MapEntry(
-              key,
-              RefreshedPointData(
-                presentValue: presentValue,
-                isOverridden: overrideInfo.isOverridden,
-                overridePriority: overrideInfo.priority,
-                overrideValue: overrideInfo.value,
-                outOfService: outOfService,
-                inAlarm: statusInfo.inAlarm,
-                units: units,
-              ),
-            );
-          }
+          return await _refreshPointGroup(host: host, port: port, group: group);
         } catch (e) {
-          _logger.e('Error refreshing $key: $e');
+          _logger.e('Error refreshing ${group.length} points: $e');
+          return const <String, RefreshedPointData>{};
         }
-        return MapEntry<String, RefreshedPointData?>(key, null);
-      });
-
-      final batchResults = await Future.wait(futures);
-      for (final entry in batchResults) {
-        if (entry.value != null) {
-          results[entry.key] = entry.value!;
-        }
-      }
+      }),
+    );
+    for (final r in groupResults) {
+      results.addAll(r);
     }
 
     return results;
+  }
+
+  /// Approximate size of the RPM answer for one point (bytes)
+  static int _estimatedRpmResponseSize(({int objectType, int objectInstance, bool isCommandable, bool isInput}) p) {
+    // object id + tags + present-value + status-flags + units (+ out-of-service)
+    var size = 40;
+    // priority-array: 16 entries, up to 5 bytes each with tags
+    if (p.isCommandable) size += 90;
+    if (p.isInput) size += 6;
+    return size;
+  }
+
+  /// Splits [points] into groups whose RPM answer should fit in one
+  /// unsegmented APDU (1476 bytes, with margin).
+  static List<List<({int objectType, int objectInstance, bool isCommandable, bool isInput})>> groupPointsForRpm(
+    List<({int objectType, int objectInstance, bool isCommandable, bool isInput})> points, {
+    int maxObjects = 25,
+    int maxResponseBytes = 1200,
+  }) {
+    final groups = <List<({int objectType, int objectInstance, bool isCommandable, bool isInput})>>[];
+    var current = <({int objectType, int objectInstance, bool isCommandable, bool isInput})>[];
+    var currentSize = 0;
+    for (final p in points) {
+      final size = _estimatedRpmResponseSize(p);
+      if (current.isNotEmpty && (current.length >= maxObjects || currentSize + size > maxResponseBytes)) {
+        groups.add(current);
+        current = [];
+        currentSize = 0;
+      }
+      current.add(p);
+      currentSize += size;
+    }
+    if (current.isNotEmpty) groups.add(current);
+    return groups;
+  }
+
+  List<int> _refreshPropertyIds(({int objectType, int objectInstance, bool isCommandable, bool isInput}) point) {
+    return [
+      BacnetPropertyId.presentValue,
+      BacnetPropertyId.statusFlags, // Pour détecter les alarmes
+      BacnetPropertyId.units, // Pour afficher les unités
+      // priority-array pour les objets commandables (AO, BO, MSO, AV, BV, MSV)
+      if (point.isCommandable) BacnetPropertyId.priorityArray,
+      // out-of-service pour les entrées (AI, BI, MSI) - forçage via OOS
+      if (point.isInput) BacnetPropertyId.outOfService,
+    ];
+  }
+
+  Future<Map<String, RefreshedPointData>> _refreshPointGroup({
+    required String host,
+    required int port,
+    required List<({int objectType, int objectInstance, bool isCommandable, bool isInput})> group,
+  }) async {
+    final results = <String, RefreshedPointData>{};
+
+    final response = await readPropertyMultiple(
+      host: host,
+      port: port,
+      items: [
+        for (final point in group)
+          ReadPropertyMultipleItem(
+            objectType: point.objectType,
+            objectInstance: point.objectInstance,
+            propertyIds: _refreshPropertyIds(point),
+          ),
+      ],
+    );
+
+    if (response.isSuccess && response.multipleResults != null) {
+      for (final point in group) {
+        final objectResult = response.multipleResults!.where(
+          (r) => r.objectType == point.objectType && r.objectInstance == point.objectInstance,
+        );
+        if (objectResult.isEmpty) continue;
+        results['${point.objectType}:${point.objectInstance}'] = _toRefreshedPointData(point, objectResult.first.properties);
+      }
+      return results;
+    }
+
+    if (!response.isDeviceError) {
+      _logger.w('refreshMultiplePointValues: no answer for ${group.length} points (${response.errorMessage})');
+      return results;
+    }
+
+    if (group.length == 1) return results;
+
+    // The device refused the grouped request (e.g. one unknown object makes
+    // some devices reject the whole RPM): one request per point
+    _logger.w('refreshMultiplePointValues: grouped RPM refused (${response.errorMessage}), reading points one by one');
+    final single = await Future.wait(group.map((point) => _refreshPointGroup(host: host, port: port, group: [point])));
+    for (final r in single) {
+      results.addAll(r);
+    }
+    return results;
+  }
+
+  RefreshedPointData _toRefreshedPointData(
+    ({int objectType, int objectInstance, bool isCommandable, bool isInput}) point,
+    List<PropertyResult> props,
+  ) {
+    dynamic valueOf(int propertyId) {
+      for (final prop in props) {
+        if (prop.propertyId == propertyId) return prop.value;
+      }
+      return null;
+    }
+
+    final key = '${point.objectType}:${point.objectInstance}';
+
+    // Status-flags (pour alarmes)
+    final statusInfo = _parseStatusFlags(valueOf(BacnetPropertyId.statusFlags));
+    if (statusInfo.inAlarm) {
+      _logger.i('refreshMultiplePointValues: ALARM on $key');
+    }
+
+    // Priority-array (pour commandables)
+    final overrideInfo = point.isCommandable
+        ? _parsePriorityArray(valueOf(BacnetPropertyId.priorityArray))
+        : (isOverridden: false, priority: null, value: null);
+
+    // Out-of-service (pour entrées)
+    final oos = point.isInput ? valueOf(BacnetPropertyId.outOfService) : null;
+
+    return RefreshedPointData(
+      presentValue: valueOf(BacnetPropertyId.presentValue),
+      isOverridden: overrideInfo.isOverridden,
+      overridePriority: overrideInfo.priority,
+      overrideValue: overrideInfo.value,
+      outOfService: oos is bool ? oos : null,
+      inAlarm: statusInfo.inAlarm,
+      units: _parseUnit(valueOf(BacnetPropertyId.units)),
+    );
   }
 
   /// Écrit la valeur d'un point
@@ -1439,24 +1686,11 @@ class BacnetService {
     _logger.i('discoverTrendLogs: starting discovery on $host:$port, deviceId=$deviceId');
 
     // 1. Lire la liste des objets
-    final objectListResult = await readProperty(
-      host: host,
-      port: port,
-      objectType: BacnetObjectTypeCode.device,
-      objectInstance: deviceId,
-      propertyId: BacnetPropertyId.objectList,
-    );
-
-    if (!objectListResult.isSuccess) {
-      _logger.e('discoverTrendLogs: Failed to read object-list: ${objectListResult.errorMessage}');
+    final objectList = await _readObjectList(host: host, port: port, deviceId: deviceId);
+    if (objectList == null) {
+      _logger.e('discoverTrendLogs: Failed to read object-list');
       return trendLogs;
     }
-
-    _logger.d('discoverTrendLogs: object-list raw value type: ${objectListResult.value.runtimeType}');
-    _logger.d('discoverTrendLogs: object-list raw value: ${objectListResult.value}');
-
-    // Parser la liste et filtrer les TrendLog (type 20)
-    final objectList = _parseObjectList(objectListResult.value);
     _logger.i('discoverTrendLogs: parsed ${objectList.length} total objects');
 
     // Log tous les types d'objets trouvés
@@ -1470,17 +1704,18 @@ class BacnetService {
 
     _logger.i('discoverTrendLogs: Found ${trendLogObjects.length} TrendLog objects (type 20)');
 
-    // 2. Lire les propriétés de chaque TrendLog
-    for (final obj in trendLogObjects) {
-      try {
-        final trendLog = await _readTrendLogProperties(host: host, port: port, objectInstance: obj.instance);
-        if (trendLog != null) {
-          trendLogs.add(trendLog);
+    // 2. Lire les propriétés de chaque TrendLog (en parallèle, borné par device)
+    final read = await Future.wait(
+      trendLogObjects.map((obj) async {
+        try {
+          return await _readTrendLogProperties(host: host, port: port, objectInstance: obj.instance);
+        } catch (e) {
+          _logger.e('Error reading TrendLog ${obj.instance}: $e');
+          return null;
         }
-      } catch (e) {
-        _logger.e('Error reading TrendLog ${obj.instance}: $e');
-      }
-    }
+      }),
+    );
+    trendLogs.addAll(read.whereType<BacnetTrendLog>());
 
     return trendLogs;
   }
@@ -1499,48 +1734,17 @@ class BacnetService {
       BacnetPropertyId.enable,
     ];
 
-    final rpmResult = await readPropertyMultiple(
+    final properties = await _readPropertiesWithFallback(
       host: host,
       port: port,
-      items: [
-        ReadPropertyMultipleItem(objectType: BacnetObjectTypeCode.trendLog, objectInstance: objectInstance, propertyIds: propertyIds),
-      ],
+      objectType: BacnetObjectTypeCode.trendLog,
+      objectInstance: objectInstance,
+      propertyIds: propertyIds,
     );
 
-    if (rpmResult.isSuccess && rpmResult.multipleResults != null && rpmResult.multipleResults!.isNotEmpty) {
-      final result = rpmResult.multipleResults!.first;
-      return _createTrendLogFromProperties(objectInstance: objectInstance, properties: result.properties);
-    }
-
-    // Fallback: lire les propriétés une par une
-    final properties = <int, dynamic>{};
-
-    for (final propId in propertyIds) {
-      final result = await readProperty(
-        host: host,
-        port: port,
-        objectType: BacnetObjectTypeCode.trendLog,
-        objectInstance: objectInstance,
-        propertyId: propId,
-      );
-
-      if (result.isSuccess) {
-        properties[propId] = result.value;
-      }
-    }
-
-    if (properties.isEmpty) return null;
+    if (properties == null) return null;
 
     return _createTrendLogFromPropertiesMap(objectInstance: objectInstance, properties: properties);
-  }
-
-  /// Crée un BacnetTrendLog depuis les propriétés RPM
-  BacnetTrendLog _createTrendLogFromProperties({required int objectInstance, required List<PropertyResult> properties}) {
-    final propMap = <int, dynamic>{};
-    for (final prop in properties) {
-      propMap[prop.propertyId] = prop.value;
-    }
-    return _createTrendLogFromPropertiesMap(objectInstance: objectInstance, properties: propMap);
   }
 
   /// Crée un BacnetTrendLog depuis une map de propriétés
@@ -1647,19 +1851,20 @@ class BacnetService {
   }) async {
     await init();
 
-    final invokeId = _nextInvokeId();
-    final packet = BacnetEncoder.encodeReadRangeRequest(
-      invokeId: invokeId,
-      objectType: objectType,
-      objectInstance: objectInstance,
-      propertyId: propertyId,
-      rangeType: rangeType,
-      referenceIndex: referenceIndex,
-      count: count,
-      referenceTime: referenceTime,
+    return _sendConfirmed(
+      host,
+      port,
+      (invokeId) => BacnetEncoder.encodeReadRangeRequest(
+        invokeId: invokeId,
+        objectType: objectType,
+        objectInstance: objectInstance,
+        propertyId: propertyId,
+        rangeType: rangeType,
+        referenceIndex: referenceIndex,
+        count: count,
+        referenceTime: referenceTime,
+      ),
     );
-
-    return _sendAndWait(packet, host, port, invokeId);
   }
 
   /// Lit le log-buffer d'un TrendLog (données les plus récentes)
@@ -1718,6 +1923,7 @@ class BacnetService {
       final remaining = recordsToRead - allRecords.length;
       // Count négatif = lire vers le passé (records plus anciens)
       final requestCount = -remaining.clamp(1, chunkSize);
+      final previousReference = referenceSeqNum;
 
       _logger.d('readTrendLogBuffer: iteration $iteration, referenceSeqNum=$referenceSeqNum, requesting $requestCount');
 
@@ -1748,7 +1954,7 @@ class BacnetService {
 
       final result = response.value as ReadRangeResult;
       _logger.i(
-        'readTrendLogBuffer: received ${result.records.length} records, firstSeqNum=${result.firstSequenceNumber}, moreItems=${result.moreItems}',
+        'readTrendLogBuffer: received ${result.records.length} records, firstSeqNum=${result.firstSequenceNumber}, firstItem=${result.firstItem}, moreItems=${result.moreItems}',
       );
 
       if (result.records.isEmpty) {
@@ -1779,9 +1985,17 @@ class BacnetService {
         break;
       }
 
-      // S'arrêter si on reçoit moins que demandé (fin du buffer disponible)
-      if (result.records.length < requestCount.abs()) {
-        _logger.i('readTrendLogBuffer: received less than requested, likely end of buffer');
+      // first-item: the oldest record of the buffer is in this response.
+      // Receiving fewer records than requested is NOT the end of the buffer:
+      // the device may simply have filled its APDU.
+      if (result.firstItem) {
+        _logger.i('readTrendLogBuffer: first-item flag set, beginning of buffer reached');
+        break;
+      }
+
+      // Safety: the reference must move backwards
+      if (referenceSeqNum >= previousReference) {
+        _logger.w('readTrendLogBuffer: sequence number did not decrease, stopping');
         break;
       }
 
@@ -1804,37 +2018,28 @@ class BacnetService {
 
     _logger.i('discoverSchedules: starting discovery on $host:$port, deviceId=$deviceId');
 
-    // 1. Lire la liste des objets
-    final objectListResult = await readProperty(
-      host: host,
-      port: port,
-      objectType: BacnetObjectTypeCode.device,
-      objectInstance: deviceId,
-      propertyId: BacnetPropertyId.objectList,
-    );
-
-    if (!objectListResult.isSuccess) {
-      _logger.e('discoverSchedules: Failed to read object-list: ${objectListResult.errorMessage}');
+    // 1. Lire la liste des objets et filtrer les schedules (type 17)
+    final objectList = await _readObjectList(host: host, port: port, deviceId: deviceId);
+    if (objectList == null) {
+      _logger.e('discoverSchedules: Failed to read object-list');
       return schedules;
     }
-
-    // Parser la liste et filtrer les schedules (type 17)
-    final objectList = _parseObjectList(objectListResult.value);
     final scheduleObjects = objectList.where((o) => o.type == BacnetObjectTypeCode.schedule).toList();
 
     _logger.i('discoverSchedules: Found ${scheduleObjects.length} Schedule objects');
 
     // 2. Lire les propriétés de base de chaque schedule
-    for (final obj in scheduleObjects) {
-      try {
-        final scheduleInfo = await readScheduleBasicInfo(host: host, port: port, scheduleInstance: obj.instance);
-        if (scheduleInfo != null) {
-          schedules.add(scheduleInfo);
+    final read = await Future.wait(
+      scheduleObjects.map((obj) async {
+        try {
+          return await readScheduleBasicInfo(host: host, port: port, scheduleInstance: obj.instance);
+        } catch (e) {
+          _logger.e('Error reading Schedule ${obj.instance}: $e');
+          return null;
         }
-      } catch (e) {
-        _logger.e('Error reading Schedule ${obj.instance}: $e');
-      }
-    }
+      }),
+    );
+    schedules.addAll(read.whereType<BacnetScheduleInfo>());
 
     return schedules;
   }
@@ -1859,25 +2064,19 @@ class BacnetService {
       BacnetPropertyId.listOfObjectPropertyReferences, // Pour récupérer les state-text de l'objet cible
     ];
 
-    final rpmResult = await readPropertyMultiple(
+    final propMap = await _readPropertiesWithFallback(
       host: host,
       port: port,
-      items: [
-        ReadPropertyMultipleItem(objectType: BacnetObjectTypeCode.schedule, objectInstance: scheduleInstance, propertyIds: propertyIds),
-      ],
+      objectType: BacnetObjectTypeCode.schedule,
+      objectInstance: scheduleInstance,
+      propertyIds: propertyIds,
     );
 
-    if (!rpmResult.isSuccess || rpmResult.multipleResults == null || rpmResult.multipleResults!.isEmpty) {
+    if (propMap == null) {
       _logger.e('readScheduleBasicInfo: Failed to read properties for schedule $scheduleInstance');
       return null;
     }
-
-    final props = rpmResult.multipleResults!.first.properties;
-    final propMap = <int, dynamic>{};
-    for (final prop in props) {
-      propMap[prop.propertyId] = prop.value;
-      _logger.d('readScheduleBasicInfo: prop ${prop.propertyId} = ${prop.value} (${prop.value?.runtimeType})');
-    }
+    _logger.d('readScheduleBasicInfo: properties = $propMap');
 
     // Essayer de récupérer les state-text
     List<String>? stateTexts = _parseStateText(propMap[BacnetPropertyId.stateText]);
@@ -1968,55 +2167,57 @@ class BacnetService {
       BacnetObjectTypeCode.multiStateValue, // 19
     ];
 
-    final objectListResult = await readProperty(
-      host: host,
-      port: port,
-      objectType: BacnetObjectTypeCode.device,
-      objectInstance: deviceId,
-      propertyId: BacnetPropertyId.objectList,
-    );
-
-    if (!objectListResult.isSuccess || objectListResult.value == null) {
+    final objects = await _readObjectList(host: host, port: port, deviceId: deviceId);
+    if (objects == null) {
       _logger.d('_findStateTextsFromMultistateByName: could not read object list');
       return null;
     }
-
-    final objects = _parseObjectList(objectListResult.value);
 
     // Filtrer les objets Multi-state
     final multistateObjects = objects.where((obj) => multistateTypes.contains(obj.type)).toList();
     _logger.d('_findStateTextsFromMultistateByName: found ${multistateObjects.length} multistate objects');
 
-    // Chercher l'objet par son nom
-    for (final obj in multistateObjects) {
-      final nameResult = await readProperty(
-        host: host,
-        port: port,
-        objectType: obj.type,
-        objectInstance: obj.instance,
-        propertyId: BacnetPropertyId.objectName,
-      );
-
-      if (nameResult.isSuccess && nameResult.value != null) {
-        final objName = nameResult.value.toString();
-        _logger.d('_findStateTextsFromMultistateByName: object ${obj.type}:${obj.instance} name="$objName"');
-
-        if (objName.toLowerCase().contains(searchName.toLowerCase())) {
-          _logger.i('_findStateTextsFromMultistateByName: found matching object "$objName" (${obj.type}:${obj.instance})');
-
-          // Lire ses state-text
-          final stateTextResult = await readProperty(
+    // Chercher l'objet par son nom (noms lus par lots en parallèle)
+    const chunkSize = 8;
+    for (int i = 0; i < multistateObjects.length; i += chunkSize) {
+      final chunk = multistateObjects.skip(i).take(chunkSize).toList();
+      final names = await Future.wait(
+        chunk.map(
+          (obj) => readProperty(
             host: host,
             port: port,
             objectType: obj.type,
             objectInstance: obj.instance,
-            propertyId: BacnetPropertyId.stateText,
-          );
+            propertyId: BacnetPropertyId.objectName,
+          ),
+        ),
+      );
 
-          if (stateTextResult.isSuccess && stateTextResult.value != null) {
-            final stateTexts = _parseStateText(stateTextResult.value);
-            _logger.i('_findStateTextsFromMultistateByName: state-texts = $stateTexts');
-            return stateTexts;
+      for (int j = 0; j < chunk.length; j++) {
+        final obj = chunk[j];
+        final nameResult = names[j];
+
+        if (nameResult.isSuccess && nameResult.value != null) {
+          final objName = nameResult.value.toString();
+          _logger.d('_findStateTextsFromMultistateByName: object ${obj.type}:${obj.instance} name="$objName"');
+
+          if (objName.toLowerCase().contains(searchName.toLowerCase())) {
+            _logger.i('_findStateTextsFromMultistateByName: found matching object "$objName" (${obj.type}:${obj.instance})');
+
+            // Lire ses state-text
+            final stateTextResult = await readProperty(
+              host: host,
+              port: port,
+              objectType: obj.type,
+              objectInstance: obj.instance,
+              propertyId: BacnetPropertyId.stateText,
+            );
+
+            if (stateTextResult.isSuccess && stateTextResult.value != null) {
+              final stateTexts = _parseStateText(stateTextResult.value);
+              _logger.i('_findStateTextsFromMultistateByName: state-texts = $stateTexts');
+              return stateTexts;
+            }
           }
         }
       }
@@ -2038,15 +2239,12 @@ class BacnetService {
       int? objectType;
       int? objectInstance;
 
-      if (objRefs is List && objRefs.isNotEmpty) {
-        final firstRef = objRefs.first;
-        if (firstRef is Map) {
-          objectType = firstRef['type'] as int?;
-          objectInstance = firstRef['instance'] as int?;
-        }
-      } else if (objRefs is Map) {
-        objectType = objRefs['type'] as int?;
-        objectInstance = objRefs['instance'] as int?;
+      final firstRef = objRefs is List && objRefs.isNotEmpty ? objRefs.first : objRefs;
+      if (firstRef is Map) {
+        // {type, instance} or BACnetDeviceObjectPropertyReference {objectIdentifier: {type, instance}, ...}
+        final id = firstRef['objectIdentifier'] is Map ? firstRef['objectIdentifier'] as Map : firstRef;
+        objectType = id['type'] as int?;
+        objectInstance = id['instance'] as int?;
       }
 
       if (objectType == null || objectInstance == null) {
@@ -2168,16 +2366,15 @@ class BacnetService {
       }
     }
 
-    final invokeId = _nextInvokeId();
-    final packet = BacnetEncoder.encodeWriteWeeklyScheduleRequest(
-      invokeId: invokeId,
-      scheduleInstance: scheduleInstance,
-      weeklySchedule: weeklySchedule,
+    final response = await _sendConfirmed(
+      host,
+      port,
+      (invokeId) => BacnetEncoder.encodeWriteWeeklyScheduleRequest(
+        invokeId: invokeId,
+        scheduleInstance: scheduleInstance,
+        weeklySchedule: weeklySchedule,
+      ),
     );
-
-    _logger.d('writeWeeklySchedule: sending packet (${packet.length} bytes)');
-
-    final response = await _sendAndWait(packet, host, port, invokeId);
 
     if (response.isSuccess) {
       _logger.i('writeWeeklySchedule: Success');
@@ -2207,15 +2404,16 @@ class BacnetService {
 
     _logger.i('writeDailySchedule: writing day $dayIndex to schedule $scheduleInstance');
 
-    final invokeId = _nextInvokeId();
-    final packet = BacnetEncoder.encodeWriteDailyScheduleRequest(
-      invokeId: invokeId,
-      scheduleInstance: scheduleInstance,
-      dayIndex: dayIndex,
-      dailySchedule: dailySchedule,
+    final response = await _sendConfirmed(
+      host,
+      port,
+      (invokeId) => BacnetEncoder.encodeWriteDailyScheduleRequest(
+        invokeId: invokeId,
+        scheduleInstance: scheduleInstance,
+        dayIndex: dayIndex,
+        dailySchedule: dailySchedule,
+      ),
     );
-
-    final response = await _sendAndWait(packet, host, port, invokeId);
 
     if (response.isSuccess) {
       _logger.i('writeDailySchedule: Success for day $dayIndex');
@@ -2235,11 +2433,66 @@ class _ObjectInfo {
   _ObjectInfo({required this.type, required this.instance});
 }
 
+/// A confirmed request waiting for its answer
+class _PendingRequest {
+  final String key;
+  final int invokeId;
+  final Uint8List packet;
+  final InternetAddress address;
+  final int port;
+  final Completer<BacnetResponse> completer = Completer<BacnetResponse>();
+  Timer? timer;
+  int attempts = 0;
+
+  // Segmented ComplexACK reassembly
+  BytesBuilder? segments;
+  int? segmentServiceChoice;
+  int expectedSequence = 0;
+
+  _PendingRequest({required this.key, required this.invokeId, required this.packet, required this.address, required this.port});
+}
+
+/// Minimal async semaphore (FIFO)
+class _Semaphore {
+  final int maxCount;
+  int _count = 0;
+  final Queue<Completer<void>> _waiters = Queue<Completer<void>>();
+
+  _Semaphore(this.maxCount);
+
+  Future<void> acquire() {
+    if (_count < maxCount) {
+      _count++;
+      return Future.value();
+    }
+    final waiter = Completer<void>();
+    _waiters.add(waiter);
+    return waiter.future;
+  }
+
+  void release() {
+    if (_waiters.isNotEmpty) {
+      // Hand the slot over to the next waiter
+      _waiters.removeFirst().complete();
+    } else if (_count > 0) {
+      _count--;
+    }
+  }
+}
+
 /// Info d'un device répondant à Who-Is
 class IAmInfo {
   final InternetAddress address;
   final int deviceId;
-  final int? networkNumber; // Réseau BACnet d'origine (si routé)
+
+  /// UDP port the I-Am came from (origin port for a Forwarded-NPDU)
+  final int port;
+
+  /// Réseau BACnet d'origine (SNET, si le device est derrière un routeur)
+  final int? networkNumber;
+
+  /// Adresse MAC du device sur son réseau d'origine (SADR, si routé)
+  final List<int>? macAddress;
 
   /// Liste des autres adresses ayant répondu avec le même deviceId (conflits)
   final List<InternetAddress> conflictingAddresses;
@@ -2247,15 +2500,31 @@ class IAmInfo {
   /// Indique s'il y a un conflit de Device ID
   bool get hasConflict => conflictingAddresses.isNotEmpty;
 
-  IAmInfo({required this.address, required this.deviceId, this.networkNumber, this.conflictingAddresses = const []});
+  /// Adresse principale puis adresses en conflit, sans doublon
+  List<InternetAddress> get allAddresses => [address, ...conflictingAddresses];
 
-  /// Crée une copie avec une adresse conflictuelle ajoutée
+  IAmInfo({
+    required this.address,
+    required this.deviceId,
+    this.port = 47808,
+    this.networkNumber,
+    this.macAddress,
+    this.conflictingAddresses = const [],
+  });
+
+  /// True if [other] is the main address or an already known conflicting one
+  bool knowsAddress(InternetAddress other) =>
+      address.address == other.address || conflictingAddresses.any((a) => a.address == other.address);
+
+  /// Crée une copie avec une adresse conflictuelle ajoutée (ignorée si déjà connue)
   IAmInfo withConflict(InternetAddress conflictAddress) {
     return IAmInfo(
       address: address,
       deviceId: deviceId,
+      port: port,
       networkNumber: networkNumber,
-      conflictingAddresses: [...conflictingAddresses, conflictAddress],
+      macAddress: macAddress,
+      conflictingAddresses: knowsAddress(conflictAddress) ? conflictingAddresses : [...conflictingAddresses, conflictAddress],
     );
   }
 }
