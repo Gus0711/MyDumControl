@@ -244,7 +244,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                 if (!Validators.isNotEmpty(value)) {
                   return l10n.fieldRequired;
                 }
-                if (!Validators.isValidHost(value!)) {
+                if (!Validators.isValidHost(value!.trim())) {
                   return l10n.invalidHost;
                 }
                 return null;
@@ -635,12 +635,22 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
 
   Future<void> _testDistechConnection() async {
     final apiService = ref.read(apiServiceProvider);
+    var password = _passwordController.text;
+    // Editing: the password field is left empty, reuse the stored secret
+    if (password.isEmpty && widget.isEditing) {
+      final repository = ref.read(connectionRepositoryProvider);
+      final existing =
+          await repository.getConnectionById(int.parse(widget.connectionId!));
+      if (existing != null) {
+        password = await repository.getPassword(existing.passwordKey) ?? '';
+      }
+    }
     final result = await apiService.testConnection(
       host: _hostController.text.trim(),
       port: int.parse(_portController.text),
       useHttps: _useHttps,
       username: _usernameController.text.trim(),
-      password: _passwordController.text,
+      password: password,
     );
 
     if (mounted) {

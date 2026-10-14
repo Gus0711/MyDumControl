@@ -371,19 +371,22 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       ),
     );
 
-    if (result == true && nameController.text.isNotEmpty && mounted) {
+    final name = nameController.text.trim();
+    // Dispose after the dialog exit animation (the TextField is still mounted)
+    Future.delayed(const Duration(milliseconds: 500), nameController.dispose);
+
+    if (result == true && name.isNotEmpty && mounted) {
       final repository = ref.read(folderRepositoryProvider);
       final newId = await repository.createFolder(
-        name: nameController.text.trim(),
+        name: name,
         color: selectedColor,
       );
+      if (!mounted) return;
       // Déplier le nouveau dossier
       setState(() {
         _expandedFolders.add(newId);
       });
     }
-
-    nameController.dispose();
   }
 
   Future<void> _showEditFolderDialog(BuildContext context, AppLocalizations l10n, Folder folder) async {
@@ -461,17 +464,19 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       ),
     );
 
-    if (result == true && nameController.text.isNotEmpty && mounted) {
+    final name = nameController.text.trim();
+    // Dispose after the dialog exit animation (the TextField is still mounted)
+    Future.delayed(const Duration(milliseconds: 500), nameController.dispose);
+
+    if (result == true && name.isNotEmpty && mounted) {
       final repository = ref.read(folderRepositoryProvider);
       await repository.updateFolder(
         id: folder.id,
-        name: nameController.text.trim(),
+        name: name,
         icon: folder.icon,
         color: selectedColor,
       );
     }
-
-    nameController.dispose();
   }
 
   Future<void> _showDeleteFolderDialog(
