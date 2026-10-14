@@ -20,24 +20,32 @@ class CacheService {
   /// Retourne null si le cache est vide ou expiré
   Future<Map<String, CachedPoint>?> getStaticPointsCache(int connectionId) async {
     try {
-      final isValid = await _database.isPointsCacheValid(connectionId);
-      if (!isValid) {
-        _logger.d('Points cache invalid or expired for connection $connectionId');
-        return null;
-      }
-
+      // Single read, then validity check on the oldest row
       final cachedPoints = await _database.getAllCachedPoints(connectionId);
       if (cachedPoints.isEmpty) return null;
 
+      final oldest = cachedPoints
+          .map((p) => p.cachedAt)
+          .reduce((a, b) => a.isBefore(b) ? a : b);
+      if (!isCacheFresh(oldest, AppDatabase.pointsCacheMaxAge)) {
+        _logger.d('Points cache expired for connection $connectionId');
+        return null;
+      }
+
       _logger.i('Loaded ${cachedPoints.length} points from cache');
       return {for (var p in cachedPoints) p.pointRef: p};
-    } catch (e) {
-      _logger.e('Error loading points cache: $e');
+    } catch (e, st) {
+      // Treated as an empty cache, but logged with stack trace so a DB/migration
+      // failure is not silently hidden.
+      _logger.e('Error loading points cache', error: e, stackTrace: st);
       return null;
     }
   }
 
-  /// Sauvegarde les propriétés statiques des points en cache
+  /// Sauvegarde les propriétés statiques des points en cache.
+  ///
+  /// Replaces the whole cache of the connection (in a transaction): points that
+  /// no longer exist on the controller are purged and cachedAt is refreshed.
   Future<void> cacheStaticPoints(int connectionId, List<BacnetObject> points) async {
     try {
       final cacheEntries = points.map((p) => CachedPointsCompanion.insert(
@@ -52,10 +60,10 @@ class CacheService {
             inactiveText: Value(p.inactiveText),
           )).toList();
 
-      await _database.cachePoints(cacheEntries);
+      await _database.replaceCachedPoints(connectionId, cacheEntries);
       _logger.i('Cached ${cacheEntries.length} points for connection $connectionId');
-    } catch (e) {
-      _logger.e('Error caching points: $e');
+    } catch (e, st) {
+      _logger.e('Error caching points', error: e, stackTrace: st);
     }
   }
 
@@ -107,11 +115,11 @@ class CacheService {
   /// Récupère le device info depuis le cache
   Future<DeviceInfo?> getCachedDeviceInfo(int connectionId) async {
     try {
-      final isValid = await _database.isDeviceInfoCacheValid(connectionId);
-      if (!isValid) return null;
-
       final cached = await _database.getCachedDeviceInfo(connectionId);
-      if (cached == null) return null;
+      if (cached == null ||
+          !isCacheFresh(cached.cachedAt, AppDatabase.deviceInfoCacheMaxAge)) {
+        return null;
+      }
 
       _logger.i('Loaded device info from cache: ${cached.objectName}');
       return DeviceInfo(

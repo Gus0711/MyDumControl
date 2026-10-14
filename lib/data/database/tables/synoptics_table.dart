@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 /// Table des synoptiques (instances de SVG avec configuration)
+@TableIndex(name: 'idx_synoptics_connection_id', columns: {#connectionId})
 class Synoptics extends Table {
   /// Identifiant unique
   IntColumn get id => integer().autoIncrement()();

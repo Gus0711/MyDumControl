@@ -7457,6 +7457,22 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DashboardWidgetsTable dashboardWidgets = $DashboardWidgetsTable(
     this,
   );
+  late final Index idxFavoriteFolderAssignmentsFolderId = Index(
+    'idx_favorite_folder_assignments_folder_id',
+    'CREATE INDEX idx_favorite_folder_assignments_folder_id ON favorite_folder_assignments (folder_id)',
+  );
+  late final Index idxSynopticsConnectionId = Index(
+    'idx_synoptics_connection_id',
+    'CREATE INDEX idx_synoptics_connection_id ON synoptics (connection_id)',
+  );
+  late final Index idxDashboardsConnectionId = Index(
+    'idx_dashboards_connection_id',
+    'CREATE INDEX idx_dashboards_connection_id ON dashboards (connection_id)',
+  );
+  late final Index idxDashboardWidgetsDashboardId = Index(
+    'idx_dashboard_widgets_dashboard_id',
+    'CREATE INDEX idx_dashboard_widgets_dashboard_id ON dashboard_widgets (dashboard_id)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7475,6 +7491,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     synopticBindings,
     dashboards,
     dashboardWidgets,
+    idxFavoriteFolderAssignmentsFolderId,
+    idxSynopticsConnectionId,
+    idxDashboardsConnectionId,
+    idxDashboardWidgetsDashboardId,
   ];
 }
 
