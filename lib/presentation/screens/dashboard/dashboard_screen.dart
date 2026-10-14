@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/providers/dashboard_provider.dart';
 import '../../../application/providers/multi_curve_provider.dart';
+import '../../../application/providers/trend_log_provider.dart';
 import '../../../data/database/app_database.dart';
 import '../../../data/database/tables/dashboard_tables.dart';
 import '../../widgets/gradient_app_bar.dart';
@@ -93,6 +94,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  /// Refreshes the data of every chart/stats widget (deduplicated per trend log).
+  Future<void> _refreshAll(List<DashboardWidget> widgets) async {
+    final futures = <Future<void>>[];
+    final seen = <int>{};
+    for (final w in widgets) {
+      switch (w.widgetType) {
+        case DashboardWidgetType.singleTrendChart:
+          final c = SingleChartWidgetConfig.fromJsonString(w.configJson);
+          if (c != null && seen.add(c.trendLogInstance)) {
+            futures.add(ref.read(trendLogViewerProvider(c.trendLogInstance).notifier).refresh());
+          }
+          break;
+        case DashboardWidgetType.statsCard:
+          final c = StatsWidgetConfig.fromJsonString(w.configJson);
+          if (c != null && seen.add(c.trendLogInstance)) {
+            futures.add(ref.read(trendLogViewerProvider(c.trendLogInstance).notifier).refresh());
+          }
+          break;
+        case DashboardWidgetType.multiCurveChart:
+          futures.add(ref.read(multiCurveViewerProvider('dashboard_widget_${w.id}').notifier).refresh());
+          break;
+      }
+    }
+    await Future.wait(futures.map((f) => f.catchError((_) {})));
+  }
+
+  /// Disposes a dialog controller once the closing animation is over.
+  void _disposeLater(TextEditingController controller) {
+    Future.delayed(const Duration(milliseconds: 400), controller.dispose);
+  }
+
   Widget _buildGrid(BuildContext context, Dashboard dashboard, List<DashboardWidget> widgets) {
     final totalSlots = dashboard.columns * dashboard.rows;
 
@@ -103,9 +135,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(dashboardWidgetsProvider(widget.dashboardId));
-      },
+      onRefresh: () => _refreshAll(widgets),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: GridView.builder(
@@ -411,6 +441,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
 
+    _disposeLater(controller);
     if (newTitle == null || !mounted) return;
 
     // Mettre à jour la config avec le nouveau titre
@@ -540,6 +571,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
 
+    _disposeLater(nameController);
     if (result != null && mounted) {
       await ref.read(dashboardNotifierProvider.notifier).updateDashboard(
             id: dashboard.id,
