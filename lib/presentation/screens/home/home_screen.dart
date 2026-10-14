@@ -28,6 +28,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _pointsLoadTriggered = false;
   bool _initialLoadComplete = false;
 
+  /// True once a points load has finished (even with 0 point or an error),
+  /// so an empty controller does not keep the loading skeleton forever.
+  bool _pointsLoadFinished = false;
+
   /// Ouvre le synoptique Envysion dans le navigateur externe
   Future<void> _openEnvysionInBrowser() async {
     final state = ref.read(activeConnectionProvider);
@@ -63,6 +67,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.connectionId != null &&
+        widget.connectionId != oldWidget.connectionId) {
+      _initialLoadComplete = false;
+      _pointsLoadTriggered = false;
+      _pointsLoadFinished = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(activeConnectionProvider.notifier).connect(widget.connectionId!);
+        }
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Écouter l'état de connexion pour charger les points automatiquement
     ref.listen<ActiveConnectionState>(activeConnectionProvider, (previous, next) {
@@ -78,6 +98,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (!next.isConnected) {
         _pointsLoadTriggered = false;
         _initialLoadComplete = false;
+        _pointsLoadFinished = false;
+      }
+    });
+
+    // Détecter la fin d'un chargement de points (même vide ou en erreur)
+    ref.listen<PointsState>(pointsProvider, (previous, next) {
+      if (previous != null && previous.isLoading && !next.isLoading) {
+        if (!_pointsLoadFinished && mounted) {
+          setState(() => _pointsLoadFinished = true);
+        }
       }
     });
 
@@ -91,7 +121,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         !connectionState.isLoading &&
         connectionState.objectsSummary != null &&
         !pointsState.isLoading &&
-        pointsState.points.isNotEmpty) {
+        (pointsState.points.isNotEmpty ||
+            _pointsLoadFinished ||
+            pointsState.error != null)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
@@ -218,7 +250,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Afficher l'overlay de chargement pendant tout le processus de connexion initial
     // L'overlay reste visible tant que le chargement initial n'est pas terminé
     final ptsState = ref.watch(pointsProvider);
-    final isLoadingPoints = ptsState.isLoading || (ptsState.points.isEmpty && state.isConnected);
+    final isLoadingPoints = ptsState.isLoading ||
+        (ptsState.points.isEmpty &&
+            state.isConnected &&
+            !_pointsLoadFinished &&
+            ptsState.error == null);
     final showLoadingOverlay = !_initialLoadComplete && (state.isConnecting || state.isLoading || isLoadingPoints);
 
     if (showLoadingOverlay) {
@@ -1132,6 +1168,7 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
 
                         try {
                           final success = await widget.onSyncTime?.call() ?? false;
+                          if (!dialogContext.mounted) return;
                           setDialogState(() {
                             isSyncing = false;
                             syncResult = success
@@ -1147,6 +1184,7 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                             }
                           }
                         } catch (e) {
+                          if (!dialogContext.mounted) return;
                           setDialogState(() {
                             isSyncing = false;
                             syncResult = 'Erreur: $e';
@@ -1163,7 +1201,7 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
                 label: Text(isSyncing ? 'Synchronisation...' : 'Synchroniser'),
               ),
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
+              onPressed: isSyncing ? null : () => Navigator.pop(dialogContext),
               child: const Text('Fermer'),
             ),
           ],
