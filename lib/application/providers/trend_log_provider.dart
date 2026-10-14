@@ -256,6 +256,23 @@ TrendLogData parseTrendLogBuffer(String bufferData) {
   }
 }
 
+/// Parses trend buffer data as returned by `ApiClient.getTrendLogBufferData`
+/// (already decoded `List`/`Map`, or V1 text `String`).
+/// Top-level so it can run in a background isolate via [compute].
+TrendLogData parseTrendLogBufferData(Object bufferData) {
+  if (bufferData is String) return parseTrendLogBuffer(bufferData);
+  return TrendLogBufferParser.parseV2(bufferData);
+}
+
+/// True if decoded buffer data holds nothing to parse.
+bool isTrendLogBufferDataEmpty(Object? data) {
+  if (data == null) return true;
+  if (data is String) return data.trim().isEmpty;
+  if (data is Iterable) return data.isEmpty;
+  if (data is Map) return data.isEmpty;
+  return false;
+}
+
 /// Notifier pour gérer le chargement des données de trend
 class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
   final Ref _ref;
@@ -278,6 +295,12 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
 
   // Incremented on every network load: older loads are ignored on completion
   int _requestId = 0;
+
+  // Single-flight: the network load currently running and what it covers.
+  Future<void>? _inFlight;
+  int? _inFlightConnectionId;
+  bool _inFlightAllData = false;
+  int _inFlightMaxRecords = 0;
 
   TrendLogViewerNotifier(this._ref, this.trendLogInstance)
       : super(const TrendLogViewerState());
@@ -331,6 +354,51 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
       return;
     }
 
+    // Single-flight: a load already running for this connection that covers
+    // the request is reused (only the selected period is updated; the running
+    // load applies state.selectedPeriod when it completes).
+    final inFlight = _inFlight;
+    if (!forceRefresh &&
+        inFlight != null &&
+        _inFlightConnectionId == currentConnectionId &&
+        (currentIsBacnet
+            ? _getMaxRecordsForPeriod(selectedPeriod) <= _inFlightMaxRecords
+            : (!allData || _inFlightAllData))) {
+      state = state.copyWith(
+        isLoading: true,
+        selectedPeriod: selectedPeriod,
+        loadingMessage: state.loadingMessage,
+      );
+      return inFlight;
+    }
+
+    final future = _startLoad(
+      connectionState,
+      selectedPeriod,
+      allData: allData,
+      isBacnet: currentIsBacnet,
+      connectionId: currentConnectionId,
+    );
+    _inFlight = future;
+    _inFlightConnectionId = currentConnectionId;
+    _inFlightAllData = allData;
+    _inFlightMaxRecords = currentIsBacnet ? _getMaxRecordsForPeriod(selectedPeriod) : 0;
+    try {
+      await future;
+    } finally {
+      if (identical(_inFlight, future)) _inFlight = null;
+    }
+  }
+
+  Future<void> _startLoad(
+    ActiveConnectionState connectionState,
+    TrendPeriod selectedPeriod, {
+    required bool allData,
+    required bool isBacnet,
+    required int? connectionId,
+  }) async {
+    final currentIsBacnet = isBacnet;
+    final currentConnectionId = connectionId;
     final requestId = ++_requestId;
     _loadAllData = allData; // Stocker pour passage aux méthodes de chargement
 
@@ -402,10 +470,10 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     }
 
     if (records.isEmpty) {
+      // Final empty state (no error): the UI shows "no data".
       _logger.w('_loadDataFromBacnet: no records returned');
       state = state.copyWith(
         isLoading: false,
-        error: 'Aucune donnée disponible',
         data: TrendLogData.fromRecords([]),
         loadingMessage: null,
       );
@@ -455,13 +523,14 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
         : 'Téléchargement de l\'historique...\n(peut prendre quelques minutes)');
 
     // Récupérer le buffer (avec ou sans limite de temps)
-    final bufferData = await client.getTrendLogBuffer(trendLogInstance, allData: allData);
+    // Already decoded by Dio (no JSON re-encoding of large buffers)
+    final bufferData = await client.getTrendLogBufferData(trendLogInstance, allData: allData);
     if (_isStale(requestId, connectionId)) return;
 
-    if (bufferData == null || bufferData.isEmpty) {
+    if (bufferData == null || isTrendLogBufferDataEmpty(bufferData)) {
+      // Final empty state (no error): the UI shows "no data".
       state = state.copyWith(
         isLoading: false,
-        error: 'Aucune donnée disponible',
         data: TrendLogData.fromRecords([]),
         loadingMessage: null,
       );
@@ -471,7 +540,7 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     state = state.copyWith(loadingMessage: 'Analyse des données...');
 
     // Parser les données (JSON V2 / V1 /trend, ou texte V1) hors du thread UI
-    final trendData = await compute(parseTrendLogBuffer, bufferData);
+    final trendData = await compute(parseTrendLogBufferData, bufferData);
     if (_isStale(requestId, connectionId)) return;
     _logger.i('TrendLogViewer: parsed ${trendData.records.length} records from API buffer');
 

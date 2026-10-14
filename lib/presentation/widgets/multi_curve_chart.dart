@@ -73,7 +73,7 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
     final units = widget.curveUnits == null ? null : Map<int, String?>.of(widget.curveUnits!);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(multiCurveViewerProvider(chartId).notifier).initialize(
+      ref.read(multiCurveViewerProvider(chartId).notifier).reconfigure(
             List<int>.of(instances),
             names: names,
             units: units,
@@ -238,11 +238,59 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
       return const _EmptyState();
     }
 
-    return Padding(
+    final chart = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _MultiCurveLineChart(
         data: state.data!,
         visibility: state.curveVisibility,
+      ),
+    );
+
+    // Partial failure: keep the loaded curves and show the error above them
+    final error = state.error ??
+        (state.curveErrors.isEmpty
+            ? null
+            : '${state.curveErrors.length} courbe(s) non chargée(s)');
+    if (error == null) return chart;
+
+    return Column(
+      children: [
+        _ErrorBanner(message: error),
+        Expanded(child: chart),
+      ],
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+
+  const _ErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 16, color: colorScheme.onErrorContainer),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: colorScheme.onErrorContainer),
+            ),
+          ),
+        ],
       ),
     );
   }

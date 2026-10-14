@@ -118,8 +118,18 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
 
   /// Initialise avec une liste d'instances de trend log
   Future<void> initialize(List<int> trendLogInstances,
+          {Map<int, String>? names, Map<int, String?>? units}) =>
+      reconfigure(trendLogInstances, names: names, units: units);
+
+  /// Replaces the whole curve configuration (instances, names, units):
+  /// cancels any running load, clears cached curve data and errors, then
+  /// reloads. The caller's maps are copied, never mutated.
+  Future<void> reconfigure(List<int> trendLogInstances,
       {Map<int, String>? names, Map<int, String?>? units}) async {
     if (trendLogInstances.isEmpty) return;
+
+    // Results of a load started for the previous configuration are ignored
+    _requestId++;
 
     // Limiter à 8 courbes max
     final instances = trendLogInstances.take(8).toList();
@@ -373,7 +383,9 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
 
       final viewerState = loader.currentState;
 
-      if (viewerState.error != null || viewerState.data == null) {
+      if (viewerState.error != null ||
+          viewerState.data == null ||
+          viewerState.data!.records.isEmpty) {
         _cachedTrendLogData.remove(trendLogInstance);
         final error = viewerState.error ?? 'Aucune donnée';
         _logger.w('_loadSingleCurveData: instance $trendLogInstance -> error: $error');
