@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../application/providers/multi_curve_provider.dart';
 import '../../application/providers/trend_log_provider.dart';
 import '../../domain/models/multi_curve_chart.dart';
+import 'chart_downsample.dart';
 import 'trend_log_viewer.dart';
 
 // =============================================================================
@@ -53,6 +55,30 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
   void initState() {
     super.initState();
     _initializeChart();
+  }
+
+  @override
+  void didUpdateWidget(covariant MultiCurveChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final configChanged = oldWidget.chartId != widget.chartId ||
+        !listEquals(oldWidget.initialTrendLogInstances, widget.initialTrendLogInstances) ||
+        !mapEquals(oldWidget.curveNames, widget.curveNames) ||
+        !mapEquals(oldWidget.curveUnits, widget.curveUnits);
+    final instances = widget.initialTrendLogInstances;
+    if (!configChanged || instances == null || instances.isEmpty) return;
+
+    // Reconfiguration (ex: dashboard widget edited): re-initialize the provider
+    final chartId = widget.chartId;
+    final names = widget.curveNames == null ? null : Map<int, String>.of(widget.curveNames!);
+    final units = widget.curveUnits == null ? null : Map<int, String?>.of(widget.curveUnits!);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(multiCurveViewerProvider(chartId).notifier).initialize(
+            List<int>.of(instances),
+            names: names,
+            units: units,
+          );
+    });
   }
 
   void _initializeChart() {
@@ -376,6 +402,18 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
   // Zoom & Pan
   double _zoomLevel = 1.0;
   double _panOffset = 0.0;
+  double _baseZoom = 1.0; // zoom at the start of the current gesture
+  double _chartWidth = 300.0; // last known width, used for pan sensitivity
+
+  @override
+  void didUpdateWidget(covariant _MultiCurveLineChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // New data set: restart from the full view
+    if (!identical(oldWidget.data, widget.data)) {
+      _zoomLevel = 1.0;
+      _panOffset = 0.0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -413,22 +451,28 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
       if (curve.minValue < visibleMinY) visibleMinY = curve.minValue;
       if (curve.maxValue > visibleMaxY) visibleMaxY = curve.maxValue;
     }
-    final yPadding = (visibleMaxY - visibleMinY) * 0.1;
+    // Padding minimal quand toutes les valeurs sont identiques (min == max)
+    final yRange = visibleMaxY - visibleMinY;
+    final yPadding = yRange > 0 ? yRange * 0.1 : 1.0;
 
+    return LayoutBuilder(builder: (context, constraints) {
+    if (constraints.maxWidth.isFinite && constraints.maxWidth > 0) {
+      _chartWidth = constraints.maxWidth;
+    }
     return GestureDetector(
-      onScaleStart: (_) {},
+      onScaleStart: (_) => _baseZoom = _zoomLevel,
       onScaleUpdate: (details) {
         setState(() {
-          // Zoom
-          final newZoom = (_zoomLevel * details.scale).clamp(1.0, 10.0);
-          _zoomLevel = newZoom;
+          // Zoom relatif au zoom de départ (details.scale est cumulatif)
+          _zoomLevel = (_baseZoom * details.scale).clamp(1.0, 10.0);
 
-          // Pan (uniquement si zoomé)
+          // Pan proportionnel à la plage visible, re-clampé à chaque update
+          final maxPan = totalRange - (totalRange / _zoomLevel);
           if (_zoomLevel > 1.0) {
-            final maxPan = totalRange - (totalRange / _zoomLevel);
-            _panOffset = (_panOffset - details.focalPointDelta.dx * 0.5)
-                .clamp(0.0, maxPan);
+            final minutesPerPixel = (totalRange / _zoomLevel) / _chartWidth;
+            _panOffset = _panOffset - details.focalPointDelta.dx * minutesPerPixel;
           }
+          _panOffset = _panOffset.clamp(0.0, maxPan > 0 ? maxPan : 0.0);
         });
       },
       onDoubleTap: () {
@@ -443,15 +487,19 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
             LineChartData(
               lineBarsData: visibleCurves.map((curve) {
                 final colorTheme = ChartColorTheme.fromName(curve.colorThemeName);
+                final spots = downsampleMinMax(
+                  visibleWindow(curve.spots, actualMinX - visibleRange * 0.1,
+                      actualMaxX + visibleRange * 0.1),
+                );
                 return LineChartBarData(
-                  spots: curve.spots,
-                  isCurved: true,
+                  spots: spots.isNotEmpty ? spots : downsampleMinMax(curve.spots),
+                  isCurved: spots.length <= kRichRenderingMaxPoints,
                   curveSmoothness: 0.2,
                   color: colorTheme.primaryColor,
                   barWidth: 2,
                   isStrokeCapRound: true,
                   dotData: FlDotData(
-                    show: curve.spots.length < 50,
+                    show: spots.length < 50,
                     getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
                       radius: 3,
                       color: colorTheme.dotBorderColor,
@@ -545,7 +593,7 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
                 ),
               ),
             ),
-            duration: const Duration(milliseconds: 150),
+            duration: Duration.zero,
           ),
 
           // Indicateur de zoom
@@ -572,6 +620,7 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
         ],
       ),
     );
+    });
   }
 
   Widget _buildDateLabel(double value) {
