@@ -1,3 +1,6 @@
+/// Sentinel pour distinguer "paramètre non fourni" de "null" dans copyWith
+const Object _unset = Object();
+
 /// Jours de la semaine pour les plannings
 enum WeekDay {
   monday('monday', 'Lundi', 'Lun'),
@@ -97,24 +100,67 @@ class ScheduleTransition {
     );
   }
 
-  /// Convertit en format V1 pour l'API
-  Map<String, dynamic> toV1Json() {
-    String valueType = 'null';
-    dynamic valueToSend = value;
+  /// Types de valeur BACnet connus (ceux qui peuvent être réécrits tels quels)
+  static const knownValueTypes = {'boolean', 'unsigned', 'signed', 'real', 'enumerated'};
 
+  /// Type d'origine de la transition s'il est connu (sinon null)
+  String? get knownType => (value != null && knownValueTypes.contains(type)) ? type : null;
+
+  /// Convertit en format V1 pour l'API
+  /// [fallbackType] : type à utiliser pour une transition sans type connu
+  /// (nouvelle transition créée dans l'éditeur), en général le type des
+  /// autres transitions du planning.
+  Map<String, dynamic> toV1Json({String? fallbackType}) {
     if (value == null) {
-      valueType = 'null';
+      return {'time': time, 'value': null, 'type': 'null'};
+    }
+
+    String valueType;
+    final resolved = knownType ?? (knownValueTypes.contains(fallbackType) ? fallbackType : null);
+    if (resolved != null) {
+      valueType = resolved;
     } else if (value is bool) {
       valueType = 'boolean';
-    } else if (value is int) {
+    } else if (value is double) {
+      valueType = 'real';
+    } else {
       valueType = 'enumerated';
     }
 
     return {
       'time': time,
-      'value': valueToSend,
+      'value': normalizeValueForType(value, valueType),
       'type': valueType,
     };
+  }
+
+  /// Convertit une valeur au type Dart attendu par un type BACnet
+  /// (ex: 1 -> true pour boolean, true -> 1 pour unsigned/enumerated)
+  static dynamic normalizeValueForType(dynamic value, String type) {
+    if (value == null) return null;
+    switch (type) {
+      case 'boolean':
+        if (value is bool) return value;
+        if (value is num) return value != 0;
+        if (value is String) return value == 'true' || value == 'active' || value == '1';
+        return value;
+      case 'unsigned':
+      case 'signed':
+      case 'enumerated':
+        if (value is int) return value;
+        if (value is bool) return value ? 1 : 0;
+        if (value is double) return value.round();
+        if (value is String) return int.tryParse(value) ?? value;
+        return value;
+      case 'real':
+        if (value is double) return value;
+        if (value is num) return value.toDouble();
+        if (value is bool) return value ? 1.0 : 0.0;
+        if (value is String) return double.tryParse(value) ?? value;
+        return value;
+      default:
+        return value;
+    }
   }
 
   /// Convertit en format V2 pour l'API
@@ -129,13 +175,13 @@ class ScheduleTransition {
   /// Copie avec modifications
   ScheduleTransition copyWith({
     String? time,
-    dynamic value,
+    Object? value = _unset,
     String? type,
     String? key,
   }) {
     return ScheduleTransition(
       time: time ?? this.time,
-      value: value ?? this.value,
+      value: identical(value, _unset) ? this.value : value,
       type: type ?? this.type,
       key: key ?? this.key,
     );
@@ -252,13 +298,13 @@ class TimeSlot {
   TimeSlot copyWith({
     int? startMinutes,
     int? endMinutes,
-    dynamic value,
+    Object? value = _unset,
     bool? isAllDay,
   }) {
     return TimeSlot(
       startMinutes: startMinutes ?? this.startMinutes,
       endMinutes: endMinutes ?? this.endMinutes,
-      value: value ?? this.value,
+      value: identical(value, _unset) ? this.value : value,
       isAllDay: isAllDay ?? this.isAllDay,
     );
   }
@@ -434,9 +480,9 @@ class DaySchedule {
   }
 
   /// Convertit en format V1 pour l'API
-  Map<String, dynamic> toV1Json() {
+  Map<String, dynamic> toV1Json({String? fallbackType}) {
     return {
-      'timeValues': sortedTransitions.map((t) => t.toV1Json()).toList(),
+      'timeValues': sortedTransitions.map((t) => t.toV1Json(fallbackType: fallbackType)).toList(),
     };
   }
 
@@ -521,10 +567,25 @@ class WeeklySchedule {
     return WeeklySchedule(days: days);
   }
 
+  /// Type de valeur d'origine du planning : celui de la première transition
+  /// non nulle dont le type est connu (lu sur l'automate). Null si inconnu.
+  String? get dominantValueType {
+    for (final day in WeekDay.values) {
+      for (final t in getDay(day).transitions) {
+        final type = t.knownType;
+        if (type != null) return type;
+      }
+    }
+    return null;
+  }
+
   /// Convertit en format V1 pour l'API
-  Map<String, dynamic> toV1Json() {
+  /// Les nouvelles transitions (sans type) prennent le type des transitions
+  /// existantes, pour ne pas mélanger les types dans un même planning.
+  Map<String, dynamic> toV1Json({String? fallbackType}) {
+    final fallback = dominantValueType ?? fallbackType;
     return {
-      'value': WeekDay.values.map((d) => getDay(d).toV1Json()).toList(),
+      'value': WeekDay.values.map((d) => getDay(d).toV1Json(fallbackType: fallback)).toList(),
     };
   }
 
@@ -680,22 +741,22 @@ class Schedule {
   Schedule copyWith({
     int? instance,
     String? objectName,
-    String? description,
+    Object? description = _unset,
     WeeklySchedule? weeklySchedule,
     List<ScheduleStateText>? stateTexts,
     ScheduleValueType? valueType,
-    dynamic presentValue,
-    dynamic scheduleDefault,
+    Object? presentValue = _unset,
+    Object? scheduleDefault = _unset,
   }) {
     return Schedule(
       instance: instance ?? this.instance,
       objectName: objectName ?? this.objectName,
-      description: description ?? this.description,
+      description: identical(description, _unset) ? this.description : description as String?,
       weeklySchedule: weeklySchedule ?? this.weeklySchedule,
       stateTexts: stateTexts ?? this.stateTexts,
       valueType: valueType ?? this.valueType,
-      presentValue: presentValue ?? this.presentValue,
-      scheduleDefault: scheduleDefault ?? this.scheduleDefault,
+      presentValue: identical(presentValue, _unset) ? this.presentValue : presentValue,
+      scheduleDefault: identical(scheduleDefault, _unset) ? this.scheduleDefault : scheduleDefault,
     );
   }
 }
@@ -742,153 +803,5 @@ class ScheduleSummary {
       presentValue: presentValue,
       valueType: ScheduleValueType.fromValue(presentValue),
     );
-  }
-}
-
-// =========================================================================
-// BACnet Schedule Converters
-// =========================================================================
-
-/// Import nécessaire pour les types BACnet - à utiliser avec:
-/// import 'package:my_dum_control/data/services/bacnet_service.dart';
-
-/// Extension pour convertir les modèles Schedule vers/depuis le format BACnet natif
-class BacnetScheduleConverter {
-  /// Convertit un DecodedWeeklySchedule BACnet en WeeklySchedule du modèle
-  static WeeklySchedule fromBacnetWeeklySchedule(
-    dynamic decodedWeeklySchedule, {
-    ScheduleValueType valueType = ScheduleValueType.enumerated,
-  }) {
-    final days = <WeekDay, DaySchedule>{};
-
-    // decodedWeeklySchedule.days est une List<DecodedDailySchedule>
-    if (decodedWeeklySchedule != null && decodedWeeklySchedule.days != null) {
-      for (int i = 0; i < 7 && i < decodedWeeklySchedule.days.length; i++) {
-        final weekDay = WeekDay.values[i];
-        final decodedDay = decodedWeeklySchedule.days[i];
-
-        final transitions = <ScheduleTransition>[];
-        if (decodedDay.timeValues != null) {
-          for (final tv in decodedDay.timeValues) {
-            transitions.add(ScheduleTransition(
-              time: tv.timeString,
-              value: tv.value,
-              type: _valueTagToTypeString(tv.valueTag),
-            ));
-          }
-        }
-
-        days[weekDay] = DaySchedule(day: weekDay, transitions: transitions);
-      }
-    }
-
-    // Remplir les jours manquants
-    for (final day in WeekDay.values) {
-      days.putIfAbsent(day, () => DaySchedule.empty(day));
-    }
-
-    return WeeklySchedule(days: days);
-  }
-
-  /// Convertit le type de tag BACnet en string pour le modèle
-  static String _valueTagToTypeString(int valueTag) {
-    switch (valueTag) {
-      case 0: return 'null';
-      case 1: return 'boolean';
-      case 2: return 'unsigned';
-      case 3: return 'signed';
-      case 4: return 'real';
-      case 9: return 'enumerated';
-      default: return 'unknown';
-    }
-  }
-
-  /// Crée un BacnetScheduleInfo depuis le modèle Schedule
-  /// Note: Nécessite l'import de bacnet_service.dart pour BacnetWeeklySchedule
-  static dynamic toBacnetWeeklySchedule(
-    WeeklySchedule weeklySchedule, {
-    bool useEnumerated = true, // true = enumerated (9), false = boolean (1)
-  }) {
-    // Cette méthode retourne un objet compatible avec BacnetWeeklySchedule
-    // L'appelant doit créer le BacnetWeeklySchedule avec les données retournées
-    return _WeeklyScheduleData(
-      days: WeekDay.values.map((weekDay) {
-        final daySchedule = weeklySchedule.getDay(weekDay);
-        return _DailyScheduleData(
-          timeValues: daySchedule.sortedTransitions.map((transition) {
-            return _TimeValueData(
-              time: transition.time,
-              value: transition.value,
-              useEnumerated: useEnumerated,
-            );
-          }).toList(),
-        );
-      }).toList(),
-    );
-  }
-}
-
-/// Données internes pour la conversion (évite la dépendance circulaire)
-class _WeeklyScheduleData {
-  final List<_DailyScheduleData> days;
-  _WeeklyScheduleData({required this.days});
-}
-
-class _DailyScheduleData {
-  final List<_TimeValueData> timeValues;
-  _DailyScheduleData({required this.timeValues});
-}
-
-class _TimeValueData {
-  final String time;
-  final dynamic value;
-  final bool useEnumerated;
-  _TimeValueData({required this.time, required this.value, required this.useEnumerated});
-}
-
-/// Extension sur Schedule pour la conversion BACnet
-extension ScheduleBacnetExtension on Schedule {
-  /// Crée un Schedule depuis un BacnetScheduleInfo
-  static Schedule fromBacnetInfo(
-    dynamic bacnetInfo, {
-    ScheduleValueType? forceValueType,
-  }) {
-    // bacnetInfo est de type BacnetScheduleInfo
-    final valueType = forceValueType ?? _detectValueType(bacnetInfo.presentValue);
-
-    WeeklySchedule weeklySchedule;
-    if (bacnetInfo.weeklySchedule != null) {
-      weeklySchedule = BacnetScheduleConverter.fromBacnetWeeklySchedule(
-        bacnetInfo.weeklySchedule,
-        valueType: valueType,
-      );
-    } else {
-      weeklySchedule = WeeklySchedule.empty();
-    }
-
-    // Parser les state texts
-    final stateTexts = <ScheduleStateText>[];
-    if (bacnetInfo.stateTexts != null) {
-      for (int i = 0; i < bacnetInfo.stateTexts.length; i++) {
-        stateTexts.add(ScheduleStateText(index: i + 1, text: bacnetInfo.stateTexts[i]));
-      }
-    }
-
-    return Schedule(
-      instance: bacnetInfo.instance,
-      objectName: bacnetInfo.objectName,
-      description: bacnetInfo.description,
-      weeklySchedule: weeklySchedule,
-      stateTexts: stateTexts,
-      valueType: valueType,
-      presentValue: bacnetInfo.presentValue,
-      scheduleDefault: bacnetInfo.scheduleDefault,
-    );
-  }
-
-  static ScheduleValueType _detectValueType(dynamic value) {
-    if (value == null) return ScheduleValueType.enumerated;
-    if (value is bool) return ScheduleValueType.boolean;
-    return ScheduleValueType.enumerated;
   }
 }
