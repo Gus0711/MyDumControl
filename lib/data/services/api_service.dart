@@ -1,10 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:logger/logger.dart';
+import '../../core/constants/api_constants.dart';
 import '../../domain/models/bacnet_object.dart';
 import '../../domain/models/schedule.dart';
+import 'api_exceptions.dart';
+import 'api_type_names.dart';
+
+export 'api_exceptions.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
@@ -30,8 +36,8 @@ class ApiService {
 
   ApiService() {
     _dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: ApiConstants.testConnectionTimeout,
+      receiveTimeout: ApiConstants.testConnectionTimeout,
       validateStatus: (status) => status != null && status < 500,
     ));
   }
@@ -50,10 +56,18 @@ class ApiService {
     };
   }
 
-  /// Calcule l'empreinte SHA256 d'un certificat
-  String _calculateFingerprint(X509Certificate cert) {
-    // Utiliser le SHA1 du certificat comme identifiant
-    return cert.sha1.map((b) => b.toRadixString(16).padLeft(2, '0')).join(':').toUpperCase();
+  /// Calcule l'empreinte SHA-256 d'un certificat
+  String _calculateFingerprint(X509Certificate cert) => certificateFingerprintOf(cert);
+
+  /// SHA-256 fingerprint of a certificate (DER), formatted as `AA:BB:...`.
+  /// Shared with [ConnectedApiClient] so both use the same format.
+  static String certificateFingerprintOf(X509Certificate cert) {
+    return sha256
+        .convert(cert.der)
+        .bytes
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join(':')
+        .toUpperCase();
   }
 
   /// Teste la connexion à un automate et détecte la version de l'API
@@ -82,6 +96,9 @@ class ApiService {
     final scheme = useHttps ? 'https' : 'http';
     final baseUrl = '$scheme://$trimmedHost:$port';
 
+    // Ne jamais réutiliser l'empreinte d'un test précédent (autre hôte)
+    _lastCertificateFingerprint = null;
+
     // Configurer pour accepter les certificats auto-signés
     if (useHttps) {
       _configureForSelfSignedCerts(trimmedHost);
@@ -101,7 +118,18 @@ class ApiService {
         );
       }
     } catch (e) {
-      // V2 a échoué, on essaie V1
+      _logger.w('testConnection: V2 probe failed: $e');
+      // Hôte injoignable : inutile d'attendre un second timeout en V1
+      if (e is DioException &&
+          (e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.connectionError)) {
+        return ConnectionTestResult(
+          success: false,
+          errorMessage: _formatError(e),
+          certificateFingerprint: _lastCertificateFingerprint,
+        );
+      }
+      // Sinon on essaie V1
     }
 
     // Essayer l'API V1
@@ -207,32 +235,153 @@ class ConnectedApiClient {
   final String basicAuth;
   final String apiVersion;
 
+  /// Expected SHA-256 certificate fingerprint (`AA:BB:...`, see
+  /// [ApiService.certificateFingerprintOf]). When null (default), every
+  /// certificate is accepted, as before. TOFU wiring is done by the callers.
+  final String? expectedCertFingerprint;
+
+  /// Called with the SHA-256 fingerprint of each self-signed / untrusted
+  /// certificate presented by the controller.
+  final void Function(String fingerprint)? onCertificateSeen;
+
+  /// Called whenever the controller answers 401/403 (bad or expired
+  /// credentials, insufficient rights). Public methods keep their historical
+  /// contract (empty list / null / false on failure); use this callback or
+  /// [lastError] to tell an auth failure apart from "no data".
+  final void Function(ApiAuthException error)? onAuthError;
+
+  ApiException? _lastError;
+  int? _lastStatusCode;
+
+  /// Last HTTP failure seen by this client (sticky until [clearLastError]).
+  ApiException? get lastError => _lastError;
+
+  /// Status code of the last HTTP response received.
+  int? get lastStatusCode => _lastStatusCode;
+
+  /// True if the last recorded failure is an authentication failure.
+  bool get hasAuthError => _lastError is ApiAuthException;
+
+  /// Clears [lastError] (call it before an operation to check its outcome).
+  void clearLastError() => _lastError = null;
+
+  /// Requests in flight, used to deduplicate identical concurrent reads.
+  final Map<String, Future<dynamic>> _inFlight = {};
+
   ConnectedApiClient({
     required this.baseUrl,
     required this.basicAuth,
     required this.apiVersion,
+    this.expectedCertFingerprint,
+    this.onCertificateSeen,
+    this.onAuthError,
   }) : _dio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 60),
-          sendTimeout: const Duration(seconds: 30),
+          connectTimeout: ApiConstants.connectTimeout,
+          receiveTimeout: ApiConstants.receiveTimeout,
+          sendTimeout: ApiConstants.sendTimeout,
           validateStatus: (status) => status != null && status < 500,
         )) {
     // Configurer pour les certificats auto-signés
     (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
       final client = HttpClient();
-      client.badCertificateCallback = (cert, host, port) => true;
+      client.badCertificateCallback = (cert, host, port) {
+        if (expectedCertFingerprint == null && onCertificateSeen == null) {
+          return true;
+        }
+        final fingerprint = ApiService.certificateFingerprintOf(cert);
+        onCertificateSeen?.call(fingerprint);
+        final expected = expectedCertFingerprint;
+        if (expected == null) return true;
+        final ok = expected.toUpperCase() == fingerprint;
+        if (!ok) {
+          _logger.e('ConnectedApiClient: certificate fingerprint mismatch for $host');
+        }
+        return ok;
+      };
       return client;
     };
+    _dio.interceptors.add(InterceptorsWrapper(
+      onResponse: (response, handler) {
+        _recordStatus(response.statusCode, response.requestOptions.uri.toString());
+        handler.next(response);
+      },
+      onError: (error, handler) {
+        final status = error.response?.statusCode;
+        if (status != null) {
+          _recordStatus(status, error.requestOptions.uri.toString());
+        } else {
+          _lastError = ApiException(
+            error.message ?? 'Erreur réseau (${error.type.name})',
+            url: error.requestOptions.uri.toString(),
+          );
+        }
+        handler.next(error);
+      },
+    ));
     _logger.i('ConnectedApiClient créé: baseUrl=$baseUrl, apiVersion=$apiVersion');
   }
 
+  void _recordStatus(int? statusCode, String url) {
+    _lastStatusCode = statusCode;
+    if (statusCode == null || statusCode < 400) return;
+    final error = ApiException.fromStatus(statusCode, url: url);
+    _lastError = error;
+    if (error is ApiAuthException) {
+      _logger.w('ConnectedApiClient: authentication failure ($statusCode) on $url');
+      onAuthError?.call(error);
+    }
+  }
+
+  /// Throws [ApiAuthException] for 401/403 responses (for methods whose
+  /// callers already handle exceptions).
+  void _throwIfAuthError(Response response) {
+    final status = response.statusCode;
+    if (status == 401 || status == 403) {
+      throw ApiAuthException(statusCode: status, url: response.requestOptions.uri.toString());
+    }
+  }
+
+  /// Runs [action] once for concurrent calls sharing the same [key].
+  Future<T> _dedup<T>(String key, Future<T> Function() action) {
+    final existing = _inFlight[key];
+    if (existing != null) return existing as Future<T>;
+    // Block body on purpose: returning the removed Future from whenComplete
+    // would make the future wait for itself (deadlock).
+    final future = action().whenComplete(() {
+      _inFlight.remove(key);
+    });
+    _inFlight[key] = future;
+    return future;
+  }
+
   /// Chemin de base pour l'API BACnet
-  String get _bacnetBasePath => apiVersion == 'V2'
-      ? '/api/rest/v2/services/bacnet/local'
-      : '/api/rest/v1/protocols/bacnet/local';
+  String get _bacnetBasePath =>
+      apiVersion == 'V2' ? ApiConstants.v2BacnetLocal : ApiConstants.v1BacnetLocal;
 
   /// Options HTTP avec authentification
   Options get _authOptions => Options(headers: {'Authorization': basicAuth});
+
+  /// Options HTTP avec authentification pour un corps JSON
+  Options get _jsonOptions => Options(headers: {
+        'Authorization': basicAuth,
+        'Content-Type': 'application/json',
+      });
+
+  /// POST JSON authentifié
+  Future<Response> _postJson(String url, Object? body, {Options? options}) {
+    return _dio.post(url, data: body, options: options ?? _jsonOptions);
+  }
+
+  /// Extracts the property references of a read-property-multiple response
+  /// (either a bare List or `{propertyReferences: [...]}`).
+  static List<dynamic> _extractRpmRefs(dynamic data) {
+    if (data is List) return data;
+    if (data is Map) {
+      final refs = data['propertyReferences'] ?? data['property-references'];
+      if (refs is List) return refs;
+    }
+    return const [];
+  }
 
   /// Récupère les informations de l'appareil
   Future<DeviceInfo> getDeviceInfo() async {
@@ -248,7 +397,7 @@ class ConnectedApiClient {
     try {
       final response = await _dio.get(url, options: _authOptions);
       _logger.i('getDeviceInfo: status=${response.statusCode}');
-      _logger.d('getDeviceInfo: data=${response.data}');
+      _logger.d(() => 'getDeviceInfo: data=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -296,7 +445,7 @@ class ConnectedApiClient {
       final infoUrl = '$baseUrl/api/rest/v1/info/device';
       _logger.i('_getDeviceInfoV1: GET $infoUrl');
       final infoResponse = await _dio.get(infoUrl, options: _authOptions);
-      _logger.d('_getDeviceInfoV1: /info/device response=${infoResponse.data}');
+      _logger.d(() => '_getDeviceInfoV1: /info/device response=${infoResponse.data}');
 
       if (infoResponse.statusCode == 200 && infoResponse.data is Map<String, dynamic>) {
         final data = infoResponse.data as Map<String, dynamic>;
@@ -326,7 +475,7 @@ class ConnectedApiClient {
 
     try {
       final response = await _dio.get(url, options: _authOptions);
-      _logger.d('_getControllerTimeV2: response=${response.data}');
+      _logger.d(() => '_getControllerTimeV2: response=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -393,15 +542,10 @@ class ConnectedApiClient {
       final response = await _dio.post(
         rpmUrl,
         data: body,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
-      _logger.d('_getControllerTimeV1: response=${response.data}');
+      _logger.d(() => '_getControllerTimeV1: response=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         String? localTime;
@@ -481,7 +625,7 @@ class ConnectedApiClient {
       'time': timeStr,
     };
 
-    _logger.d('_setControllerTimeV1: body=$body');
+    _logger.d(() => '_setControllerTimeV1: body=$body');
 
     try {
       final response = await _dio.post(
@@ -542,7 +686,7 @@ class ConnectedApiClient {
       );
 
       _logger.i('_getNetworkInfoV1: status=${response.statusCode}');
-      _logger.d('_getNetworkInfoV1: data=${response.data}');
+      _logger.d(() => '_getNetworkInfoV1: data=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -576,7 +720,7 @@ class ConnectedApiClient {
       );
 
       _logger.i('_getNetworkInfoV2: status=${response.statusCode}');
-      _logger.d('_getNetworkInfoV2: data=${response.data}');
+      _logger.d(() => '_getNetworkInfoV2: data=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -654,7 +798,8 @@ class ConnectedApiClient {
     try {
       final response = await _dio.get(url, options: _authOptions);
       _logger.i('getObjectsSummary: status=${response.statusCode}');
-      _logger.d('getObjectsSummary: data=${response.data}');
+      _logger.d(() => 'getObjectsSummary: data=${response.data}');
+      _throwIfAuthError(response);
 
       if (response.statusCode == 200 && response.data != null) {
         // Vérifier que la réponse est bien du JSON
@@ -701,9 +846,9 @@ class ConnectedApiClient {
 
     // Liste des types à compter avec instance=-1 (tous les objets du type)
     final propertyRefs = <Map<String, dynamic>>[];
-    for (final type in _importantTypes) {
+    for (final type in _summaryTypes) {
       propertyRefs.add({
-        'type': type,
+        'type': ApiTypeNames.v1Name(type),
         'instance': -1,  // -1 = tous les instances
         'property': 'objectName',
         'arrayIndex': -1,
@@ -717,133 +862,113 @@ class ConnectedApiClient {
 
     _logger.i('_getObjectsSummaryV1: POST $rpmUrl with ${propertyRefs.length} types');
 
+    Response response;
     try {
-      final response = await _dio.post(
-        rpmUrl,
-        data: body,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      _logger.d('_getObjectsSummaryV1: response status=${response.statusCode}');
-      _logger.d('_getObjectsSummaryV1: response data=${response.data}');
-
-      if (response.statusCode == 200 && response.data != null) {
-        return _parseObjectsSummaryFromRpm(response.data);
-      }
+      response = await _postJson(rpmUrl, body);
     } catch (e) {
       _logger.w('_getObjectsSummaryV1: read-property-multiple failed: $e');
       // Fallback: compter depuis la liste des types
       return _getObjectsSummaryV1Fallback(data);
     }
 
-    return ObjectsSummary();
+    _logger.d(() => '_getObjectsSummaryV1: response status=${response.statusCode}');
+    _logger.d(() => '_getObjectsSummaryV1: response data=${response.data}');
+    _throwIfAuthError(response);
+
+    if (response.statusCode == 200 && response.data != null) {
+      return parseObjectsSummaryFromRpm(response.data);
+    }
+
+    // Statut inattendu : ne pas renvoyer un résumé vide (il écraserait le cache)
+    _logger.w('_getObjectsSummaryV1: RPM status=${response.statusCode}, using fallback');
+    return _getObjectsSummaryV1Fallback(data);
   }
 
   /// Types d'objets importants à compter
-  static const _importantTypes = [
-    'analogInput', 'analogOutput', 'analogValue',
-    'binaryInput', 'binaryOutput', 'binaryValue',
-    'multiStateInput', 'multiStateOutput', 'multiStateValue',
-    'schedule',
+  static const _summaryTypes = [
+    ...ApiTypeNames.pointTypes,
+    BacnetObjectType.schedule,
   ];
 
-  /// Parse la réponse read-property-multiple pour compter les objets
-  ObjectsSummary _parseObjectsSummaryFromRpm(dynamic data) {
-    final counts = <String, int>{};
-
-    // La réponse peut être une List directement ou un Map avec propertyReferences
-    List refs;
-    if (data is List) {
-      refs = data;
-    } else if (data is Map<String, dynamic>) {
-      refs = data['propertyReferences'] as List? ?? [];
-    } else {
-      refs = [];
-    }
-
-    // Compter les objets par type (chaque entrée avec instance différent = 1 objet)
-    final instancesByType = <String, Set<int>>{};
-
-    for (final ref in refs) {
-      if (ref is! Map<String, dynamic>) continue;
-      final type = ref['type'] as String? ?? '';
-      final instance = ref['instance'] as int? ?? 0;
-
-      if (_importantTypes.contains(type)) {
-        instancesByType.putIfAbsent(type, () => <int>{});
-        instancesByType[type]!.add(instance);
-      }
-    }
-
-    for (final entry in instancesByType.entries) {
-      counts[entry.key] = entry.value.length;
-    }
-
-    _logger.i('_parseObjectsSummaryFromRpm: ${counts.entries.map((e) => '${e.key}=${e.value}').join(', ')}');
-
+  /// Builds an [ObjectsSummary] from per-type counts.
+  static ObjectsSummary _summaryFromCounts(Map<BacnetObjectType, int> counts) {
     return ObjectsSummary(
-      analogInputs: counts['analogInput'] ?? 0,
-      analogOutputs: counts['analogOutput'] ?? 0,
-      analogValues: counts['analogValue'] ?? 0,
-      binaryInputs: counts['binaryInput'] ?? 0,
-      binaryOutputs: counts['binaryOutput'] ?? 0,
-      binaryValues: counts['binaryValue'] ?? 0,
-      multiStateInputs: counts['multiStateInput'] ?? 0,
-      multiStateOutputs: counts['multiStateOutput'] ?? 0,
-      multiStateValues: counts['multiStateValue'] ?? 0,
-      schedules: counts['schedule'] ?? 0,
+      analogInputs: counts[BacnetObjectType.analogInput] ?? 0,
+      analogOutputs: counts[BacnetObjectType.analogOutput] ?? 0,
+      analogValues: counts[BacnetObjectType.analogValue] ?? 0,
+      binaryInputs: counts[BacnetObjectType.binaryInput] ?? 0,
+      binaryOutputs: counts[BacnetObjectType.binaryOutput] ?? 0,
+      binaryValues: counts[BacnetObjectType.binaryValue] ?? 0,
+      multiStateInputs: counts[BacnetObjectType.multiStateInput] ?? 0,
+      multiStateOutputs: counts[BacnetObjectType.multiStateOutput] ?? 0,
+      multiStateValues: counts[BacnetObjectType.multiStateValue] ?? 0,
+      schedules: counts[BacnetObjectType.schedule] ?? 0,
     );
+  }
+
+  /// Parse la réponse read-property-multiple pour compter les objets.
+  /// Type names are matched case-insensitively (`multistateValue` and
+  /// `multiStateValue` are both accepted).
+  static ObjectsSummary parseObjectsSummaryFromRpm(dynamic data) {
+    // Compter les objets par type (chaque entrée avec instance différent = 1 objet)
+    final instancesByType = <BacnetObjectType, Set<int>>{};
+
+    for (final ref in _extractRpmRefs(data)) {
+      if (ref is! Map) continue;
+      final type = ApiTypeNames.fromV1Name(ref['type']?.toString() ?? '');
+      final rawInstance = ref['instance'];
+      final instance = rawInstance is int ? rawInstance : int.tryParse('$rawInstance');
+      if (type == null || !_summaryTypes.contains(type)) continue;
+      if (instance == null || instance == -1) continue;
+      instancesByType.putIfAbsent(type, () => <int>{}).add(instance);
+    }
+
+    final counts = instancesByType.map((type, set) => MapEntry(type, set.length));
+    _logger.i(() => 'parseObjectsSummaryFromRpm: ${counts.entries.map((e) => '${e.key.name}=${e.value}').join(', ')}');
+    return _summaryFromCounts(counts);
   }
 
   /// Fallback: compter les objets via requêtes individuelles (si RPM échoue)
   Future<ObjectsSummary> _getObjectsSummaryV1Fallback(Map<String, dynamic> data) async {
     _logger.i('_getObjectsSummaryV1Fallback: using individual requests');
     final objectTypes = data['bacnetObjectTypes'] as List? ?? [];
-    final counts = <String, int>{};
+    final counts = <BacnetObjectType, int>{};
 
     // Traiter par lots de 4
-    final typesToCount = <Map<String, String>>[];
+    final typesToCount = <(BacnetObjectType, String)>[];
     for (final typeInfo in objectTypes) {
       if (typeInfo is! Map<String, dynamic>) continue;
-      final name = typeInfo['name'] as String? ?? '';
+      final type = ApiTypeNames.fromV1Name(typeInfo['name'] as String? ?? '');
       final href = typeInfo['href'] as String?;
-      if (href != null && _importantTypes.contains(name)) {
-        typesToCount.add({'name': name, 'href': href});
+      if (href != null && type != null && _summaryTypes.contains(type)) {
+        typesToCount.add((type, href));
       }
     }
 
+    var failures = 0;
     const batchSize = 4;
     for (var i = 0; i < typesToCount.length; i += batchSize) {
       final batch = typesToCount.skip(i).take(batchSize);
       await Future.wait(batch.map((t) async {
         try {
-          final response = await _dio.get('$baseUrl${t['href']}', options: _authOptions);
+          final response = await _dio.get('$baseUrl${t.$2}', options: _authOptions);
           if (response.statusCode == 200 && response.data is List) {
-            counts[t['name']!] = (response.data as List).length;
+            counts[t.$1] = (response.data as List).length;
+          } else {
+            failures++;
           }
         } catch (e) {
-          counts[t['name']!] = 0;
+          failures++;
         }
       }));
     }
 
-    return ObjectsSummary(
-      analogInputs: counts['analogInput'] ?? 0,
-      analogOutputs: counts['analogOutput'] ?? 0,
-      analogValues: counts['analogValue'] ?? 0,
-      binaryInputs: counts['binaryInput'] ?? 0,
-      binaryOutputs: counts['binaryOutput'] ?? 0,
-      binaryValues: counts['binaryValue'] ?? 0,
-      multiStateInputs: counts['multiStateInput'] ?? 0,
-      multiStateOutputs: counts['multiStateOutput'] ?? 0,
-      multiStateValues: counts['multiStateValue'] ?? 0,
-      schedules: counts['schedule'] ?? 0,
-    );
+    // Tout a échoué : lever une erreur plutôt qu'un résumé vide qui écraserait le cache
+    if (typesToCount.isNotEmpty && failures == typesToCount.length) {
+      throw _lastError ?? const ApiException('Impossible de compter les objets');
+    }
+
+    return _summaryFromCounts(counts);
   }
 
   int _countObjects(Map<String, dynamic> data, String key1, String key2) {
@@ -854,89 +979,118 @@ class ConnectedApiClient {
     return 0;
   }
 
-  /// Récupère tous les objets d'un type donné
+  /// URL path segment of an object type for the current API version
+  /// (V1: `analog-value`, V2: `analog-values`).
+  String _typePath(BacnetObjectType type) =>
+      apiVersion == 'V2' ? ApiTypeNames.v2Path(type) : ApiTypeNames.v1Path(type);
+
+  /// Récupère tous les objets d'un type donné.
+  /// Lève une [ApiException] si la liste ne peut pas être lue.
   Future<List<BacnetObject>> getObjectsByType(BacnetObjectType type) async {
-    final response = await _dio.get(
-      '$baseUrl$_bacnetBasePath/objects/${type.apiName}',
-      options: _authOptions,
-    );
+    final url = '$baseUrl$_bacnetBasePath/objects/${_typePath(type)}';
+    final response = await _dio.get(url, options: _authOptions);
+    _throwIfAuthError(response);
 
-    if (response.statusCode == 200 && response.data != null) {
-      final data = response.data;
-      final objects = <BacnetObject>[];
-
-      if (data is List) {
-        // Liste d'IDs ou liste d'objets complets
-        for (var i = 0; i < data.length; i++) {
-          final item = data[i];
-          if (item is Map<String, dynamic>) {
-            // Objet complet
-            final instance = item['object-identifier']?['instance'] ??
-                            item['objectIdentifier']?['instance'] ?? i + 1;
-            objects.add(BacnetObject.fromJson(type, instance, item));
-          } else if (item is int) {
-            // Juste un ID, on doit récupérer les détails
-            final details = await getObjectDetails(type, item);
-            if (details != null) objects.add(details);
-          }
-        }
-      } else if (data is Map<String, dynamic>) {
-        // Un seul objet ou map d'objets par ID
-        data.forEach((key, value) {
-          if (value is Map<String, dynamic>) {
-            final instance = int.tryParse(key) ??
-                            value['object-identifier']?['instance'] ?? 1;
-            objects.add(BacnetObject.fromJson(type, instance, value));
-          }
-        });
-      }
-
-      return objects;
+    if (response.statusCode != 200 || response.data == null) {
+      throw ApiException.fromStatus(response.statusCode ?? 0, url: url);
     }
 
-    return [];
+    final data = response.data;
+    final objects = <BacnetObject>[];
+    final instancesToFetch = <int>[];
+
+    if (data is List) {
+      // Liste d'IDs, de liens {href, name} (V1) ou d'objets complets
+      for (var i = 0; i < data.length; i++) {
+        final item = data[i];
+        if (item is int) {
+          instancesToFetch.add(item);
+        } else if (item is Map<String, dynamic>) {
+          final hasProperties = item.containsKey('object-name') || item.containsKey('objectName');
+          final hrefInstance = _instanceFromHref(item['href']);
+          if (!hasProperties && hrefInstance != null) {
+            instancesToFetch.add(hrefInstance);
+            continue;
+          }
+          final instance = item['object-identifier']?['instance'] ??
+                          item['objectIdentifier']?['instance'] ?? hrefInstance ?? i + 1;
+          objects.add(BacnetObject.fromJson(type, instance, item));
+        }
+      }
+    } else if (data is Map<String, dynamic>) {
+      // Un seul objet ou map d'objets par ID
+      data.forEach((key, value) {
+        if (value is Map<String, dynamic>) {
+          final instance = int.tryParse(key) ??
+                          value['object-identifier']?['instance'] ?? 1;
+          objects.add(BacnetObject.fromJson(type, instance, value));
+        }
+      });
+    }
+
+    // Récupérer les détails par lots (requêtes indépendantes)
+    const batchSize = 8;
+    for (var i = 0; i < instancesToFetch.length; i += batchSize) {
+      final batch = instancesToFetch.skip(i).take(batchSize);
+      final details = await Future.wait(batch.map((instance) => getObjectDetails(type, instance)));
+      objects.addAll(details.whereType<BacnetObject>());
+    }
+
+    return objects;
+  }
+
+  /// Extracts the trailing instance number of a V1 href (`.../analog-value/12`).
+  static int? _instanceFromHref(dynamic href) {
+    if (href is! String) return null;
+    final match = RegExp(r'/(\d+)/?$').firstMatch(href);
+    return match != null ? int.tryParse(match.group(1)!) : null;
   }
 
   /// Récupère les détails d'un objet spécifique
   Future<BacnetObject?> getObjectDetails(BacnetObjectType type, int instance) async {
     try {
       final response = await _dio.get(
-        '$baseUrl$_bacnetBasePath/objects/${type.apiName}/$instance',
+        '$baseUrl$_bacnetBasePath/objects/${_typePath(type)}/$instance',
         options: _authOptions,
       );
 
-      if (response.statusCode == 200 && response.data != null) {
-        return BacnetObject.fromJson(type, instance, response.data);
+      if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
+        return BacnetObject.fromJson(type, instance, response.data as Map<String, dynamic>);
       }
     } catch (e) {
       // Ignorer les erreurs pour les objets individuels
+      _logger.d(() => 'getObjectDetails ${type.apiName}:$instance error: $e');
     }
     return null;
   }
 
-  /// Récupère tous les objets avec leurs valeurs actuelles
+  /// Récupère tous les objets avec leurs valeurs actuelles.
+  /// Lève la dernière erreur si aucun type n'a pu être lu.
   Future<List<BacnetObject>> getAllObjects() async {
     final objects = <BacnetObject>[];
+    Object? lastError;
+    var failures = 0;
 
-    // Types d'objets principaux à récupérer
-    final types = [
-      BacnetObjectType.analogInput,
-      BacnetObjectType.analogOutput,
-      BacnetObjectType.analogValue,
-      BacnetObjectType.binaryInput,
-      BacnetObjectType.binaryOutput,
-      BacnetObjectType.binaryValue,
-    ];
-
-    for (final type in types) {
+    // Requêtes indépendantes : les lancer en parallèle
+    final results = await Future.wait(ApiTypeNames.pointTypes.map((type) async {
       try {
-        final typeObjects = await getObjectsByType(type);
-        objects.addAll(typeObjects);
+        return await getObjectsByType(type);
+      } on ApiAuthException {
+        rethrow;
       } catch (e) {
         // Continuer même si un type échoue
+        failures++;
+        lastError = e;
+        return <BacnetObject>[];
       }
+    }));
+    for (final typeObjects in results) {
+      objects.addAll(typeObjects);
     }
 
+    if (failures == ApiTypeNames.pointTypes.length && lastError != null) {
+      throw lastError!;
+    }
     return objects;
   }
 
@@ -1070,27 +1224,25 @@ class ConnectedApiClient {
           'encode': 'text',
           'propertyReferences': propertyRefs,
         },
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
-      _logger.d('_getAllPointsV1Optimized: response status=${rpmResponse.statusCode}');
+      _logger.d(() => '_getAllPointsV1Optimized: response status=${rpmResponse.statusCode}');
+      _throwIfAuthError(rpmResponse);
 
       if (rpmResponse.statusCode == 200 && rpmResponse.data != null) {
         return _parsePointsFromRpm(rpmResponse.data);
       }
+      _logger.w('_getAllPointsV1Optimized: RPM status=${rpmResponse.statusCode}');
+    } on ApiAuthException {
+      rethrow;
     } catch (e) {
       _logger.e('_getAllPointsV1Optimized: read-property-multiple failed: $e');
-      // En cas d'échec, on fallback sur la méthode classique
-      _logger.i('_getAllPointsV1Optimized: falling back to getAllObjects()');
-      return getAllObjects();
     }
 
-    return [];
+    // En cas d'échec, on fallback sur la méthode classique
+    _logger.i('_getAllPointsV1Optimized: falling back to getAllObjects()');
+    return getAllObjects();
   }
 
   /// Récupère tous les points V2 via batch API
@@ -1114,39 +1266,37 @@ class ConnectedApiClient {
       });
     }
 
-    final batchUrl = '$baseUrl/api/rest/v2/batch';
+    final batchUrl = '$baseUrl${ApiConstants.v2Batch}';
     _logger.i('_getAllPointsV2Optimized: POST $batchUrl with ${requests.length} requests');
 
     try {
       final response = await _dio.post(
         batchUrl,
         data: {'requests': requests},
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
-      _logger.d('_getAllPointsV2Optimized: response status=${response.statusCode}');
+      _logger.d(() => '_getAllPointsV2Optimized: response status=${response.statusCode}');
+      _throwIfAuthError(response);
 
       if (response.statusCode == 200 && response.data != null) {
         return _parsePointsFromBatchV2(response.data);
       }
+      _logger.w('_getAllPointsV2Optimized: batch status=${response.statusCode}');
+    } on ApiAuthException {
+      rethrow;
     } catch (e) {
       _logger.e('_getAllPointsV2Optimized: batch API failed: $e');
-      // En cas d'échec, fallback sur la méthode classique
-      _logger.i('_getAllPointsV2Optimized: falling back to getAllObjects()');
-      return getAllObjects();
     }
 
-    return [];
+    // En cas d'échec, fallback sur la méthode classique
+    _logger.i('_getAllPointsV2Optimized: falling back to getAllObjects()');
+    return getAllObjects();
   }
 
   /// Parse la réponse batch V2 pour construire les objets BACnet
   List<BacnetObject> _parsePointsFromBatchV2(dynamic data) {
-    _logger.d('_parsePointsFromBatchV2: data type=${data.runtimeType}');
+    _logger.d(() => '_parsePointsFromBatchV2: data type=${data.runtimeType}');
 
     final results = <BacnetObject>[];
 
@@ -1159,7 +1309,7 @@ class ConnectedApiClient {
       final responsesList = data['responses'];
       if (responsesList is List) {
         responses = responsesList;
-        _logger.d('_parsePointsFromBatchV2: extracted ${responses.length} responses from wrapper');
+        _logger.d(() => '_parsePointsFromBatchV2: extracted ${responses.length} responses from wrapper');
       } else {
         _logger.w('_parsePointsFromBatchV2: no responses key found, keys=${data.keys.toList()}');
         return results;
@@ -1174,11 +1324,19 @@ class ConnectedApiClient {
 
       final id = batchResponse['id'] as String?;
       final body = batchResponse['body'];
+      final status = batchResponse['status'];
 
       if (id == null || body == null) continue;
 
+      // Statut par sous-requête : un type en échec est signalé, pas ignoré en silence
+      if (status is int && status != 200) {
+        _logger.w('_parsePointsFromBatchV2: sub-request "$id" failed with status $status');
+        _recordStatus(status, id);
+        continue;
+      }
+
       // Mapper l'ID (type kebab-case) vers BacnetObjectType
-      final objectType = _mapTypeNameV2(id);
+      final objectType = ApiTypeNames.fromV2Path(id);
       if (objectType == null) continue;
 
       // Body contient directement les instances {instance: {props...}, ...}
@@ -1234,7 +1392,7 @@ class ConnectedApiClient {
             units: _extractUnitsV2(props['units']),
             outOfService: props['out-of-service'] as bool?,
             description: props['description']?.toString(),
-            priorityArrayRaw: priorityArray?.toString(),
+            // priority-array brut non conservé (non utilisé, coûteux sur de gros volumes)
             isOverridden: overrideInfo.isOverridden,
             overridePriority: overrideInfo.priority,
             overrideValue: overrideInfo.value,
@@ -1258,40 +1416,6 @@ class ConnectedApiClient {
     }
 
     return results;
-  }
-
-  /// Mappe le nom de type V2 (kebab-case pluriel) vers BacnetObjectType
-  BacnetObjectType? _mapTypeNameV2(String typeName) {
-    switch (typeName) {
-      case 'analog-inputs':
-        return BacnetObjectType.analogInput;
-      case 'analog-outputs':
-        return BacnetObjectType.analogOutput;
-      case 'analog-values':
-        return BacnetObjectType.analogValue;
-      case 'binary-inputs':
-        return BacnetObjectType.binaryInput;
-      case 'binary-outputs':
-        return BacnetObjectType.binaryOutput;
-      case 'binary-values':
-        return BacnetObjectType.binaryValue;
-      case 'multi-state-inputs':
-        return BacnetObjectType.multiStateInput;
-      case 'multi-state-outputs':
-        return BacnetObjectType.multiStateOutput;
-      case 'multi-state-values':
-        return BacnetObjectType.multiStateValue;
-      case 'schedules':
-        return BacnetObjectType.schedule;
-      case 'calendars':
-        return BacnetObjectType.calendar;
-      case 'trend-logs':
-        return BacnetObjectType.trendLog;
-      case 'devices':
-        return BacnetObjectType.device;
-      default:
-        return null;
-    }
   }
 
   /// Extrait les unités pour V2 (peut être un objet avec $value)
@@ -1357,7 +1481,7 @@ class ConnectedApiClient {
 
   /// Parse la réponse read-property-multiple pour construire les objets BACnet
   List<BacnetObject> _parsePointsFromRpm(dynamic data) {
-    _logger.d('_parsePointsFromRpm: data type=${data.runtimeType}');
+    _logger.d(() => '_parsePointsFromRpm: data type=${data.runtimeType}');
 
     final objects = <String, Map<String, dynamic>>{};
 
@@ -1366,7 +1490,7 @@ class ConnectedApiClient {
       refs = data;
     } else if (data is Map<String, dynamic>) {
       refs = data['propertyReferences'] as List? ?? [];
-      _logger.d('_parsePointsFromRpm: found ${refs.length} propertyReferences');
+      _logger.d(() => '_parsePointsFromRpm: found ${refs.length} propertyReferences');
     } else {
       _logger.w('_parsePointsFromRpm: unexpected data format');
       return [];
@@ -1393,7 +1517,7 @@ class ConnectedApiClient {
       objects[key]![property] = value;
     }
 
-    _logger.d('_parsePointsFromRpm: grouped into ${objects.length} objects');
+    _logger.d(() => '_parsePointsFromRpm: grouped into ${objects.length} objects');
 
     // Convertir en liste de BacnetObject
     final result = <BacnetObject>[];
@@ -1403,15 +1527,13 @@ class ConnectedApiClient {
       final instance = props['instance'] as int;
 
       // Mapper le nom de type camelCase vers BacnetObjectType
-      final objectType = _mapTypeName(typeName);
+      final objectType = ApiTypeNames.fromV1Name(typeName);
 
       if (objectType != null) {
         // Parser le priority-array pour détecter les forçages
         // Le format peut être String (V1) ou List (V2)
         final priorityArrayData = props['priorityArray'];
-        final priorityArrayRaw = priorityArrayData is String
-            ? priorityArrayData
-            : (priorityArrayData is List ? priorityArrayData.toString() : null);
+        final priorityArrayRaw = priorityArrayData is String ? priorityArrayData : null;
         final overrideInfo = BacnetObject.parsePriorityArray(priorityArrayData);
 
         // Parser stateText pour les multistate (V1)
@@ -1497,43 +1619,6 @@ class ConnectedApiClient {
     return cleaned.split(',').map((e) => e.trim()).toList();
   }
 
-  /// Mappe le nom de type de l'API vers BacnetObjectType
-  BacnetObjectType? _mapTypeName(String typeName) {
-    final normalized = typeName.toLowerCase();
-
-    switch (normalized) {
-      case 'analoginput':
-        return BacnetObjectType.analogInput;
-      case 'analogoutput':
-        return BacnetObjectType.analogOutput;
-      case 'analogvalue':
-        return BacnetObjectType.analogValue;
-      case 'binaryinput':
-        return BacnetObjectType.binaryInput;
-      case 'binaryoutput':
-        return BacnetObjectType.binaryOutput;
-      case 'binaryvalue':
-        return BacnetObjectType.binaryValue;
-      case 'multistateinput':
-        return BacnetObjectType.multiStateInput;
-      case 'multistateoutput':
-        return BacnetObjectType.multiStateOutput;
-      case 'multistatevalue':
-        return BacnetObjectType.multiStateValue;
-      case 'schedule':
-        return BacnetObjectType.schedule;
-      case 'calendar':
-        return BacnetObjectType.calendar;
-      case 'trendlog':
-        return BacnetObjectType.trendLog;
-      case 'device':
-        return BacnetObjectType.device;
-      default:
-        _logger.w('_mapTypeName: unknown type $typeName');
-        return null;
-    }
-  }
-
   /// Extrait une valeur string d'un champ qui peut être string, map ou autre
   String? _extractStringValue(dynamic value) {
     if (value == null) return null;
@@ -1556,17 +1641,20 @@ class ConnectedApiClient {
     return null;
   }
 
-  dynamic _parseValue(dynamic value) {
+  dynamic _parseValue(dynamic value) => _parseValueStatic(value);
+
+  static dynamic _parseValueStatic(dynamic value) {
     if (value == null) return null;
     if (value is num) return value;
     if (value is bool) return value;
     if (value is String) {
-      // Essayer de parser comme nombre
+      // Essayer de parser comme nombre ('1'/'0' restent numériques : l'UI
+      // interprète les binaires via BacnetObject)
       final numValue = num.tryParse(value);
       if (numValue != null) return numValue;
       // Essayer comme booléen
-      if (value.toLowerCase() == 'true' || value == 'active' || value == '1') return true;
-      if (value.toLowerCase() == 'false' || value == 'inactive' || value == '0') return false;
+      if (value.toLowerCase() == 'true' || value == 'active') return true;
+      if (value.toLowerCase() == 'false' || value == 'inactive') return false;
       return value;
     }
     return value;
@@ -1639,7 +1727,7 @@ class ConnectedApiClient {
   /// Écrit une propriété quelconque sur un objet (V1)
   Future<bool> _writePropertyV1(BacnetObjectType type, int instance, String property, dynamic value) async {
     final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
-    final typeName = _objectTypeToCamelCase(type);
+    final typeName = ApiTypeNames.v1Name(type);
 
     final body = {
       'encode': 'text',
@@ -1659,12 +1747,7 @@ class ConnectedApiClient {
       final response = await _dio.post(
         url,
         data: body,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_writePropertyV1: status=${response.statusCode}');
@@ -1679,7 +1762,7 @@ class ConnectedApiClient {
   /// Utilise write-property-multiple avec property-references (format V2)
   Future<bool> _writePropertyV2(BacnetObjectType type, int instance, String property, dynamic value) async {
     final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
-    final typeName = _objectTypeToCamelCase(type);
+    final typeName = ApiTypeNames.v1Name(type);
 
     final body = {
       'encode': 'text',
@@ -1699,12 +1782,7 @@ class ConnectedApiClient {
       final response = await _dio.post(
         url,
         data: body,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_writePropertyV2: status=${response.statusCode}');
@@ -1724,10 +1802,10 @@ class ConnectedApiClient {
     final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
 
     // Convertir le type en camelCase pour l'API V1
-    final typeName = _objectTypeToCamelCase(type);
+    final typeName = ApiTypeNames.v1Name(type);
 
     // Formater la valeur pour l'API - toujours en String
-    final formattedValue = _formatValueForWriteV1(type, value);
+    final formattedValue = formatValueForWriteV1(type, value);
 
     final propertyRef = <String, dynamic>{
       'type': typeName,
@@ -1752,16 +1830,11 @@ class ConnectedApiClient {
       final response = await _dio.post(
         url,
         data: body,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_writeValueV1: status=${response.statusCode}');
-      _logger.d('_writeValueV1: response=${response.data}');
+      _logger.d(() => '_writeValueV1: response=${response.data}');
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (e) {
       _logger.e('_writeValueV1 error: $e');
@@ -1772,7 +1845,7 @@ class ConnectedApiClient {
   /// Libération V1 via write-property-multiple avec "Null"
   Future<bool> _releaseOverrideV1(BacnetObjectType type, int instance, {int priority = 8}) async {
     final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
-    final typeName = _objectTypeToCamelCase(type);
+    final typeName = ApiTypeNames.v1Name(type);
 
     final body = {
       'encode': 'text',
@@ -1793,12 +1866,7 @@ class ConnectedApiClient {
       final response = await _dio.post(
         url,
         data: body,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_releaseOverrideV1: status=${response.statusCode}');
@@ -1810,7 +1878,7 @@ class ConnectedApiClient {
   }
 
   /// Formate une valeur pour l'écriture V1 - TOUJOURS en String
-  String _formatValueForWriteV1(BacnetObjectType type, dynamic value) {
+  static String formatValueForWriteV1(BacnetObjectType type, dynamic value) {
     // Pour les types binaires, convertir en 'active'/'inactive'
     // L'API V1 Distech attend 'active'/'inactive' pour les valeurs binaires
     if (type.isBinary) {
@@ -1829,7 +1897,7 @@ class ConnectedApiClient {
   /// Libération d'urgence V1 - libère toutes les priorités
   Future<bool> _emergencyReleaseV1(BacnetObjectType type, int instance) async {
     final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
-    final typeName = _objectTypeToCamelCase(type);
+    final typeName = ApiTypeNames.v1Name(type);
 
     // Créer les requêtes pour libérer toutes les priorités 1-16
     final propertyRefs = <Map<String, dynamic>>[];
@@ -1854,12 +1922,7 @@ class ConnectedApiClient {
       final response = await _dio.post(
         url,
         data: body,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_emergencyReleaseV1: status=${response.statusCode}');
@@ -1870,14 +1933,38 @@ class ConnectedApiClient {
     }
   }
 
-  /// Force une entrée V1 en mettant out-of-service à true puis en écrivant present-value
+  /// Force une entrée V1 : out-of-service=true et present-value dans UN SEUL
+  /// write-property-multiple (les deux références sont appliquées ensemble).
+  /// En cas d'échec, tente de remettre out-of-service à false pour ne pas
+  /// laisser un capteur gelé à une valeur obsolète.
   Future<bool> _forceInputV1(BacnetObjectType type, int instance, dynamic value) async {
     final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
-    final typeName = _objectTypeToCamelCase(type);
-    final formattedValue = _formatValueForWriteV1(type, value);
+    final body = buildForceInputV1Body(type, instance, value);
 
-    // Étape 1: Mettre out-of-service à true
-    final oosBody = {
+    _logger.i('_forceInputV1: out-of-service=true + present-value for ${ApiTypeNames.v1Name(type)}:$instance');
+
+    int? status;
+    try {
+      final response = await _postJson(url, body);
+      status = response.statusCode;
+      _logger.i('_forceInputV1: status=$status');
+      if (isHttpOk(status)) return true;
+    } catch (e) {
+      _logger.e('_forceInputV1 error: $e');
+    }
+
+    // 401/403 : rien n'a été écrit, pas de compensation
+    if (status != 401 && status != 403) {
+      _logger.w('_forceInputV1: failed, releasing out-of-service (compensation)');
+      await _releaseInputV1(type, instance);
+    }
+    return false;
+  }
+
+  /// Corps write-property-multiple V1 du forçage d'une entrée (testable).
+  static Map<String, dynamic> buildForceInputV1Body(BacnetObjectType type, int instance, dynamic value) {
+    final typeName = ApiTypeNames.v1Name(type);
+    return {
       'encode': 'text',
       'propertyReferences': [
         {
@@ -1886,66 +1973,20 @@ class ConnectedApiClient {
           'property': 'outOfService',
           'value': 'true',
         },
+        {
+          'type': typeName,
+          'instance': instance,
+          'property': 'presentValue',
+          'value': formatValueForWriteV1(type, value),
+        },
       ],
     };
-
-    _logger.i('_forceInputV1: Setting out-of-service=true for $typeName:$instance');
-
-    try {
-      final oosResponse = await _dio.post(
-        url,
-        data: oosBody,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      if (oosResponse.statusCode != 200 && oosResponse.statusCode != 204) {
-        _logger.e('_forceInputV1: Failed to set out-of-service, status=${oosResponse.statusCode}');
-        return false;
-      }
-
-      // Étape 2: Écrire present-value
-      final pvBody = {
-        'encode': 'text',
-        'propertyReferences': [
-          {
-            'type': typeName,
-            'instance': instance,
-            'property': 'presentValue',
-            'value': formattedValue,
-          },
-        ],
-      };
-
-      _logger.i('_forceInputV1: Writing present-value=$formattedValue for $typeName:$instance');
-
-      final pvResponse = await _dio.post(
-        url,
-        data: pvBody,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      _logger.i('_forceInputV1: status=${pvResponse.statusCode}');
-      return pvResponse.statusCode == 200 || pvResponse.statusCode == 204;
-    } catch (e) {
-      _logger.e('_forceInputV1 error: $e');
-      return false;
-    }
   }
 
   /// Libère une entrée forcée V1 en remettant out-of-service à false
   Future<bool> _releaseInputV1(BacnetObjectType type, int instance) async {
     final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
-    final typeName = _objectTypeToCamelCase(type);
+    final typeName = ApiTypeNames.v1Name(type);
 
     final body = {
       'encode': 'text',
@@ -1965,12 +2006,7 @@ class ConnectedApiClient {
       final response = await _dio.post(
         url,
         data: body,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_releaseInputV1: status=${response.statusCode}');
@@ -1985,7 +2021,7 @@ class ConnectedApiClient {
 
   /// Écriture simple V2 via set-value
   Future<bool> _writeValueV2(BacnetObjectType type, int instance, dynamic value) async {
-    final typePath = _objectTypeToKebabCasePlural(type);
+    final typePath = ApiTypeNames.v2Path(type);
     final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/set-value';
 
     final formattedValue = _formatValueForWrite(type, value);
@@ -1996,12 +2032,7 @@ class ConnectedApiClient {
       final response = await _dio.post(
         url,
         data: {'value': formattedValue},
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_writeValueV2: status=${response.statusCode}');
@@ -2014,7 +2045,7 @@ class ConnectedApiClient {
 
   /// Forçage V2 via set-value-at
   Future<bool> _writeOverrideV2(BacnetObjectType type, int instance, dynamic value, {int priority = 8}) async {
-    final typePath = _objectTypeToKebabCasePlural(type);
+    final typePath = ApiTypeNames.v2Path(type);
     final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/set-value-at';
 
     final formattedValue = _formatValueForWrite(type, value);
@@ -2028,12 +2059,7 @@ class ConnectedApiClient {
           'value': formattedValue,
           'priority': priority,
         },
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_writeOverrideV2: status=${response.statusCode}');
@@ -2046,7 +2072,7 @@ class ConnectedApiClient {
 
   /// Libération V2 via set-value-at avec null
   Future<bool> _releaseOverrideV2(BacnetObjectType type, int instance, {int priority = 8}) async {
-    final typePath = _objectTypeToKebabCasePlural(type);
+    final typePath = ApiTypeNames.v2Path(type);
     final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/set-value-at';
 
     _logger.i('_releaseOverrideV2: POST $url with value=null, priority=$priority');
@@ -2058,12 +2084,7 @@ class ConnectedApiClient {
           'value': null,
           'priority': priority,
         },
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_releaseOverrideV2: status=${response.statusCode}');
@@ -2076,7 +2097,7 @@ class ConnectedApiClient {
 
   /// Libération d'urgence V2 via emergency-auto
   Future<bool> _emergencyReleaseV2(BacnetObjectType type, int instance) async {
-    final typePath = _objectTypeToKebabCasePlural(type);
+    final typePath = ApiTypeNames.v2Path(type);
     final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/emergency-auto';
 
     _logger.i('_emergencyReleaseV2: POST $url');
@@ -2085,12 +2106,7 @@ class ConnectedApiClient {
       final response = await _dio.post(
         url,
         data: {},
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_emergencyReleaseV2: status=${response.statusCode}');
@@ -2101,9 +2117,11 @@ class ConnectedApiClient {
     }
   }
 
-  /// Force une entrée V2 en mettant out-of-service à true puis en écrivant present-value
+  /// Force une entrée V2 en mettant out-of-service à true puis en écrivant present-value.
+  /// Si l'écriture de present-value échoue, out-of-service est remis à false
+  /// (compensation) pour ne pas laisser l'entrée gelée.
   Future<bool> _forceInputV2(BacnetObjectType type, int instance, dynamic value) async {
-    final typePath = _objectTypeToKebabCasePlural(type);
+    final typePath = ApiTypeNames.v2Path(type);
     final formattedValue = _formatValueForWrite(type, value);
 
     // Étape 1: Mettre out-of-service à true via POST sur la propriété
@@ -2111,48 +2129,40 @@ class ConnectedApiClient {
     _logger.i('_forceInputV2: Setting out-of-service=true for $typePath/$instance');
 
     try {
-      final oosResponse = await _dio.post(
-        oosUrl,
-        data: {'\$value': true},
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      if (oosResponse.statusCode != 200 && oosResponse.statusCode != 204) {
+      final oosResponse = await _postJson(oosUrl, {'\$value': true});
+      if (!isHttpOk(oosResponse.statusCode)) {
         _logger.e('_forceInputV2: Failed to set out-of-service, status=${oosResponse.statusCode}');
         return false;
       }
-
-      // Étape 2: Écrire present-value via POST sur la propriété
-      final pvUrl = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/present-value';
-      _logger.i('_forceInputV2: Writing present-value=$formattedValue for $typePath/$instance');
-
-      final pvResponse = await _dio.post(
-        pvUrl,
-        data: {'\$value': formattedValue},
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      _logger.i('_forceInputV2: status=${pvResponse.statusCode}');
-      return pvResponse.statusCode == 200 || pvResponse.statusCode == 204;
     } catch (e) {
-      _logger.e('_forceInputV2 error: $e');
+      _logger.e('_forceInputV2: out-of-service error: $e');
       return false;
     }
+
+    // Étape 2: Écrire present-value via POST sur la propriété
+    final pvUrl = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/present-value';
+    _logger.i('_forceInputV2: Writing present-value=$formattedValue for $typePath/$instance');
+
+    try {
+      final pvResponse = await _postJson(pvUrl, {'\$value': formattedValue});
+      _logger.i('_forceInputV2: status=${pvResponse.statusCode}');
+      if (isHttpOk(pvResponse.statusCode)) return true;
+    } catch (e) {
+      _logger.e('_forceInputV2: present-value error: $e');
+    }
+
+    // Compensation : ne pas laisser l'entrée hors service à une valeur obsolète
+    _logger.w('_forceInputV2: present-value write failed, releasing out-of-service (compensation)');
+    final released = await _releaseInputV2(type, instance);
+    if (!released) {
+      _logger.e('_forceInputV2: compensation failed, $typePath/$instance may stay out-of-service');
+    }
+    return false;
   }
 
   /// Libère une entrée forcée V2 en remettant out-of-service à false
   Future<bool> _releaseInputV2(BacnetObjectType type, int instance) async {
-    final typePath = _objectTypeToKebabCasePlural(type);
+    final typePath = ApiTypeNames.v2Path(type);
     final url = '$baseUrl$_bacnetBasePath/objects/$typePath/$instance/out-of-service';
 
     _logger.i('_releaseInputV2: Setting out-of-service=false for $typePath/$instance');
@@ -2161,12 +2171,7 @@ class ConnectedApiClient {
       final response = await _dio.post(
         url,
         data: {'\$value': false},
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_releaseInputV2: status=${response.statusCode}');
@@ -2178,58 +2183,6 @@ class ConnectedApiClient {
   }
 
   // ============ Helpers ============
-
-  /// Convertit BacnetObjectType en camelCase pour V1
-  String _objectTypeToCamelCase(BacnetObjectType type) {
-    switch (type) {
-      case BacnetObjectType.analogInput:
-        return 'analogInput';
-      case BacnetObjectType.analogOutput:
-        return 'analogOutput';
-      case BacnetObjectType.analogValue:
-        return 'analogValue';
-      case BacnetObjectType.binaryInput:
-        return 'binaryInput';
-      case BacnetObjectType.binaryOutput:
-        return 'binaryOutput';
-      case BacnetObjectType.binaryValue:
-        return 'binaryValue';
-      case BacnetObjectType.multiStateInput:
-        return 'multistateInput';
-      case BacnetObjectType.multiStateOutput:
-        return 'multistateOutput';
-      case BacnetObjectType.multiStateValue:
-        return 'multistateValue';
-      default:
-        return type.name;
-    }
-  }
-
-  /// Convertit BacnetObjectType en kebab-case pluriel pour V2
-  String _objectTypeToKebabCasePlural(BacnetObjectType type) {
-    switch (type) {
-      case BacnetObjectType.analogInput:
-        return 'analog-inputs';
-      case BacnetObjectType.analogOutput:
-        return 'analog-outputs';
-      case BacnetObjectType.analogValue:
-        return 'analog-values';
-      case BacnetObjectType.binaryInput:
-        return 'binary-inputs';
-      case BacnetObjectType.binaryOutput:
-        return 'binary-outputs';
-      case BacnetObjectType.binaryValue:
-        return 'binary-values';
-      case BacnetObjectType.multiStateInput:
-        return 'multi-state-inputs';
-      case BacnetObjectType.multiStateOutput:
-        return 'multi-state-outputs';
-      case BacnetObjectType.multiStateValue:
-        return 'multi-state-values';
-      default:
-        return type.apiName;
-    }
-  }
 
   /// Formate une valeur pour l'écriture selon le type d'objet
   dynamic _formatValueForWrite(BacnetObjectType type, dynamic value) {
@@ -2280,14 +2233,14 @@ class ConnectedApiClient {
 
     try {
       final response = await _dio.get(url, options: _authOptions);
-      _logger.d('_getTrendLogsV1: status=${response.statusCode}');
+      _logger.d(() => '_getTrendLogsV1: status=${response.statusCode}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
         final trendLogs = <Map<String, dynamic>>[];
 
         if (data is List) {
-          _logger.d('_getTrendLogsV1: data is List with ${data.length} items');
+          _logger.d(() => '_getTrendLogsV1: data is List with ${data.length} items');
           // Liste d'objets ou d'IDs
           for (final item in data) {
             int? instance;
@@ -2328,7 +2281,7 @@ class ConnectedApiClient {
           }
         }
 
-        _logger.i('_getTrendLogsV1: parsed ${trendLogs.length} trend-logs: ${trendLogs.map((t) => t['instance']).toList()}');
+        _logger.i(() => '_getTrendLogsV1: parsed ${trendLogs.length} trend-logs: ${trendLogs.map((t) => t['instance']).toList()}');
         return trendLogs;
       }
     } catch (e) {
@@ -2342,36 +2295,30 @@ class ConnectedApiClient {
   Future<List<Map<String, dynamic>>> _getTrendLogsV2() async {
     _logger.i('_getTrendLogsV2: fetching trend-logs');
 
-    final url = '$baseUrl$_bacnetBasePath/objects/trend-logs';
-
     try {
-      final response = await _dio.get(url, options: _authOptions);
-      _logger.d('_getTrendLogsV2: status=${response.statusCode}');
+      final data = await _fetchTrendLogsRawV2();
+      if (data == null) return [];
+      final trendLogs = <Map<String, dynamic>>[];
 
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data;
-        final trendLogs = <Map<String, dynamic>>[];
-
-        if (data is Map<String, dynamic>) {
-          // Format V2: {"1": {...}, "2": {...}}
-          data.forEach((key, value) {
-            final instance = int.tryParse(key);
-            if (instance != null && value is Map<String, dynamic>) {
-              trendLogs.add({'instance': instance, ...value});
-            }
-          });
-        } else if (data is List) {
-          for (final item in data) {
-            if (item is int) {
-              trendLogs.add({'instance': item});
-            } else if (item is Map<String, dynamic>) {
-              trendLogs.add(item);
-            }
+      if (data is Map<String, dynamic>) {
+        // Format V2: {"1": {...}, "2": {...}}
+        data.forEach((key, value) {
+          final instance = int.tryParse(key);
+          if (instance != null && value is Map<String, dynamic>) {
+            trendLogs.add({'instance': instance, ...value});
+          }
+        });
+      } else if (data is List) {
+        for (final item in data) {
+          if (item is int) {
+            trendLogs.add({'instance': item});
+          } else if (item is Map<String, dynamic>) {
+            trendLogs.add(item);
           }
         }
-
-        return trendLogs;
       }
+
+      return trendLogs;
     } catch (e) {
       _logger.e('_getTrendLogsV2 error: $e');
     }
@@ -2379,91 +2326,104 @@ class ConnectedApiClient {
     return [];
   }
 
-  /// Récupère le mapping trend-log -> objet tracké via read-property-multiple (V1)
-  /// Retourne un Map<String, int> où la clé est "objectType:objectInstance" et la valeur est l'instance du trend-log
-  Future<Map<String, int>> getTrendLogMapping() async {
-    if (apiVersion == 'V2') {
-      return _getTrendLogMappingV2();
+  /// Short-lived cache of the V2 trend-logs collection, shared by
+  /// [getTrendLogs] and [getTrendLogMapping] (avoids a duplicate GET).
+  static const _trendLogsCacheTtl = Duration(seconds: 30);
+  dynamic _trendLogsRawV2;
+  DateTime? _trendLogsRawV2At;
+
+  /// GET /objects/trend-logs (V2), deduplicated and cached for a few seconds.
+  /// Returns null if the collection could not be read.
+  Future<dynamic> _fetchTrendLogsRawV2() {
+    final cachedAt = _trendLogsRawV2At;
+    if (_trendLogsRawV2 != null &&
+        cachedAt != null &&
+        DateTime.now().difference(cachedAt) < _trendLogsCacheTtl) {
+      return Future.value(_trendLogsRawV2);
     }
-    return _getTrendLogMappingV1();
+    return _dedup('GET trend-logs', () async {
+      final url = '$baseUrl$_bacnetBasePath/objects/trend-logs';
+      final response = await _dio.get(url, options: _authOptions);
+      _logger.d(() => '_fetchTrendLogsRawV2: status=${response.statusCode}');
+      if (response.statusCode != 200 || response.data == null) return null;
+      _trendLogsRawV2 = response.data;
+      _trendLogsRawV2At = DateTime.now();
+      return response.data;
+    });
   }
 
-  /// Récupère le mapping V1 via read-property-multiple
+  /// Récupère le mapping trend-log -> objet tracké.
+  /// Retourne une Map dont la clé est "objectType:objectInstance" (ex. `analog-value:12`)
+  /// et la valeur l'instance du trend-log. Les appels concurrents sont dédupliqués.
+  Future<Map<String, int>> getTrendLogMapping() {
+    return _dedup('trendLogMapping', () {
+      if (apiVersion == 'V2') {
+        return _getTrendLogMappingV2();
+      }
+      return _getTrendLogMappingV1();
+    });
+  }
+
+  /// Récupère le mapping V1 via read-property-multiple.
+  /// Essaie d'abord une seule requête (instance=-1 = tous les trend-logs), puis
+  /// l'ancienne méthode (liste puis RPM) si elle ne donne rien.
   Future<Map<String, int>> _getTrendLogMappingV1() async {
     _logger.i('_getTrendLogMappingV1: loading trend log mapping');
 
-    final mapping = <String, int>{};
+    final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
 
-    // D'abord récupérer la liste des trend-logs
+    // 1 requête : tous les trend-logs d'un coup
+    try {
+      final response = await _postJson(rpmUrl, {
+        'encode': 'text',
+        'propertyReferences': [
+          {
+            'type': ApiTypeNames.v1Name(BacnetObjectType.trendLog),
+            'instance': -1,
+            'property': 'logDeviceObjectProperty',
+            'arrayIndex': -1,
+          },
+        ],
+      });
+      if (response.statusCode == 200 && response.data != null) {
+        final mapping = parseTrendLogMappingV1(response.data);
+        if (mapping.isNotEmpty) {
+          _logger.i('_getTrendLogMappingV1: found ${mapping.length} mappings (single request)');
+          return mapping;
+        }
+      }
+    } catch (e) {
+      _logger.w('_getTrendLogMappingV1: wildcard RPM failed: $e');
+    }
+
+    // Repli : récupérer la liste des trend-logs puis leurs propriétés
     final trendLogs = await _getTrendLogsV1();
     _logger.i('_getTrendLogMappingV1: got ${trendLogs.length} trend-logs');
     if (trendLogs.isEmpty) {
       _logger.w('_getTrendLogMappingV1: no trend-logs found, returning empty mapping');
-      return mapping;
+      return {};
     }
 
-    // Utiliser read-property-multiple pour récupérer log-device-object-property
-    final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
-
     final propertyRefs = trendLogs.map((tl) => {
-      'type': 'trendLog',
+      'type': ApiTypeNames.v1Name(BacnetObjectType.trendLog),
       'instance': tl['instance'],
       'property': 'logDeviceObjectProperty',
       'arrayIndex': -1,
     }).toList();
 
-    _logger.d('_getTrendLogMappingV1: requesting ${propertyRefs.length} properties');
+    _logger.d(() => '_getTrendLogMappingV1: requesting ${propertyRefs.length} properties');
 
+    var mapping = <String, int>{};
     try {
-      final response = await _dio.post(
-        rpmUrl,
-        data: {
-          'encode': 'text',
-          'propertyReferences': propertyRefs,
-        },
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
+      final response = await _postJson(rpmUrl, {
+        'encode': 'text',
+        'propertyReferences': propertyRefs,
+      });
 
-      _logger.d('_getTrendLogMappingV1: status=${response.statusCode}');
+      _logger.d(() => '_getTrendLogMappingV1: status=${response.statusCode}');
 
       if (response.statusCode == 200 && response.data != null) {
-        List refs;
-        if (response.data is List) {
-          refs = response.data;
-        } else if (response.data is Map<String, dynamic>) {
-          refs = response.data['propertyReferences'] as List? ?? [];
-        } else {
-          refs = [];
-        }
-
-        for (final ref in refs) {
-          if (ref is! Map<String, dynamic>) continue;
-
-          final instance = ref['instance'];
-          final value = ref['value']?.toString() ?? ref['message']?.toString();
-
-          if (instance == null || instance == -1 || value == null) continue;
-
-          // Parser le format "[Analog Value 454,Present Value,,]"
-          final match = RegExp(r'\[([^,]+)\s+(\d+),').firstMatch(value);
-          if (match != null) {
-            final objectTypeRaw = match.group(1)?.trim();
-            final objectInstance = int.tryParse(match.group(2) ?? '');
-
-            if (objectTypeRaw != null && objectInstance != null) {
-              // Convertir "Analog Value" -> "analog-value"
-              final objectType = objectTypeRaw.toLowerCase().replaceAll(RegExp(r'\s+'), '-');
-              final key = '$objectType:$objectInstance';
-              final trendLogInstance = instance is int ? instance : int.tryParse(instance.toString()) ?? 0;
-              mapping[key] = trendLogInstance;
-            }
-          }
-        }
+        mapping = parseTrendLogMappingV1(response.data);
       }
     } catch (e) {
       _logger.e('_getTrendLogMappingV1 error: $e');
@@ -2473,55 +2433,45 @@ class ConnectedApiClient {
     return mapping;
   }
 
-  /// Récupère le mapping V2
+  /// Parse une réponse RPM `logDeviceObjectProperty` (V1) en mapping
+  /// `objectType:objectInstance` -> instance du trend-log.
+  static Map<String, int> parseTrendLogMappingV1(dynamic data) {
+    final mapping = <String, int>{};
+    for (final ref in _extractRpmRefs(data)) {
+      if (ref is! Map) continue;
+
+      final instance = ref['instance'];
+      final value = ref['value']?.toString() ?? ref['message']?.toString();
+
+      if (instance == null || instance == -1 || value == null) continue;
+
+      // Parser le format "[Analog Value 454,Present Value,,]"
+      final match = RegExp(r'\[([^,]+)\s+(\d+),').firstMatch(value);
+      if (match != null) {
+        final objectTypeRaw = match.group(1)?.trim();
+        final objectInstance = int.tryParse(match.group(2) ?? '');
+
+        if (objectTypeRaw != null && objectInstance != null) {
+          // Convertir "Analog Value" -> "analog-value"
+          final objectType = objectTypeRaw.toLowerCase().replaceAll(RegExp(r'\s+'), '-');
+          final trendLogInstance = instance is int ? instance : int.tryParse(instance.toString());
+          if (trendLogInstance == null) continue;
+          mapping['$objectType:$objectInstance'] = trendLogInstance;
+        }
+      }
+    }
+    return mapping;
+  }
+
+  /// Récupère le mapping V2 (réutilise la collection trend-logs mise en cache)
   Future<Map<String, int>> _getTrendLogMappingV2() async {
     _logger.i('_getTrendLogMappingV2: loading trend log mapping');
 
-    final mapping = <String, int>{};
-
-    // En V2, récupérer les trend-logs
-    final url = '$baseUrl$_bacnetBasePath/objects/trend-logs';
-
+    var mapping = <String, int>{};
     try {
-      final response = await _dio.get(url, options: _authOptions);
-
-      _logger.d('_getTrendLogMappingV2: status=${response.statusCode}, data type=${response.data?.runtimeType}');
-      if (response.statusCode == 200 && response.data is Map<String, dynamic>) {
-        final data = response.data as Map<String, dynamic>;
-        _logger.d('_getTrendLogMappingV2: ${data.length} entries, keys=${data.keys.take(3).toList()}');
-
-        data.forEach((key, value) {
-          final instance = int.tryParse(key);
-          if (instance == null || value is! Map<String, dynamic>) return;
-
-          // En V2, la propriété s'appelle 'source-reference'
-          final logProp = value['source-reference'];
-          if (logProp == null || logProp is! Map<String, dynamic>) return;
-
-          // Parser le format V2: {object-identifier: {object-type: "AnalogValue", object-instance: 17}}
-          String? objectType;
-          int? objectInstance;
-
-          final objectId = logProp['object-identifier'];
-          if (objectId is Map<String, dynamic>) {
-            // Format V2: object-type est en PascalCase (AnalogValue, BinaryInput, etc.)
-            final rawType = objectId['object-type']?.toString();
-            objectInstance = objectId['object-instance'] as int?;
-
-            // Convertir PascalCase en kebab-case (AnalogValue -> analog-value)
-            if (rawType != null) {
-              objectType = rawType
-                  .replaceAllMapped(RegExp(r'([A-Z])'), (m) => '-${m.group(1)!.toLowerCase()}')
-                  .replaceFirst('-', ''); // Enlever le tiret initial
-            }
-          }
-
-          if (objectType != null && objectInstance != null) {
-            final objKey = '$objectType:$objectInstance';
-            mapping[objKey] = instance;
-            _logger.d('_getTrendLogMappingV2: mapped $objKey -> trend-log $instance');
-          }
-        });
+      final data = await _fetchTrendLogsRawV2();
+      if (data is Map<String, dynamic>) {
+        mapping = parseTrendLogMappingV2(data);
       }
     } catch (e) {
       _logger.e('_getTrendLogMappingV2 error: $e');
@@ -2531,20 +2481,63 @@ class ConnectedApiClient {
     return mapping;
   }
 
+  /// Parse la collection trend-logs V2 (`{instance: {source-reference: ...}}`).
+  static Map<String, int> parseTrendLogMappingV2(Map<String, dynamic> data) {
+    final mapping = <String, int>{};
+    data.forEach((key, value) {
+      final instance = int.tryParse(key);
+      if (instance == null || value is! Map<String, dynamic>) return;
+
+      // En V2, la propriété s'appelle 'source-reference'
+      final logProp = value['source-reference'];
+      if (logProp is! Map<String, dynamic>) return;
+
+      // Format V2: {object-identifier: {object-type: "AnalogValue", object-instance: 17}}
+      final objectId = logProp['object-identifier'];
+      if (objectId is! Map<String, dynamic>) return;
+
+      final rawType = objectId['object-type']?.toString();
+      final objectInstance = objectId['object-instance'];
+      if (rawType == null || objectInstance is! int) return;
+
+      // Convertir PascalCase en kebab-case (AnalogValue -> analog-value)
+      final objectType = rawType
+          .replaceAllMapped(RegExp(r'([A-Z])'), (m) => '-${m.group(1)!.toLowerCase()}')
+          .replaceFirst('-', ''); // Enlever le tiret initial
+      mapping['$objectType:$objectInstance'] = instance;
+    });
+    return mapping;
+  }
+
   /// Récupère le log buffer d'un trend-log spécifique (V1)
   /// Si allData=true, récupère tout l'historique sans limite de temps
+  /// Retourne une chaîne (JSON ré-encodé ou texte V1) : préférer
+  /// [getTrendLogBufferData] qui évite de ré-encoder de gros volumes.
   Future<String?> getTrendLogBuffer(int trendLogInstance, {bool allData = false}) async {
-    if (apiVersion == 'V2') {
-      return _getTrendLogBufferV2(trendLogInstance, allData: allData);
-    }
-    return _getTrendLogBufferV1(trendLogInstance, allData: allData);
+    final data = await getTrendLogBufferData(trendLogInstance, allData: allData);
+    if (data == null) return null;
+    if (data is String) return data;
+    return jsonEncode(data);
+  }
+
+  /// Comme [getTrendLogBuffer], mais retourne les données telles que décodées
+  /// par Dio : `List`/`Map` (JSON V1 /trend ou V2 get-table, à passer
+  /// directement à `TrendLogBufferParser.parseV2`) ou `String` (texte du
+  /// logBuffer V1, pour `TrendLogBufferParser.parseV1`). Pas de ré-encodage JSON.
+  Future<Object?> getTrendLogBufferData(int trendLogInstance, {bool allData = false}) {
+    return _dedup('trendBuffer:$trendLogInstance:$allData', () {
+      if (apiVersion == 'V2') {
+        return _getTrendLogBufferV2(trendLogInstance, allData: allData);
+      }
+      return _getTrendLogBufferV1(trendLogInstance, allData: allData);
+    });
   }
 
   /// Récupère le log buffer V1 via l'endpoint /trend
   /// Utilise les paramètres start/stop pour la plage de temps et limit pour le nombre de records
   /// Si allData=true, ne met pas de limite de temps (récupère tout)
   /// Doc: https://wiki.distech-controls.com/RestAPI/Protocols/BACnet/Local/Objects/ObjectType/ObjectInstance/Trend/GET-trend
-  Future<String?> _getTrendLogBufferV1(int trendLogInstance, {int? maxRecords, bool allData = false}) async {
+  Future<Object?> _getTrendLogBufferV1(int trendLogInstance, {int? maxRecords, bool allData = false}) async {
     _logger.i('_getTrendLogBufferV1: fetching trend data for trend-log $trendLogInstance, allData=$allData');
 
     // D'abord, récupérer les infos du trend-log pour trouver l'objet source
@@ -2554,12 +2547,12 @@ class ConnectedApiClient {
     // Méthode 1: Essayer de récupérer les infos du trend-log directement
     try {
       final infoUrl = '$baseUrl$_bacnetBasePath/objects/trendLog/$trendLogInstance';
-      _logger.d('_getTrendLogBufferV1: fetching trend-log info from $infoUrl');
-      final infoResponse = await _dio.get(infoUrl, options: Options(headers: {'Authorization': basicAuth}));
+      _logger.d(() => '_getTrendLogBufferV1: fetching trend-log info from $infoUrl');
+      final infoResponse = await _dio.get(infoUrl, options: _authOptions);
 
       if (infoResponse.statusCode == 200 && infoResponse.data is Map<String, dynamic>) {
         final data = infoResponse.data as Map<String, dynamic>;
-        _logger.d('_getTrendLogBufferV1: trend-log response keys: ${data.keys.toList()}');
+        _logger.d(() => '_getTrendLogBufferV1: trend-log response keys: ${data.keys.toList()}');
 
         final recordCount = data['record-count'] ?? data['recordCount'];
         final bufferSize = data['buffer-size'] ?? data['bufferSize'];
@@ -2635,7 +2628,7 @@ class ConnectedApiClient {
         trendUrl = '$baseUrl$_bacnetBasePath/objects/$sourceObjectType/$sourceObjectInstance/trend'
             '?dataOnly=true&iso8601=true&start=$startMs&stop=$stopMs&limit=$limit';
         _logger.i('_getTrendLogBufferV1: fetching 30 days from /trend endpoint');
-        _logger.d('_getTrendLogBufferV1: time range: ${start.toIso8601String()} -> ${now.toIso8601String()}');
+        _logger.d(() => '_getTrendLogBufferV1: time range: ${start.toIso8601String()} -> ${now.toIso8601String()}');
       }
 
       _logger.i('_getTrendLogBufferV1: URL=$trendUrl');
@@ -2645,8 +2638,8 @@ class ConnectedApiClient {
           trendUrl,
           options: Options(
             headers: {'Authorization': basicAuth},
-            receiveTimeout: const Duration(minutes: 5),
-            sendTimeout: const Duration(minutes: 1),
+            receiveTimeout: ApiConstants.longReceiveTimeout,
+            sendTimeout: ApiConstants.longSendTimeout,
           ),
         );
 
@@ -2660,15 +2653,15 @@ class ConnectedApiClient {
 
             // Log le premier record pour debug
             if (records.isNotEmpty) {
-              _logger.d('_getTrendLogBufferV1: first record: ${records.first}');
+              _logger.d(() => '_getTrendLogBufferV1: first record: ${records.first}');
             }
 
-            // Encoder en JSON pour le parser
-            return jsonEncode(response.data);
+            // Données déjà décodées par Dio : pas de ré-encodage
+            return records;
           } else if (response.data is Map) {
             // Parfois la réponse est dans un wrapper
-            _logger.d('_getTrendLogBufferV1: response is Map with keys: ${(response.data as Map).keys}');
-            return jsonEncode(response.data);
+            _logger.d(() => '_getTrendLogBufferV1: response is Map with keys: ${(response.data as Map).keys}');
+            return response.data as Map;
           } else {
             _logger.w('_getTrendLogBufferV1: unexpected response type: ${response.data.runtimeType}');
           }
@@ -2677,7 +2670,7 @@ class ConnectedApiClient {
         }
       } catch (e, st) {
         _logger.e('_getTrendLogBufferV1: /trend endpoint failed: $e');
-        _logger.d('_getTrendLogBufferV1: stacktrace: $st');
+        _logger.d(() => '_getTrendLogBufferV1: stacktrace: $st');
       }
     } else {
       _logger.w('_getTrendLogBufferV1: source object not found (type=$sourceObjectType, instance=$sourceObjectInstance)');
@@ -2692,7 +2685,7 @@ class ConnectedApiClient {
         logBufferUrl,
         options: Options(
           headers: {'Authorization': basicAuth},
-          receiveTimeout: const Duration(minutes: 5),
+          receiveTimeout: ApiConstants.longReceiveTimeout,
         ),
       );
 
@@ -2719,20 +2712,27 @@ class ConnectedApiClient {
 
   /// Récupère le log buffer V2 via l'API history
   /// Si allData=true, récupère tout l'historique (depuis 10 ans)
-  Future<String?> _getTrendLogBufferV2(int trendLogInstance, {bool allData = false}) async {
+  Future<Object?> _getTrendLogBufferV2(int trendLogInstance, {bool allData = false}) async {
     _logger.i('_getTrendLogBufferV2: fetching history for trend-log $trendLogInstance, allData=$allData');
 
     // D'abord récupérer le nom de l'historique depuis le trend-log
     String? historyName;
-    try {
-      final trendLogUrl = '$baseUrl$_bacnetBasePath/objects/trend-logs/$trendLogInstance';
-      final trendLogResponse = await _dio.get(trendLogUrl, options: _authOptions);
-      if (trendLogResponse.statusCode == 200 && trendLogResponse.data is Map<String, dynamic>) {
-        historyName = trendLogResponse.data['history']?.toString();
-        _logger.d('_getTrendLogBufferV2: got history name: $historyName');
+    // Réutiliser la collection trend-logs récemment lue si elle contient le nom
+    final cached = _trendLogsRawV2;
+    if (cached is Map && cached['$trendLogInstance'] is Map) {
+      historyName = (cached['$trendLogInstance'] as Map)['history']?.toString();
+    }
+    if (historyName == null || historyName.isEmpty) {
+      try {
+        final trendLogUrl = '$baseUrl$_bacnetBasePath/objects/trend-logs/$trendLogInstance';
+        final trendLogResponse = await _dio.get(trendLogUrl, options: _authOptions);
+        if (trendLogResponse.statusCode == 200 && trendLogResponse.data is Map<String, dynamic>) {
+          historyName = trendLogResponse.data['history']?.toString();
+          _logger.d(() => '_getTrendLogBufferV2: got history name: $historyName');
+        }
+      } catch (e) {
+        _logger.w('_getTrendLogBufferV2: failed to get history name: $e');
       }
-    } catch (e) {
-      _logger.w('_getTrendLogBufferV2: failed to get history name: $e');
     }
 
     if (historyName == null || historyName.isEmpty) {
@@ -2742,7 +2742,7 @@ class ConnectedApiClient {
 
     // En V2, utiliser l'API history avec get-table (données brutes, pas d'agrégation)
     // get-history fait de l'agrégation automatique, get-table retourne les données brutes
-    final url = '$baseUrl/api/rest/v2/services/history/groups/bacnet/histories/get-table';
+    final url = '$baseUrl${ApiConstants.v2BacnetHistories}/get-table';
 
     // Calculer la plage de temps
     final now = DateTime.now();
@@ -2768,108 +2768,31 @@ class ConnectedApiClient {
       'time-range': timeRange,
       'limit': 0, // 0 = pas de limite, retourne toutes les données
     };
-    _logger.d('_getTrendLogBufferV2: POST $url');
-    _logger.d('_getTrendLogBufferV2: body=$requestData');
+    _logger.d(() => '_getTrendLogBufferV2: POST $url');
+    _logger.d(() => '_getTrendLogBufferV2: body=$requestData');
 
     try {
-      final response = await _dio.post(
+      // get-table avec limit=0 sur une longue période : timeout long (comme en V1)
+      final response = await _postJson(
         url,
-        data: requestData,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
+        requestData,
+        options: _jsonOptions.copyWith(
+          receiveTimeout: ApiConstants.longReceiveTimeout,
+          sendTimeout: ApiConstants.longSendTimeout,
         ),
       );
 
-      _logger.d('_getTrendLogBufferV2: status=${response.statusCode}, response=${response.data}');
+      _logger.d(() => '_getTrendLogBufferV2: status=${response.statusCode}, response=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
-        // Retourner les données JSON comme chaîne encodée proprement
-        // Format V2: {columns: [...], rows: [...]}
+        // Format V2: {columns: [...], rows: [...]} déjà décodé par Dio
         if (response.data is Map || response.data is List) {
-          return jsonEncode(response.data);
+          return response.data as Object;
         }
         return response.data.toString();
       }
     } catch (e) {
       _logger.e('_getTrendLogBufferV2 error: $e');
-    }
-
-    return null;
-  }
-
-  /// Récupère l'historique d'un trend-log avec filtre de période (V2 uniquement)
-  Future<List<Map<String, dynamic>>?> getTrendLogHistoryV2({
-    required int trendLogInstance,
-    required DateTime startDate,
-    required DateTime endDate,
-  }) async {
-    if (apiVersion != 'V2') {
-      _logger.w('getTrendLogHistoryV2: not supported in V1');
-      return null;
-    }
-
-    _logger.i('getTrendLogHistoryV2: fetching history for trend-log $trendLogInstance');
-
-    final url = '$baseUrl/api/rest/v2/services/history/groups/bacnet/histories/get-history';
-    final timeRange = '${startDate.toIso8601String()}/${endDate.toIso8601String()}';
-
-    try {
-      final response = await _dio.post(
-        url,
-        data: {
-          'history': 'trend-log-$trendLogInstance',
-          'delta': false,
-          'time-range': timeRange,
-          'interval': null,
-          'delta-timestamps': 'Leading',
-        },
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      _logger.d('getTrendLogHistoryV2: status=${response.statusCode}');
-
-      if (response.statusCode == 200 && response.data != null) {
-        if (response.data is List) {
-          return (response.data as List).cast<Map<String, dynamic>>();
-        }
-      }
-    } catch (e) {
-      _logger.e('getTrendLogHistoryV2 error: $e');
-    }
-
-    return null;
-  }
-
-  /// Récupère le trend (historique) d'un point spécifique (V1)
-  /// Endpoint: /objects/{type}/{instance}/trend?dataOnly=true
-  Future<String?> getPointTrendV1(BacnetObjectType type, int instance) async {
-    if (apiVersion != 'V1') {
-      _logger.w('getPointTrendV1: only supported in V1');
-      return null;
-    }
-
-    final typeName = _objectTypeToCamelCase(type);
-    final url = '$baseUrl$_bacnetBasePath/objects/$typeName/$instance/trend?dataOnly=true';
-
-    _logger.i('getPointTrendV1: GET $url');
-
-    try {
-      final response = await _dio.get(url, options: _authOptions);
-      _logger.d('getPointTrendV1: status=${response.statusCode}');
-
-      if (response.statusCode == 200 && response.data != null) {
-        return response.data.toString();
-      }
-    } catch (e) {
-      _logger.e('getPointTrendV1 error: $e');
     }
 
     return null;
@@ -2894,7 +2817,7 @@ class ConnectedApiClient {
 
     try {
       final listResponse = await _dio.get(listUrl, options: _authOptions);
-      _logger.d('_getSchedulesV1: list status=${listResponse.statusCode}');
+      _logger.d(() => '_getSchedulesV1: list status=${listResponse.statusCode}');
 
       if (listResponse.statusCode != 200 || listResponse.data == null) {
         return [];
@@ -2955,12 +2878,7 @@ class ConnectedApiClient {
             'encode': 'text',
             'propertyReferences': propertyRefs,
           },
-          options: Options(
-            headers: {
-              'Authorization': basicAuth,
-              'Content-Type': 'application/json',
-            },
-          ),
+          options: _jsonOptions,
         );
 
         if (rpmResponse.statusCode == 200 && rpmResponse.data != null) {
@@ -3017,19 +2935,19 @@ class ConnectedApiClient {
 
     try {
       final response = await _dio.get(url, options: _authOptions);
-      _logger.d('_getSchedulesV2: status=${response.statusCode}');
-      _logger.d('_getSchedulesV2: response type=${response.data.runtimeType}');
-      _logger.d('_getSchedulesV2: response data=${response.data}');
+      _logger.d(() => '_getSchedulesV2: status=${response.statusCode}');
+      _logger.d(() => '_getSchedulesV2: response type=${response.data.runtimeType}');
+      _logger.d(() => '_getSchedulesV2: response data=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final schedules = <ScheduleSummary>[];
 
         if (response.data is Map<String, dynamic>) {
           final data = response.data as Map<String, dynamic>;
-          _logger.d('_getSchedulesV2: data keys=${data.keys.toList()}');
+          _logger.d(() => '_getSchedulesV2: data keys=${data.keys.toList()}');
           data.forEach((key, value) {
             final instance = int.tryParse(key);
-            _logger.d('_getSchedulesV2: key=$key, instance=$instance, value type=${value.runtimeType}');
+            _logger.d(() => '_getSchedulesV2: key=$key, instance=$instance, value type=${value.runtimeType}');
             if (instance != null && value is Map<String, dynamic>) {
               schedules.add(ScheduleSummary.fromV2(instance, value));
             }
@@ -3069,13 +2987,30 @@ class ConnectedApiClient {
         {'type': 'schedule', 'instance': instance, 'property': 'stateTextReference', 'arrayIndex': -1},
       ];
 
-      final rpmResponse = await _dio.post(
-        rpmUrl,
-        data: {'encode': 'text', 'propertyReferences': propertyRefs},
-        options: Options(
-          headers: {'Authorization': basicAuth, 'Content-Type': 'application/json'},
-        ),
+      final weeklyUrl = '$baseUrl$_bacnetBasePath/objects/schedule/$instance/properties/weekly-schedule';
+
+      // Trois requêtes indépendantes : en parallèle (1 aller-retour au lieu de 3)
+      final results = await Future.wait<Object?>([
+        _postJson(rpmUrl, {'encode': 'text', 'propertyReferences': propertyRefs}),
+        _dio.get(weeklyUrl, options: _authOptions),
+        _getScheduleStateTextsV1(instance),
+      ]);
+      final rpmResponse = results[0] as Response;
+      final weeklyResponse = results[1] as Response;
+      final stateTexts = results[2] as List<ScheduleStateText>;
+
+      // Planning illisible : ne JAMAIS substituer un planning vide (il serait
+      // ensuite écrasable par une sauvegarde)
+      final weeklySchedule = parseWeeklyScheduleResponse(
+        weeklyResponse.statusCode,
+        weeklyResponse.data,
+        WeeklySchedule.fromV1,
       );
+      if (weeklySchedule == null) {
+        _logger.e('_getScheduleDetailV1: weekly-schedule unreadable '
+            '(status=${weeklyResponse.statusCode}), schedule $instance not returned');
+        return null;
+      }
 
       String objectName = 'Schedule $instance';
       String? description;
@@ -3083,16 +3018,7 @@ class ConnectedApiClient {
       dynamic scheduleDefault;
 
       if (rpmResponse.statusCode == 200 && rpmResponse.data != null) {
-        List refs;
-        if (rpmResponse.data is List) {
-          refs = rpmResponse.data;
-        } else if (rpmResponse.data is Map<String, dynamic>) {
-          refs = rpmResponse.data['propertyReferences'] as List? ?? [];
-        } else {
-          refs = [];
-        }
-
-        for (final ref in refs) {
+        for (final ref in _extractRpmRefs(rpmResponse.data)) {
           if (ref is! Map<String, dynamic>) continue;
           if (ref['instance'] == -1) continue;
 
@@ -3116,18 +3042,6 @@ class ConnectedApiClient {
         }
       }
 
-      // Récupérer le weekly-schedule
-      final weeklyUrl = '$baseUrl$_bacnetBasePath/objects/schedule/$instance/properties/weekly-schedule';
-      final weeklyResponse = await _dio.get(weeklyUrl, options: _authOptions);
-
-      WeeklySchedule weeklySchedule = WeeklySchedule.empty();
-      if (weeklyResponse.statusCode == 200 && weeklyResponse.data != null) {
-        weeklySchedule = WeeklySchedule.fromV1(weeklyResponse.data as Map<String, dynamic>);
-      }
-
-      // Récupérer les state-texts
-      final stateTexts = await _getScheduleStateTextsV1(instance);
-
       // Déterminer le type de valeur
       final valueType = ScheduleValueType.fromValue(presentValue);
 
@@ -3147,6 +3061,22 @@ class ConnectedApiClient {
     }
   }
 
+  /// Parses a weekly-schedule GET response. Returns null (never an empty
+  /// planning) when the response is not a 200 with a JSON object body.
+  static WeeklySchedule? parseWeeklyScheduleResponse(
+    int? statusCode,
+    dynamic data,
+    WeeklySchedule Function(Map<String, dynamic>) parse,
+  ) {
+    if (statusCode != 200 || data is! Map<String, dynamic>) return null;
+    try {
+      return parse(data);
+    } catch (e) {
+      _logger.e('parseWeeklyScheduleResponse: invalid weekly-schedule: $e');
+      return null;
+    }
+  }
+
   /// Récupère les state-texts d'un schedule V1
   /// Format V1: {value: "{Hors_Gel;Enumerated:1,Reduit;Enumerated:2,Confort;Enumerated:3}"}
   Future<List<ScheduleStateText>> _getScheduleStateTextsV1(int instance) async {
@@ -3157,7 +3087,7 @@ class ConnectedApiClient {
       final url = '$baseUrl$_bacnetBasePath/objects/schedule/$instance/properties/schedule-state-text';
       final response = await _dio.get(url, options: _authOptions);
 
-      _logger.d('_getScheduleStateTextsV1: response=${response.data}');
+      _logger.d(() => '_getScheduleStateTextsV1: response=${response.data}');
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
@@ -3229,7 +3159,7 @@ class ConnectedApiClient {
             // Remplacer les underscores par des espaces dans le label
             final displayLabel = label.replaceAll('_', ' ');
             stateTexts.add(ScheduleStateText(index: index, text: displayLabel));
-            _logger.d('_parseScheduleStateTextV1: parsed state $index = "$displayLabel"');
+            _logger.d(() => '_parseScheduleStateTextV1: parsed state $index = "$displayLabel"');
           }
         }
       }
@@ -3247,15 +3177,34 @@ class ConnectedApiClient {
 
     try {
       // Récupérer les propriétés principales (sans $select qui cause des problèmes)
+      // et le weekly-schedule en parallèle (requêtes indépendantes)
       final url = '$baseUrl$_bacnetBasePath/objects/schedules/$instance';
-      final response = await _dio.get(url, options: _authOptions);
+      final weeklyUrl = '$baseUrl$_bacnetBasePath/objects/schedules/$instance/weekly-schedule';
+      final responses = await Future.wait([
+        _dio.get(url, options: _authOptions),
+        _dio.get(weeklyUrl, options: _authOptions),
+      ]);
+      final response = responses[0];
+      final weeklyResponse = responses[1];
 
-      if (response.statusCode != 200 || response.data == null) {
+      if (response.statusCode != 200 || response.data is! Map<String, dynamic>) {
+        return null;
+      }
+
+      // Planning illisible : ne jamais renvoyer un planning vide écrasable
+      final weeklySchedule = parseWeeklyScheduleResponse(
+        weeklyResponse.statusCode,
+        weeklyResponse.data,
+        WeeklySchedule.fromV2,
+      );
+      if (weeklySchedule == null) {
+        _logger.e('_getScheduleDetailV2: weekly-schedule unreadable '
+            '(status=${weeklyResponse.statusCode}), schedule $instance not returned');
         return null;
       }
 
       final data = response.data as Map<String, dynamic>;
-      _logger.d('_getScheduleDetailV2: data keys=${data.keys.toList()}');
+      _logger.d(() => '_getScheduleDetailV2: data keys=${data.keys.toList()}');
 
       final objectName = data['object-name']?.toString() ?? 'Schedule $instance';
       final description = data['description']?.toString();
@@ -3265,7 +3214,7 @@ class ConnectedApiClient {
       // Parser les state-texts (V2 utilise 'schedule-state-text')
       final stateTexts = <ScheduleStateText>[];
       final stateTextData = data['schedule-state-text'];
-      _logger.d('_getScheduleDetailV2: schedule-state-text=$stateTextData');
+      _logger.d(() => '_getScheduleDetailV2: schedule-state-text=$stateTextData');
 
       if (stateTextData is List) {
         // V2: [{string: "Hors gel", value: 1}, {string: "Vacances", value: 2}, ...]
@@ -3288,21 +3237,12 @@ class ConnectedApiClient {
         });
       }
 
-      _logger.d('_getScheduleDetailV2: parsed stateTexts=${stateTexts.length}');
+      _logger.d(() => '_getScheduleDetailV2: parsed stateTexts=${stateTexts.length}');
 
       // Valeurs par défaut si vide
       if (stateTexts.isEmpty) {
         stateTexts.add(ScheduleStateText(index: 0, text: 'Inoccupé'));
         stateTexts.add(ScheduleStateText(index: 1, text: 'Occupé'));
-      }
-
-      // Récupérer le weekly-schedule
-      final weeklyUrl = '$baseUrl$_bacnetBasePath/objects/schedules/$instance/weekly-schedule';
-      final weeklyResponse = await _dio.get(weeklyUrl, options: _authOptions);
-
-      WeeklySchedule weeklySchedule = WeeklySchedule.empty();
-      if (weeklyResponse.statusCode == 200 && weeklyResponse.data != null) {
-        weeklySchedule = WeeklySchedule.fromV2(weeklyResponse.data as Map<String, dynamic>);
       }
 
       return Schedule(
@@ -3336,18 +3276,13 @@ class ConnectedApiClient {
     final url = '$baseUrl$_bacnetBasePath/objects/schedule/$instance/properties/weekly-schedule';
     final body = weeklySchedule.toV1Json();
 
-    _logger.d('_writeWeeklyScheduleV1: body=$body');
+    _logger.d(() => '_writeWeeklyScheduleV1: body=$body');
 
     try {
       final response = await _dio.post(
         url,
         data: body,
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: _jsonOptions,
       );
 
       _logger.i('_writeWeeklyScheduleV1: status=${response.statusCode}');
@@ -3365,8 +3300,8 @@ class ConnectedApiClient {
     final url = '$baseUrl$_bacnetBasePath/objects/schedules/$instance/weekly-schedule';
     final body = weeklySchedule.toV2Json();
 
-    _logger.d('_writeWeeklyScheduleV2: url=$url');
-    _logger.d('_writeWeeklyScheduleV2: body=$body');
+    _logger.d(() => '_writeWeeklyScheduleV2: url=$url');
+    _logger.d(() => '_writeWeeklyScheduleV2: body=$body');
 
     try {
       final response = await _dio.post(
@@ -3419,6 +3354,17 @@ class ConnectedApiClient {
     }
   }
 
+  /// Static (rarely changing) V1 properties of the super-favorites, cached
+  /// per object so that periodic refreshes only read presentValue/outOfService.
+  static const _staticPropsTtl = Duration(minutes: 10);
+  static const _staticPropNamesV1 = [
+    'objectName', 'units', 'description', 'activeText', 'inactiveText', 'stateText',
+  ];
+  final Map<String, ({DateTime at, Map<String, dynamic> props})> _staticPropsCache = {};
+
+  /// Forces the next [readMultiplePoints] to re-read names, units and texts.
+  void invalidateStaticPropertiesCache() => _staticPropsCache.clear();
+
   /// Lecture batch V1 via read-property-multiple
   Future<Map<String, BacnetObject>> _readMultiplePointsV1(List<String> pointRefs) async {
     final rpmUrl = '$baseUrl$_bacnetBasePath/objects/read-property-multiple';
@@ -3426,6 +3372,8 @@ class ConnectedApiClient {
 
     // Construire les propertyReferences pour chaque point
     final propertyRefs = <Map<String, dynamic>>[];
+    final now = DateTime.now();
+    final cachedKeys = <String>{};
 
     for (final ref in pointRefs) {
       // Parser le pointRef (format: "analog-value:1" ou "AV:1")
@@ -3435,14 +3383,27 @@ class ConnectedApiClient {
         continue;
       }
 
-      // API V1 utilise camelCase (analogInput, analogValue, etc.)
       final type = BacnetObjectType.fromApiName(parsed['type'] as String);
       if (type == null) continue;
-      final typeNameV1 = type.name; // camelCase: analogInput, analogValue, etc.
+      // API V1 : camelCase avec "multistate" en minuscules (multistateValue)
+      final typeNameV1 = ApiTypeNames.v1Name(type);
       final instance = parsed['instance'] as int;
 
-      // Ajouter les propriétés essentielles
-      for (final prop in ['objectName', 'presentValue', 'units', 'description', 'outOfService']) {
+      final key = ApiTypeNames.objectKey(type, instance);
+      final cached = _staticPropsCache[key];
+      final hasFreshStatic = cached != null && now.difference(cached.at) < _staticPropsTtl;
+
+      final props = <String>['presentValue', 'outOfService'];
+      if (hasFreshStatic) {
+        cachedKeys.add(key);
+      } else {
+        props.addAll(['objectName', 'units', 'description']);
+        // Ajouter les textes pour les types binaires/multistate
+        if (type.isBinary) props.addAll(['activeText', 'inactiveText']);
+        if (type.isMultiState) props.add('stateText');
+      }
+
+      for (final prop in props) {
         propertyRefs.add({
           'type': typeNameV1,
           'instance': instance,
@@ -3450,39 +3411,37 @@ class ConnectedApiClient {
           'arrayIndex': -1,
         });
       }
-
-      // Ajouter les textes pour les types binaires/multistate
-      if (type.isBinary) {
-        propertyRefs.add({'type': typeNameV1, 'instance': instance, 'property': 'activeText', 'arrayIndex': -1});
-        propertyRefs.add({'type': typeNameV1, 'instance': instance, 'property': 'inactiveText', 'arrayIndex': -1});
-      }
-      if (type.isMultiState) {
-        propertyRefs.add({'type': typeNameV1, 'instance': instance, 'property': 'stateText', 'arrayIndex': -1});
-      }
     }
 
     if (propertyRefs.isEmpty) return {};
 
-    _logger.d('_readMultiplePointsV1: propertyRefs=${propertyRefs.take(3).toList()}');
+    _logger.d(() => '_readMultiplePointsV1: ${propertyRefs.length} refs (${cachedKeys.length} points with cached static props)');
 
     try {
-      final response = await _dio.post(
-        rpmUrl,
-        data: {
-          'encode': 'text',
-          'propertyReferences': propertyRefs,
-        },
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
+      final response = await _postJson(rpmUrl, {
+        'encode': 'text',
+        'propertyReferences': propertyRefs,
+      });
 
-      _logger.d('_readMultiplePointsV1: status=${response.statusCode}, data=${response.data}');
+      _logger.d(() => '_readMultiplePointsV1: status=${response.statusCode}, data=${response.data}');
       if (response.statusCode == 200 && response.data != null) {
-        return _parseMultiplePointsFromRpm(response.data, pointRefs);
+        final grouped = groupRpmPropertiesByObject(response.data);
+        for (final entry in grouped.entries) {
+          if (cachedKeys.contains(entry.key)) {
+            // Compléter avec les propriétés statiques en cache
+            final cached = _staticPropsCache[entry.key]!;
+            entry.value.addAll({...cached.props, ...entry.value});
+          } else if (entry.value['objectName'] != null) {
+            _staticPropsCache[entry.key] = (
+              at: now,
+              props: {
+                for (final name in _staticPropNamesV1)
+                  if (entry.value.containsKey(name)) name: entry.value[name],
+              },
+            );
+          }
+        }
+        return buildMultiplePointsFromGrouped(grouped, pointRefs);
       }
     } catch (e) {
       _logger.e('_readMultiplePointsV1 error: $e');
@@ -3491,10 +3450,35 @@ class ConnectedApiClient {
     return {};
   }
 
+  /// True once the controller rejected `$select` in batch sub-requests.
+  bool _v2SelectUnsupported = false;
+
+  /// Properties needed to display a super-favorite (V2 `$select`).
+  static const _favoriteSelectV2 =
+      'object-name,present-value,units,description,out-of-service,active-text,inactive-text,state-text';
+
   /// Lecture batch V2 via l'API batch
   Future<Map<String, BacnetObject>> _readMultiplePointsV2(List<String> pointRefs) async {
-    final batchUrl = '$baseUrl/api/rest/v2/batch';
-    _logger.i('_readMultiplePointsV2: POST $batchUrl for ${pointRefs.length} points');
+    final useSelect = !_v2SelectUnsupported;
+    final result = await _readMultiplePointsV2Batch(pointRefs, useSelect: useSelect);
+    if (result != null) return result;
+    if (useSelect) {
+      // $select refusé par ce firmware : relire sans et ne plus l'utiliser
+      _logger.w('_readMultiplePointsV2: \$select rejected, retrying without it');
+      _v2SelectUnsupported = true;
+      return await _readMultiplePointsV2Batch(pointRefs, useSelect: false) ?? {};
+    }
+    return {};
+  }
+
+  /// Returns null when every sub-request failed with a 4xx (other than
+  /// 401/403), which is how a `$select` rejection shows up.
+  Future<Map<String, BacnetObject>?> _readMultiplePointsV2Batch(
+    List<String> pointRefs, {
+    required bool useSelect,
+  }) async {
+    final batchUrl = '$baseUrl${ApiConstants.v2Batch}';
+    _logger.i('_readMultiplePointsV2: POST $batchUrl for ${pointRefs.length} points (select=$useSelect)');
 
     // Construire les requêtes batch
     final requests = <Map<String, dynamic>>[];
@@ -3503,17 +3487,15 @@ class ConnectedApiClient {
       final parsed = _parsePointRef(ref);
       if (parsed == null) continue;
 
-      final typeName = parsed['type'] as String;
+      final type = BacnetObjectType.fromApiName(parsed['type'] as String);
+      if (type == null || !ApiTypeNames.pointTypes.contains(type)) continue;
       final instance = parsed['instance'] as int;
 
-      // Convertir en format kebab-case pour V2
-      final typeV2 = _typeToV2Name(typeName);
-      if (typeV2 == null) continue;
-
+      final select = useSelect ? '?\$select=$_favoriteSelectV2' : '';
       requests.add({
         'id': ref,
         'method': 'GET',
-        'url': '$_bacnetBasePath/objects/$typeV2/$instance',
+        'url': '$_bacnetBasePath/objects/${ApiTypeNames.v2Path(type)}/$instance$select',
       });
     }
 
@@ -3523,19 +3505,11 @@ class ConnectedApiClient {
     }
 
     try {
-      final response = await _dio.post(
-        batchUrl,
-        data: {'requests': requests},
-        options: Options(
-          headers: {
-            'Authorization': basicAuth,
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
+      final response = await _postJson(batchUrl, {'requests': requests});
 
-      _logger.d('_readMultiplePointsV2: status=${response.statusCode}, data=${response.data}');
+      _logger.d(() => '_readMultiplePointsV2: status=${response.statusCode}, data=${response.data}');
       if (response.statusCode == 200 && response.data != null) {
+        if (useSelect && _allSubRequestsRejected(response.data)) return null;
         return _parseMultiplePointsFromBatchV2(response.data);
       }
     } catch (e) {
@@ -3545,8 +3519,18 @@ class ConnectedApiClient {
     return {};
   }
 
+  /// True if the batch contains responses and all of them are 4xx (not auth).
+  static bool _allSubRequestsRejected(dynamic data) {
+    final responses = data is List ? data : (data is Map ? data['responses'] : null);
+    if (responses is! List || responses.isEmpty) return false;
+    return responses.every((r) {
+      final status = r is Map ? r['status'] : null;
+      return status is int && status >= 400 && status < 500 && status != 401 && status != 403;
+    });
+  }
+
   /// Parse un pointRef en type + instance
-  Map<String, dynamic>? _parsePointRef(String pointRef) {
+  static Map<String, dynamic>? _parsePointRef(String pointRef) {
     // Format possible: "analog-value:1", "AV:1", "analogValue:1"
     final parts = pointRef.split(':');
     if (parts.length != 2) return null;
@@ -3555,8 +3539,8 @@ class ConnectedApiClient {
     final instance = int.tryParse(parts[1].trim());
     if (instance == null) return null;
 
-    // Mapper le nom du type (supporte tous les formats)
-    final type = BacnetObjectType.fromAnyName(typePart);
+    // Mapper le nom du type (supporte tous les formats, y compris "multistateValue")
+    final type = BacnetObjectType.fromAnyName(typePart) ?? ApiTypeNames.fromV1Name(typePart);
     if (type == null) {
       _logger.w('_parsePointRef: unknown type "$typePart" in "$pointRef"');
       return null;
@@ -3568,87 +3552,59 @@ class ConnectedApiClient {
     };
   }
 
-  /// Convertit un nom de type en format V2 (kebab-case + pluriel)
-  String? _typeToV2Name(String typeName) {
-    // Mapping apiName (kebab-case) vers endpoint V2 (pluriel)
-    const mapping = {
-      'analog-input': 'analog-inputs',
-      'analog-output': 'analog-outputs',
-      'analog-value': 'analog-values',
-      'binary-input': 'binary-inputs',
-      'binary-output': 'binary-outputs',
-      'binary-value': 'binary-values',
-      'multi-state-input': 'multi-state-inputs',
-      'multi-state-output': 'multi-state-outputs',
-      'multi-state-value': 'multi-state-values',
-    };
-    return mapping[typeName];
-  }
-
-  /// Parse la réponse RPM pour les super favoris (V1)
-  Map<String, BacnetObject> _parseMultiplePointsFromRpm(dynamic data, List<String> originalRefs) {
-    final results = <String, BacnetObject>{};
+  /// Groups a V1 read-property-multiple response by object. Keys are
+  /// normalized `apiName:instance` (e.g. `multi-state-value:3`) whatever the
+  /// casing returned by the controller (`multistateValue` / `multiStateValue`).
+  static Map<String, Map<String, dynamic>> groupRpmPropertiesByObject(dynamic data) {
     final grouped = <String, Map<String, dynamic>>{};
 
-    // Construire un mapping camelCase:instance -> originalRef
-    // L'API V1 retourne les types en camelCase (analogInput, analogValue, etc.)
-    final refMapping = <String, String>{};
-    for (final ref in originalRefs) {
-      final parsed = _parsePointRef(ref);
-      if (parsed != null) {
-        final type = BacnetObjectType.fromApiName(parsed['type'] as String);
-        if (type != null) {
-          final instance = parsed['instance'] as int;
-          refMapping['${type.name}:$instance'] = ref; // type.name = camelCase
-        }
-      }
-    }
+    for (final ref in _extractRpmRefs(data)) {
+      if (ref is! Map) continue;
 
-    _logger.d('_parseMultiplePointsFromRpm: refMapping=$refMapping');
-
-    // La réponse peut être une liste directement ou un wrapper
-    List<dynamic> refs;
-    if (data is List) {
-      refs = data;
-    } else if (data is Map<String, dynamic>) {
-      refs = data['propertyReferences'] as List? ?? [];
-    } else {
-      _logger.w('_parseMultiplePointsFromRpm: unexpected data type: ${data.runtimeType}');
-      return results;
-    }
-
-    _logger.d('_parseMultiplePointsFromRpm: refs.length=${refs.length}');
-
-    // Grouper par type:instance
-    for (final ref in refs) {
-      if (ref is! Map<String, dynamic>) continue;
-
-      final type = ref['type'] as String?;
-      final instance = ref['instance'];
-      final property = ref['property'] as String?;
+      final typeName = ref['type']?.toString();
+      final rawInstance = ref['instance'];
+      final property = ref['property']?.toString();
       var value = ref['value'] ?? ref['message'];
 
-      if (type == null || instance == null || property == null) continue;
+      if (typeName == null || rawInstance == null || property == null) continue;
+      final instance = rawInstance is int ? rawInstance : int.tryParse('$rawInstance');
+      if (instance == null || instance == -1) continue;
+
+      final type = ApiTypeNames.fromV1Name(typeName) ?? BacnetObjectType.fromAnyName(typeName);
+      if (type == null) continue; // Ignorer les types inconnus
 
       // Extraire la valeur du Map si nécessaire
       if (value is Map) {
         value = value['value'] ?? value['\$value'] ?? value.values.firstOrNull;
       }
 
-      final key = '$type:$instance';
-      grouped.putIfAbsent(key, () => {'type': type, 'instance': instance});
-      grouped[key]![property] = value;
+      final key = ApiTypeNames.objectKey(type, instance);
+      grouped.putIfAbsent(key, () => {'type': type, 'instance': instance})[property] = value;
     }
 
-    _logger.d('_parseMultiplePointsFromRpm: grouped.keys=${grouped.keys.toList()}');
+    return grouped;
+  }
 
-    // Construire les BacnetObjects avec les clés originales
+  /// Builds the super-favorites map (keyed by the original pointRefs) from
+  /// [groupRpmPropertiesByObject] output.
+  static Map<String, BacnetObject> buildMultiplePointsFromGrouped(
+    Map<String, Map<String, dynamic>> grouped,
+    List<String> originalRefs,
+  ) {
+    // Mapping clé normalisée -> pointRef original (ex: "AV:1")
+    final refMapping = <String, String>{};
+    for (final ref in originalRefs) {
+      final parsed = _parsePointRef(ref);
+      if (parsed != null) {
+        refMapping['${parsed['type']}:${parsed['instance']}'] = ref;
+      }
+    }
+
+    final results = <String, BacnetObject>{};
     for (final entry in grouped.entries) {
       final props = entry.value;
-      // Utiliser fromAnyName car V1 retourne les types en camelCase (analogValue, etc.)
-      final type = BacnetObjectType.fromAnyName(props['type'] as String? ?? '');
-      if (type == null) continue; // Ignorer les types inconnus
-      final instance = props['instance'] as int? ?? 0;
+      final type = props['type'] as BacnetObjectType;
+      final instance = props['instance'] as int;
 
       // Parser stateText pour multistate
       List<String>? stateText;
@@ -3659,26 +3615,17 @@ class ConnectedApiClient {
         stateText = stateTextRaw.split(',').map((e) => e.trim()).toList();
       }
 
-      // Trouver la clé originale (ex: "AV:1" au lieu de "analogValue:1")
+      // Trouver la clé originale (ex: "AV:1" au lieu de "analog-value:1")
       final originalKey = refMapping[entry.key] ?? entry.key;
 
-      // Extraire la valeur de presentValue (peut être un objet complexe)
-      var presentValue = props['presentValue'];
-      if (presentValue is Map) {
-        presentValue = presentValue['value'] ?? presentValue['\$value'] ?? presentValue.values.firstOrNull;
-      }
-
-      // Extraire units (peut être un objet avec $value)
-      var units = props['units'];
-      if (units is Map) {
-        units = units['value'] ?? units['\$value'] ?? units.values.firstOrNull;
-      }
+      final presentValue = props['presentValue'];
+      final units = props['units'];
 
       results[originalKey] = BacnetObject(
         type: type,
         instance: instance,
         objectName: props['objectName']?.toString() ?? 'Point $instance',
-        presentValue: _parseValue(presentValue),
+        presentValue: _parseValueStatic(presentValue),
         units: units?.toString(),
         description: props['description']?.toString(),
         outOfService: props['outOfService'] == true || props['outOfService'] == 'true',
@@ -3705,7 +3652,7 @@ class ConnectedApiClient {
       return results;
     }
 
-    _logger.d('_parseMultiplePointsFromBatchV2: responses.length=${responses.length}');
+    _logger.d(() => '_parseMultiplePointsFromBatchV2: responses.length=${responses.length}');
 
     for (final batchResponse in responses) {
       if (batchResponse is! Map<String, dynamic>) continue;
@@ -3714,7 +3661,7 @@ class ConnectedApiClient {
       final body = batchResponse['body'];
       final statusCode = batchResponse['status'] as int?;
 
-      _logger.d('_parseMultiplePointsFromBatchV2: id=$id, status=$statusCode');
+      _logger.d(() => '_parseMultiplePointsFromBatchV2: id=$id, status=$statusCode');
 
       if (id == null || body == null || statusCode != 200) continue;
       if (body is! Map<String, dynamic>) continue;
