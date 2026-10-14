@@ -1395,7 +1395,6 @@ class _TrendChart extends StatefulWidget {
   final bool enableZoom;
   final bool showZoomControls;
   final ChartAnnotations annotations;
-  final bool startYAtZero; // Forcer l'origine Y à 0
 
   const _TrendChart({
     required this.chartData,
@@ -1409,7 +1408,6 @@ class _TrendChart extends StatefulWidget {
     this.enableZoom = true,
     this.showZoomControls = true,
     this.annotations = const ChartAnnotations(),
-    this.startYAtZero = true, // Par défaut, origine à 0
   });
 
   @override
@@ -1445,8 +1443,8 @@ class _TrendChartState extends State<_TrendChart> {
   }
 
   double get _baseMinY {
-    if (widget.startYAtZero && widget.chartData.minY >= 0) {
-      // Si origine à 0 et toutes les valeurs sont positives, commencer à 0
+    if (widget.chartData.minY >= 0) {
+      // Toutes les valeurs sont positives : l'axe Y commence à 0
       return 0.0;
     }
     return widget.chartData.minY - widget.chartData.yPadding;

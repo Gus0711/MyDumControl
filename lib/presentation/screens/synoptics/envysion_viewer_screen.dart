@@ -144,39 +144,6 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
     }
   }
 
-  void _showUnsupportedPlatformDialog() {
-    final l10n = AppLocalizations.of(context)!;
-    String platformName = 'Unknown';
-    if (kIsWeb) {
-      platformName = 'Web';
-    } else if (Platform.isLinux) {
-      platformName = 'Linux';
-    } else if (Platform.isMacOS) {
-      platformName = 'macOS';
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.webViewNotSupported),
-        content: Text(l10n.webViewNotSupportedMessage(platformName)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(l10n.cancel),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _openInExternalBrowser();
-            },
-            child: Text(l10n.openInBrowser),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;

@@ -447,7 +447,7 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
     final text = widget.schedule.getStateText(value);
     // Raccourcir le texte pour les petits blocs
     if (text.length > 6) {
-      return text.substring(0, 5) + '.';
+      return '${text.substring(0, 5)}.';
     }
     return text;
   }

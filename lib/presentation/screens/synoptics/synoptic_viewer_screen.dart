@@ -40,7 +40,7 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
         title: synopticAsync.when(
           data: (synoptic) => Text(synoptic?.name ?? l10n.synopticDefaultName),
           loading: () => Text(l10n.loading),
-          error: (_, __) => Text(l10n.error),
+          error: (_, _) => Text(l10n.error),
         ),
         actions: [
           // Indicateur de chargement

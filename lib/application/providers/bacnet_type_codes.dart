@@ -1,8 +1,9 @@
 import '../../data/services/bacnet/bacnet_constants.dart';
 import '../../domain/models/bacnet_object.dart';
 
-/// Convertit un BacnetObjectType en code numérique BACnet (null si non géré)
-int? bacnetObjectTypeCode(BacnetObjectType type) {
+/// Convertit un BacnetObjectType en code numérique BACnet.
+/// Exhaustive switch: adding an enum value forces a mapping here.
+int bacnetObjectTypeCode(BacnetObjectType type) {
   switch (type) {
     case BacnetObjectType.analogInput:
       return BacnetObjectTypeCode.analogInput;
@@ -28,10 +29,10 @@ int? bacnetObjectTypeCode(BacnetObjectType type) {
       return BacnetObjectTypeCode.calendar;
     case BacnetObjectType.trendLog:
       return BacnetObjectTypeCode.trendLog;
+    case BacnetObjectType.notificationClass:
+      return BacnetObjectTypeCode.notificationClass;
     case BacnetObjectType.device:
       return BacnetObjectTypeCode.device;
-    default:
-      return null;
   }
 }
 
@@ -50,7 +51,5 @@ ParsedBacnetPointRef? parseBacnetPointRef(String pointRef) {
   final type = BacnetObjectType.fromShortName(parts[0]);
   final instance = int.tryParse(parts[1]);
   if (type == null || instance == null) return null;
-  final code = bacnetObjectTypeCode(type);
-  if (code == null) return null;
-  return (pointRef: pointRef, type: type, typeCode: code, instance: instance);
+  return (pointRef: pointRef, type: type, typeCode: bacnetObjectTypeCode(type), instance: instance);
 }

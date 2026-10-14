@@ -262,7 +262,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
                 ),
                 const SizedBox(height: 16),
                 ..._conflicts.map((conflict) => Card(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   margin: const EdgeInsets.only(bottom: 8),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -641,7 +641,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
                         avatar: const Icon(Icons.warning, size: 16, color: Colors.orange),
                         label: Text('${_conflicts.length} ${l10n.conflicts}'),
                         onPressed: _showConflictsDialog,
-                        backgroundColor: Colors.orange.withOpacity(0.1),
+                        backgroundColor: Colors.orange.withValues(alpha: 0.1),
                       ),
                     ),
                   if (_isDiscovering)
@@ -724,7 +724,7 @@ class _BacnetDeviceCard extends StatelessWidget {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: avatarColor.withOpacity(0.2),
+                      color: avatarColor.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(

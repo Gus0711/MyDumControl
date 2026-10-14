@@ -523,7 +523,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       // Construire la liste des points à rafraîchir avec info commandable/input
       final pointsToRefresh = state.points.map((p) => (
-        objectType: _bacnetObjectTypeToCode(p.type),
+        objectType: bacnetObjectTypeCode(p.type),
         objectInstance: p.instance,
         isCommandable: p.type.isCommandable,
         isInput: p.type.isInput,
@@ -545,7 +545,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       // Mettre à jour les points avec les nouvelles valeurs, infos de forçage et alarmes
       final updatedPoints = state.points.map((point) {
-        final key = '${_bacnetObjectTypeToCode(point.type)}:${point.instance}';
+        final key = '${bacnetObjectTypeCode(point.type)}:${point.instance}';
         final data = refreshedData[key];
         if (data != null) {
           return point.copyWith(
@@ -595,7 +595,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
-      final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+      final objectTypeCode = bacnetObjectTypeCode(point.type);
 
       final newValue = await bacnetService.refreshPointValue(
         host: bacnetConnection.host,
@@ -697,7 +697,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
-      final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+      final objectTypeCode = bacnetObjectTypeCode(point.type);
 
       await bacnetService.writePointValue(
         host: bacnetConnection.host,
@@ -771,7 +771,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
-      final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+      final objectTypeCode = bacnetObjectTypeCode(point.type);
 
       await bacnetService.writePointValue(
         host: bacnetConnection.host,
@@ -844,7 +844,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
-      final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+      final objectTypeCode = bacnetObjectTypeCode(point.type);
 
       // En BACnet, pour libérer une priorité on écrit null à cette priorité
       await bacnetService.writePointValue(
@@ -913,7 +913,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
     if (bacnetConnection == null) return false;
 
     final bacnetService = _ref.read(bacnetServiceProvider);
-    final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+    final objectTypeCode = bacnetObjectTypeCode(point.type);
     final failed = <int>[];
 
     Future<void> release(int priority) async {
@@ -999,7 +999,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
-      final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+      final objectTypeCode = bacnetObjectTypeCode(point.type);
 
       // 1. Mettre out-of-service à true
       final oosResponse = await bacnetService.writeProperty(
@@ -1106,7 +1106,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
-      final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+      final objectTypeCode = bacnetObjectTypeCode(point.type);
 
       // Remettre out-of-service à false
       final response = await bacnetService.writeProperty(
@@ -1178,7 +1178,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
-      final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+      final objectTypeCode = bacnetObjectTypeCode(point.type);
 
       final response = await bacnetService.writeProperty(
         host: bacnetConnection.host,
@@ -1201,11 +1201,6 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return false;
     }
   }
-
-  /// Convertit un BacnetObjectType en code numérique BACnet
-  /// (shared mapping, plus notification-class which it does not cover)
-  int _bacnetObjectTypeToCode(BacnetObjectType type) =>
-      bacnetObjectTypeCode(type) ?? BacnetObjectTypeCode.notificationClass;
 
   /// Met à jour un point localement dans le state
   void _updatePointLocally(

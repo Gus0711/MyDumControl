@@ -499,7 +499,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       final repository = ref.read(folderRepositoryProvider);
       await repository.deleteFolder(folder.id);
       _expandedFolders.remove(folder.id);
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.connectionsFolderDeleted(folder.name))),
         );
@@ -523,7 +523,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
 
     if (confirmed == true && mounted) {
       await ref.read(connectionRepositoryProvider).deleteConnection(connection.id);
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.connectionsDeleted(connection.name))),
         );
@@ -585,7 +585,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       final repository = ref.read(folderRepositoryProvider);
       final newFolderId = selectedFolderId == -1 ? null : selectedFolderId;
       await repository.moveConnectionToFolder(connection.id, newFolderId);
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.connectionsMoved)),
         );

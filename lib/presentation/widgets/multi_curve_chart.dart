@@ -551,7 +551,7 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
                   isStrokeCapRound: true,
                   dotData: FlDotData(
                     show: spots.length < 50,
-                    getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
+                    getDotPainter: (spot, _, _, _) => FlDotCirclePainter(
                       radius: 3,
                       color: colorTheme.dotBorderColor,
                       strokeWidth: 2,

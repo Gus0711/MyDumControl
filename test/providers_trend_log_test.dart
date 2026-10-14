@@ -67,7 +67,7 @@ void main() {
   tearDown(() => container.dispose());
 
   test('BACnet viewer reloads only when a longer period is requested', () async {
-    final sub = container.listen(trendLogViewerProvider(300001), (_, __) {});
+    final sub = container.listen(trendLogViewerProvider(300001), (_, _) {});
     final notifier = container.read(trendLogViewerProvider(300001).notifier);
 
     await notifier.loadData(period: TrendPeriod.hour);

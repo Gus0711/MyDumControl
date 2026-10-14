@@ -234,7 +234,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         }
       }
 
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -280,7 +280,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         await notifier.removeFavoriteById(favoriteId);
       }
 
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.favoritesDeleted(ids.length)),
@@ -329,9 +329,9 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
       onRefresh: () => ref.read(pointsProvider.notifier).refresh(),
       child: ReorderableListView(
         padding: EdgeInsets.only(bottom: _selectionMode ? 100 : 80),
-        onReorder: (oldIndex, newIndex) {
+        // onReorderItem: newIndex is already adjusted for the removed item
+        onReorderItem: (oldIndex, newIndex) {
           if (_selectionMode) return; // Pas de réordonnancement en mode sélection
-          if (newIndex > oldIndex) newIndex--;
           final folderIds = folders.map((f) => f.id).toList();
           if (oldIndex < folderIds.length && newIndex <= folderIds.length) {
             final movedId = folderIds.removeAt(oldIndex);
@@ -441,7 +441,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   Future<void> _assignFavoriteToFolder(BuildContext context, int favoriteId, int folderId) async {
     final l10n = AppLocalizations.of(context)!;
     final success = await ref.read(favoriteFoldersNotifierProvider.notifier).assignToFolder(favoriteId, folderId);
-    if (success && mounted) {
+    if (success && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.favoriteAddedToFolder),

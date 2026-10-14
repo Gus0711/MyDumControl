@@ -115,7 +115,7 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
     return AppBar(
       title: scheduleAsync.when(
         loading: () => Text(l10n.loadingEllipsis),
-        error: (_, __) => Text(l10n.error),
+        error: (_, _) => Text(l10n.error),
         data: (schedule) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

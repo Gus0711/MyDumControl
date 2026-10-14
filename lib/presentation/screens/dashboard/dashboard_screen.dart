@@ -77,7 +77,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
         loading: () => GradientAppBar(title: l10n.loading),
-        error: (_, __) => GradientAppBar(title: l10n.error),
+        error: (_, _) => GradientAppBar(title: l10n.error),
       ),
       body: dashboardAsync.when(
         data: (dashboard) {
@@ -270,7 +270,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           createdAt: DateTime.now(),
         );
 
-        if (mounted) {
+        if (context.mounted) {
           await _configureWidget(context, dashboard, tempWidget);
         }
       }
@@ -300,7 +300,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // Récupérer la liste des trend logs disponibles
     final trendLogs = await ref.read(availableTrendLogsProvider.future);
 
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     final currentConfig = widgetData.configJson != null
         ? SingleChartWidgetConfig.fromJsonString(widgetData.configJson)
@@ -348,7 +348,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<void> _configureStatsCard(BuildContext context, DashboardWidget widgetData) async {
     final trendLogs = await ref.read(availableTrendLogsProvider.future);
 
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     final currentConfig = widgetData.configJson != null
         ? StatsWidgetConfig.fromJsonString(widgetData.configJson)
@@ -590,7 +590,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     if (confirmed == true && mounted) {
       await ref.read(dashboardNotifierProvider.notifier).deleteDashboard(widget.dashboardId);
-      if (mounted) {
+      if (context.mounted) {
         context.pop();
       }
     }
@@ -652,24 +652,24 @@ class _TrendLogSelectionDialogState extends State<_TrendLogSelectionDialog> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: ListView.builder(
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final tl = filtered[index];
-                  final isSelected = _selected == tl.instance;
+              child: RadioGroup<int>(
+                groupValue: _selected,
+                onChanged: (value) => setState(() => _selected = value),
+                child: ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final tl = filtered[index];
+                    final isSelected = _selected == tl.instance;
 
-                  return ListTile(
-                    title: Text(tl.pointName ?? tl.pointKey),
-                    subtitle: Text('TL ${tl.instance}'),
-                    selected: isSelected,
-                    leading: Radio<int>(
-                      value: tl.instance,
-                      groupValue: _selected,
-                      onChanged: (value) => setState(() => _selected = value),
-                    ),
-                    onTap: () => setState(() => _selected = tl.instance),
-                  );
-                },
+                    return ListTile(
+                      title: Text(tl.pointName ?? tl.pointKey),
+                      subtitle: Text('TL ${tl.instance}'),
+                      selected: isSelected,
+                      leading: Radio<int>(value: tl.instance),
+                      onTap: () => setState(() => _selected = tl.instance),
+                    );
+                  },
+                ),
               ),
             ),
           ],

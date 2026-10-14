@@ -8,6 +8,7 @@ import '../../../application/providers/active_connection_provider.dart';
 import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/favorites_provider.dart';
 import '../../../application/providers/alarms_provider.dart';
+import '../../../application/providers/settings_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/services/api_exceptions.dart';
@@ -122,6 +123,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Écouter aussi le chargement des points pour fermer l'overlay
     final pointsState = ref.watch(pointsProvider);
     final connectionState = ref.watch(activeConnectionProvider);
+    // Rebuild the controller clock when the 12/24 h setting changes
+    ref.watch(settingsProvider.select((s) => s.use24HourFormat));
 
     // Marquer le chargement initial comme terminé quand connexion ET points sont chargés
     if (!_initialLoadComplete &&

@@ -47,7 +47,7 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
         title: synopticAsync.when(
           data: (synoptic) => Text(l10n.synopticEditTitle(synoptic?.name ?? l10n.synopticDefaultName)),
           loading: () => Text(l10n.loading),
-          error: (_, __) => Text(l10n.error),
+          error: (_, _) => Text(l10n.error),
         ),
         actions: [
           IconButton(

@@ -124,21 +124,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.theme),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: ThemeMode.values.map((mode) {
-            return RadioListTile<ThemeMode>(
-              title: Text(_getThemeLabel(mode, l10n)),
-              value: mode,
-              groupValue: settings.themeMode,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setThemeMode(value);
-                  Navigator.pop(context);
-                }
-              },
-            );
-          }).toList(),
+        content: RadioGroup<ThemeMode>(
+          groupValue: settings.themeMode,
+          onChanged: (value) {
+            if (value != null) {
+              ref.read(settingsProvider.notifier).setThemeMode(value);
+              Navigator.pop(context);
+            }
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: ThemeMode.values.map((mode) {
+              return RadioListTile<ThemeMode>(
+                title: Text(_getThemeLabel(mode, l10n)),
+                value: mode,
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -159,32 +161,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.language),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<String>(
-              title: const Text('Français'),
-              value: 'fr',
-              groupValue: settings.locale,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setLocale(value);
-                  Navigator.pop(context);
-                }
-              },
-            ),
-            RadioListTile<String>(
-              title: const Text('English'),
-              value: 'en',
-              groupValue: settings.locale,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setLocale(value);
-                  Navigator.pop(context);
-                }
-              },
-            ),
-          ],
+        content: RadioGroup<String>(
+          groupValue: settings.locale,
+          onChanged: (value) {
+            if (value != null) {
+              ref.read(settingsProvider.notifier).setLocale(value);
+              Navigator.pop(context);
+            }
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<String>(
+                title: const Text('Français'),
+                value: 'fr',
+              ),
+              RadioListTile<String>(
+                title: const Text('English'),
+                value: 'en',
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -208,21 +205,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.connectionTimeout),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: options.map((seconds) {
-            return RadioListTile<int>(
-              title: Text(l10n.secondsValue(seconds)),
-              value: seconds,
-              groupValue: settings.connectionTimeoutSeconds,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setConnectionTimeout(value);
-                  Navigator.pop(context);
-                }
-              },
-            );
-          }).toList(),
+        content: RadioGroup<int>(
+          groupValue: settings.connectionTimeoutSeconds,
+          onChanged: (value) {
+            if (value != null) {
+              ref.read(settingsProvider.notifier).setConnectionTimeout(value);
+              Navigator.pop(context);
+            }
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options.map((seconds) {
+              return RadioListTile<int>(
+                title: Text(l10n.secondsValue(seconds)),
+                value: seconds,
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -251,27 +250,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.autoRefresh),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: options.map((seconds) {
-            String label;
-            if (seconds == 0) {
-              label = l10n.disabled;
-            } else {
-              label = l10n.everySeconds(seconds);
+        content: RadioGroup<int>(
+          groupValue: settings.refreshIntervalSeconds,
+          onChanged: (value) {
+            if (value != null) {
+              ref.read(settingsProvider.notifier).setRefreshInterval(value);
+              Navigator.pop(context);
             }
-            return RadioListTile<int>(
-              title: Text(label),
-              value: seconds,
-              groupValue: settings.refreshIntervalSeconds,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setRefreshInterval(value);
-                  Navigator.pop(context);
-                }
-              },
-            );
-          }).toList(),
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options.map((seconds) {
+              String label;
+              if (seconds == 0) {
+                label = l10n.disabled;
+              } else {
+                label = l10n.everySeconds(seconds);
+              }
+              return RadioListTile<int>(
+                title: Text(label),
+                value: seconds,
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -339,32 +340,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.temperatureUnit),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<String>(
-              title: Text(l10n.celsius),
-              value: 'celsius',
-              groupValue: settings.temperatureUnit,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setTemperatureUnit(value);
-                  Navigator.pop(context);
-                }
-              },
-            ),
-            RadioListTile<String>(
-              title: Text(l10n.fahrenheit),
-              value: 'fahrenheit',
-              groupValue: settings.temperatureUnit,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setTemperatureUnit(value);
-                  Navigator.pop(context);
-                }
-              },
-            ),
-          ],
+        content: RadioGroup<String>(
+          groupValue: settings.temperatureUnit,
+          onChanged: (value) {
+            if (value != null) {
+              ref.read(settingsProvider.notifier).setTemperatureUnit(value);
+              Navigator.pop(context);
+            }
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<String>(
+                title: Text(l10n.celsius),
+                value: 'celsius',
+              ),
+              RadioListTile<String>(
+                title: Text(l10n.fahrenheit),
+                value: 'fahrenheit',
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -397,22 +393,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.decimalPlaces),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [0, 1, 2, 3].map((places) {
-            return RadioListTile<int>(
-              title: Text(l10n.decimalPlacesValue(places)),
-              subtitle: Text(l10n.example((23.456789).toStringAsFixed(places))),
-              value: places,
-              groupValue: settings.decimalPlaces,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setDecimalPlaces(value);
-                  Navigator.pop(context);
-                }
-              },
-            );
-          }).toList(),
+        content: RadioGroup<int>(
+          groupValue: settings.decimalPlaces,
+          onChanged: (value) {
+            if (value != null) {
+              ref.read(settingsProvider.notifier).setDecimalPlaces(value);
+              Navigator.pop(context);
+            }
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [0, 1, 2, 3].map((places) {
+              return RadioListTile<int>(
+                title: Text(l10n.decimalPlacesValue(places)),
+                subtitle: Text(l10n.example((23.456789).toStringAsFixed(places))),
+                value: places,
+              );
+            }).toList(),
+          ),
         ),
       ),
     );

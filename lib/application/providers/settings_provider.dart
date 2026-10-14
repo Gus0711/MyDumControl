@@ -255,6 +255,8 @@ class DataExportService {
         'connectionType': c.connectionType,
         'bacnetDeviceId': c.bacnetDeviceId,
         'designerUrl': c.designerUrl,
+        // Public certificate hash (TOFU pin), not a secret
+        'certificateFingerprint': c.certificateFingerprint,
         'folderName': folders.where((f) => f.id == c.folderId).firstOrNull?.name,
       }).toList(),
     };
@@ -291,6 +293,14 @@ class DataExportService {
 /// from older exports map to 'distech_api').
 String normalizeImportedConnectionType(String? type) =>
     type == 'bacnet' ? 'bacnet' : 'distech_api';
+
+/// Keeps an imported certificate fingerprint only if it is a well-formed
+/// SHA-256 fingerprint (`AA:BB:...`, 32 bytes); anything else is ignored.
+String? _validFingerprint(Object? value) {
+  if (value is! String) return null;
+  final normalized = value.trim().toUpperCase();
+  return RegExp(r'^([0-9A-F]{2}:){31}[0-9A-F]{2}$').hasMatch(normalized) ? normalized : null;
+}
 
 /// Imports folders and connections from an export JSON into [db].
 ///
@@ -385,6 +395,7 @@ Future<ImportResult> importConnectionsData(AppDatabase db, String jsonString) as
             connectionType: Value(connectionType),
             bacnetDeviceId: Value(connData['bacnetDeviceId'] as int?),
             designerUrl: Value(connData['designerUrl'] as String?),
+            certificateFingerprint: Value(_validFingerprint(connData['certificateFingerprint'])),
             folderId: Value(folderId),
           ));
           existingTargets.add(key);

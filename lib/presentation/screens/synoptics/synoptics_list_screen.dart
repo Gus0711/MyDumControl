@@ -233,7 +233,7 @@ class _SynopticCard extends ConsumerWidget {
                             height: 12,
                             child: CircularProgressIndicator(strokeWidth: 1),
                           ),
-                          error: (_, __) => Text(
+                          error: (_, _) => Text(
                             l10n.synopticBindingsUnknown,
                             style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                           ),

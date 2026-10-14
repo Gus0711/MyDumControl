@@ -16,7 +16,7 @@ import 'package:myglobaldc/domain/models/bacnet_object.dart';
 class FakeBacnetService extends BacnetService {
   final List<({int propertyId, dynamic value, int? priority})> writes = [];
   BacnetResponse Function(int propertyId, dynamic value, int? priority) onWrite =
-      (_, __, ___) => BacnetResponse(type: BacnetResponseType.simpleAck);
+      (_, _, _) => BacnetResponse(type: BacnetResponseType.simpleAck);
   Completer<List<BacnetObject>>? discoverCompleter;
 
   @override
@@ -131,7 +131,7 @@ void main() {
     test('forceInput returns false when out-of-service is refused', () async {
       final ai = _point(BacnetObjectType.analogInput, 1);
       await seedPoints([ai]);
-      bacnet.onWrite = (_, __, ___) => BacnetResponse.error('write-access-denied');
+      bacnet.onWrite = (_, _, _) => BacnetResponse.error('write-access-denied');
 
       expect(await notifier().forceInput(ai, 12.0), isFalse);
       expect(bacnet.writes, hasLength(1));
@@ -141,7 +141,7 @@ void main() {
     test('forceInput rolls back out-of-service when present-value fails', () async {
       final ai = _point(BacnetObjectType.analogInput, 1);
       await seedPoints([ai]);
-      bacnet.onWrite = (prop, _, __) => prop == BacnetPropertyId.presentValue
+      bacnet.onWrite = (prop, _, _) => prop == BacnetPropertyId.presentValue
           ? BacnetResponse.error('value-out-of-range')
           : BacnetResponse(type: BacnetResponseType.simpleAck);
 
@@ -156,7 +156,7 @@ void main() {
     test('releaseInput / writeDescription return false when refused', () async {
       final ai = _point(BacnetObjectType.analogInput, 1);
       await seedPoints([ai]);
-      bacnet.onWrite = (_, __, ___) => BacnetResponse.error('denied');
+      bacnet.onWrite = (_, _, _) => BacnetResponse.error('denied');
 
       expect(await notifier().releaseInput(ai), isFalse);
       expect(await notifier().writeDescription(ai, 'x'), isFalse);
@@ -188,7 +188,7 @@ void main() {
     test('returns false and keeps the override when one priority fails', () async {
       final av = _point(BacnetObjectType.analogValue, 2, overridden: true);
       await seedPoints([av]);
-      bacnet.onWrite = (_, __, priority) => priority == 8
+      bacnet.onWrite = (_, _, priority) => priority == 8
           ? BacnetResponse.error('timeout')
           : BacnetResponse(type: BacnetResponseType.simpleAck);
 
@@ -225,7 +225,7 @@ void main() {
   test('pointDetailProvider ignores search changes', () async {
     await seedPoints([_point(BacnetObjectType.analogInput, 1)]);
     var notifications = 0;
-    container.listen(pointDetailProvider((BacnetObjectType.analogInput, 1)), (_, __) => notifications++);
+    container.listen(pointDetailProvider((BacnetObjectType.analogInput, 1)), (_, _) => notifications++);
 
     notifier().setSearchQuery('abc');
     notifier().setSortOption(PointSortOption.nameDesc);

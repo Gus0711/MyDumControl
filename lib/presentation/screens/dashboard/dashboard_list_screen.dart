@@ -189,7 +189,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
         rows: result['rows'] as int,
       );
 
-      if (id != null && mounted) {
+      if (id != null && context.mounted) {
         context.push(Routes.dashboardViewPath(id));
       }
     }

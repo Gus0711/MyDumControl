@@ -302,6 +302,21 @@ void main() {
       expect(result.errors.length, 1);
     });
 
+    test('certificate fingerprint is imported only when well-formed', () async {
+      final fp = List.filled(32, 'ab').join(':');
+      final json = jsonEncode({
+        'connections': [
+          {'name': 'P', 'host': 'h1', 'port': 443, 'username': 'u', 'certificateFingerprint': fp},
+          {'name': 'Q', 'host': 'h2', 'port': 443, 'username': 'u', 'certificateFingerprint': 'garbage'},
+        ],
+      });
+      final result = await importConnectionsData(db, json);
+      expect(result.connectionsImported, 2);
+      final conns = await db.getAllConnections();
+      expect(conns.firstWhere((c) => c.name == 'P').certificateFingerprint, fp.toUpperCase());
+      expect(conns.firstWhere((c) => c.name == 'Q').certificateFingerprint, isNull);
+    });
+
     test('normalizeImportedConnectionType', () {
       expect(normalizeImportedConnectionType(null), 'distech_api');
       expect(normalizeImportedConnectionType('api'), 'distech_api');
