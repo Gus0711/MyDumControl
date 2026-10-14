@@ -1,8 +1,30 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:logger/logger.dart';
+import 'package:uuid/uuid.dart';
 import '../../data/database/app_database.dart';
 import 'database_provider.dart';
+
+final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
+
+/// Generates a unique secure-storage key for a connection password.
+String generatePasswordKey() => 'conn_pwd_${const Uuid().v4()}';
+
+/// True if a connection edit points it to another device, so the cached data
+/// (points, device info, trend mapping, summary) must be invalidated.
+bool connectionTargetChanged(
+  Connection existing, {
+  required String host,
+  required int port,
+  required String connectionType,
+  required int? bacnetDeviceId,
+}) {
+  return existing.host != host ||
+      existing.port != port ||
+      existing.connectionType != connectionType ||
+      existing.bacnetDeviceId != bacnetDeviceId;
+}
 
 /// Provider pour le stockage sécurisé des mots de passe
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
@@ -49,7 +71,7 @@ class ConnectionRepository {
     String? designerUrl,
   }) async {
     // Générer une clé unique pour le mot de passe
-    final passwordKey = 'conn_pwd_${DateTime.now().millisecondsSinceEpoch}';
+    final passwordKey = generatePasswordKey();
 
     // Stocker le mot de passe de manière sécurisée (même vide pour BACnet)
     await secureStorage.write(key: passwordKey, value: password);
@@ -95,6 +117,15 @@ class ConnectionRepository {
       await secureStorage.write(key: existing.passwordKey, value: password);
     }
 
+    final newType = connectionType ?? existing.connectionType;
+    final targetChanged = connectionTargetChanged(
+      existing,
+      host: host,
+      port: port,
+      connectionType: newType,
+      bacnetDeviceId: bacnetDeviceId,
+    );
+
     // Mettre à jour les autres champs
     await database.updateConnection(
       existing.copyWith(
@@ -104,12 +135,17 @@ class ConnectionRepository {
         useHttps: useHttps,
         username: username,
         apiVersion: Value(apiVersion ?? existing.apiVersion),
-        connectionType: connectionType ?? existing.connectionType,
+        connectionType: newType,
         bacnetDeviceId: Value(bacnetDeviceId),
         designerUrl: Value(designerUrl),
         updatedAt: DateTime.now(),
       ),
     );
+
+    // The connection now targets another device: drop the old device's cache
+    if (targetChanged) {
+      await database.clearAllCache(id);
+    }
   }
 
   /// Supprime une connexion
@@ -117,11 +153,22 @@ class ConnectionRepository {
     final existing = await database.getConnectionById(id);
     if (existing == null) return;
 
-    // Supprimer le mot de passe du stockage sécurisé
-    await secureStorage.delete(key: existing.passwordKey);
+    // Supprimer la connexion et toutes ses données liées (transaction)
+    await database.deleteConnectionCascade(id);
 
-    // Supprimer la connexion de la base de données
-    await database.deleteConnectionById(id);
+    // Puis le mot de passe, seulement une fois la suppression DB réussie
+    try {
+      await secureStorage.delete(key: existing.passwordKey);
+    } catch (e) {
+      _logger.w('deleteConnection: failed to delete password secret: $e');
+    }
+  }
+
+  /// True if a password is stored for this connection. False for connections
+  /// restored from an export: the user must enter the password again.
+  Future<bool> hasPassword(Connection connection) async {
+    final password = await secureStorage.read(key: connection.passwordKey);
+    return password != null;
   }
 
   /// Récupère le mot de passe d'une connexion
