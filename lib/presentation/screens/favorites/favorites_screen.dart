@@ -17,6 +17,25 @@ import '../../widgets/gradient_app_bar.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Écran des favoris - affiche les points favoris organisés par dossiers
+/// Live points indexed by objectId (O(1) lookup per favorite tile).
+final _pointsByIdProvider = Provider<Map<String, BacnetObject>>((ref) {
+  final points = ref.watch(pointsProvider.select((s) => s.points));
+  return {for (final p in points) p.objectId: p};
+});
+
+/// favoriteId -> folders containing it, derived from the folder streams.
+final _foldersByFavoriteProvider = Provider<Map<int, List<FavoriteFolder>>>((ref) {
+  final folders = ref.watch(favoriteFoldersProvider).valueOrNull ?? const <FavoriteFolder>[];
+  final map = <int, List<FavoriteFolder>>{};
+  for (final folder in folders) {
+    final favorites = ref.watch(favoritesInFolderProvider(folder.id)).valueOrNull ?? const <Favorite>[];
+    for (final favorite in favorites) {
+      map.putIfAbsent(favorite.id, () => []).add(folder);
+    }
+  }
+  return map;
+});
+
 class FavoritesScreen extends ConsumerStatefulWidget {
   const FavoritesScreen({super.key});
 
@@ -207,7 +226,8 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
     if (selectedFolderIds != null && selectedFolderIds.isNotEmpty) {
       final notifier = ref.read(favoriteFoldersNotifierProvider.notifier);
-      for (final favoriteId in _selectedFavoriteIds) {
+      final ids = _selectedFavoriteIds.toList(); // snapshot: the set may change during awaits
+      for (final favoriteId in ids) {
         // Ajouter aux dossiers sélectionnés (sans retirer des autres)
         for (final folderId in selectedFolderIds) {
           await notifier.assignToFolder(favoriteId, folderId);
@@ -218,7 +238,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              l10n.favoritesAssigned(_selectedFavoriteIds.length, selectedFolderIds.length),
+              l10n.favoritesAssigned(ids.length, selectedFolderIds.length),
             ),
           ),
         );
@@ -255,14 +275,15 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
     if (confirmed == true) {
       final notifier = ref.read(favoritesNotifierProvider.notifier);
-      for (final favoriteId in _selectedFavoriteIds) {
+      final ids = _selectedFavoriteIds.toList(); // snapshot: the set may change during awaits
+      for (final favoriteId in ids) {
         await notifier.removeFavoriteById(favoriteId);
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.favoritesDeleted(_selectedFavoriteIds.length)),
+            content: Text(l10n.favoritesDeleted(ids.length)),
           ),
         );
         _toggleSelectionMode();
@@ -796,10 +817,11 @@ class _FavoriteTileInFolder extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pointsState = ref.watch(pointsProvider);
-    final livePoint = _findLivePoint(pointsState.points, favorite);
-    final folderIdsAsync = ref.watch(folderIdsForFavoriteProvider(favorite.id));
-    final foldersAsync = ref.watch(foldersForFavoriteProvider(favorite.id));
+    // Only rebuild when this favorite's live point changes (O(1) lookup)
+    final livePoint = ref.watch(_pointsByIdProvider.select((m) => m[favorite.pointRef]));
+    // Folders of this favorite derived from already-watched folder streams (no per-tile query)
+    final folders = ref.watch(_foldersByFavoriteProvider.select((m) => m[favorite.id])) ?? const <FavoriteFolder>[];
+    final folderIds = folders.map((f) => f.id).toList();
 
     final type = BacnetObjectType.values.cast<BacnetObjectType?>().firstWhere(
           (t) => t?.apiName == favorite.objectType,
@@ -815,9 +837,6 @@ class _FavoriteTileInFolder extends ConsumerWidget {
     final trendLogKey = '${favorite.objectType}:$instance';
     final hasTrendLog = ref.watch(hasTrendLogProvider(trendLogKey));
 
-    // Tags des dossiers
-    final folders = foldersAsync.valueOrNull ?? [];
-
     // Widget du contenu de la tile
     final tileContent = ListTile(
       onTap: selectionMode
@@ -825,7 +844,7 @@ class _FavoriteTileInFolder extends ConsumerWidget {
           : () => _navigateToPoint(context, favorite),
       onLongPress: selectionMode
           ? null
-          : () => _showAssignDialog(context, ref, favorite, folderIdsAsync),
+          : () => _showAssignDialog(context, ref, favorite, folderIds),
       contentPadding: EdgeInsets.only(left: selectionMode ? 16 : 56, right: 8),
       leading: selectionMode
           ? Checkbox(
@@ -893,7 +912,7 @@ class _FavoriteTileInFolder extends ConsumerWidget {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             tooltip: AppLocalizations.of(context)!.assignToFoldersDialog,
-            onPressed: () => _showAssignDialog(context, ref, favorite, folderIdsAsync),
+            onPressed: () => _showAssignDialog(context, ref, favorite, folderIds),
           ),
           // Bouton favori
           if (livePoint != null)
@@ -992,24 +1011,15 @@ class _FavoriteTileInFolder extends ConsumerWidget {
           child: const Icon(Icons.delete, color: Colors.white),
         ),
         onDismissed: (_) async {
+          // Capture before the await: the tile is already out of the tree
+          final messenger = ScaffoldMessenger.of(context);
+          final message = AppLocalizations.of(context)!.removedFromFavorites(favorite.pointName);
           await ref.read(favoritesNotifierProvider.notifier).removeFavoriteById(favorite.id);
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context)!.removedFromFavorites(favorite.pointName))),
-            );
-          }
+          messenger.showSnackBar(SnackBar(content: Text(message)));
         },
         child: tileContent,
       ),
     );
-  }
-
-  BacnetObject? _findLivePoint(List<BacnetObject> points, Favorite favorite) {
-    try {
-      return points.firstWhere((p) => p.objectId == favorite.pointRef);
-    } catch (_) {
-      return null;
-    }
   }
 
   void _navigateToPoint(BuildContext context, Favorite favorite) {
@@ -1030,9 +1040,9 @@ class _FavoriteTileInFolder extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     Favorite favorite,
-    AsyncValue<List<int>> folderIdsAsync,
+    List<int> folderIds,
   ) async {
-    final currentIds = folderIdsAsync.valueOrNull ?? [];
+    final currentIds = folderIds;
     final result = await AssignFoldersDialog.show(
       context,
       favorite: favorite,

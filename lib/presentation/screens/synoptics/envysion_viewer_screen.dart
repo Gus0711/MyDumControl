@@ -37,16 +37,6 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
   void initState() {
     super.initState();
     _loadConnectionData();
-    _initCookieManager();
-  }
-
-  Future<void> _initCookieManager() async {
-    // Activer la persistence des cookies pour garder la session OIDC
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      final cookieManager = CookieManager.instance();
-      // Les cookies seront persistes automatiquement
-      debugPrint('Cookie manager initialized');
-    }
   }
 
   Future<void> _loadConnectionData() async {
@@ -90,6 +80,17 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
     debugPrint('EnvysionViewer URL: $url (port configuré: $port)');
 
     return url;
+  }
+
+  /// True only if the HTTP auth challenge targets the configured controller
+  /// (same host, and same port when the challenge reports one).
+  bool _isChallengeFromController(URLProtectionSpace space) {
+    final connection = _connection;
+    if (connection == null) return false;
+    if (space.host.toLowerCase() != connection.host.toLowerCase()) return false;
+    final port = space.port;
+    if (port != null && port > 0 && port != connection.port) return false;
+    return true;
   }
 
   String _getBasicAuthHeader() {
@@ -258,36 +259,24 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               // Mode desktop pour meilleur rendu
               preferredContentMode: UserPreferredContentMode.DESKTOP,
               // Autoriser le contenu mixte (HTTP dans HTTPS)
-              mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+              mixedContentMode: MixedContentMode.MIXED_CONTENT_COMPATIBILITY_MODE,
               // Cache
               cacheEnabled: true,
-              // Permettre l'acces aux fichiers
-              allowFileAccessFromFileURLs: true,
-              allowUniversalAccessFromFileURLs: true,
-              // Activer l'interception des requetes pour injecter l'auth
-              useShouldInterceptRequest: true,
+              // Aucun contenu file:// n'est charge : acces fichiers desactive
+              allowFileAccessFromFileURLs: false,
+              allowUniversalAccessFromFileURLs: false,
               // Permettre le stockage local (cookies, localStorage)
               domStorageEnabled: true,
               databaseEnabled: true,
               // Cookies tiers pour OIDC
               thirdPartyCookiesEnabled: true,
-              // Sauvegarder les credentials dans le formulaire
-              saveFormData: true,
+              saveFormData: false,
               // Garder les donnees entre sessions
               clearCache: false,
               clearSessionCache: false,
             ),
             onWebViewCreated: (controller) {
               _webViewController = controller;
-            },
-            shouldInterceptRequest: (controller, request) async {
-              // Injecter le header Authorization pour toutes les requetes vers le meme host
-              final requestUrl = request.url.toString();
-              if (requestUrl.contains(_connection!.host)) {
-                debugPrint('Intercepting request: $requestUrl');
-              }
-              // Retourner null - l'auth sera geree par onReceivedHttpAuthRequest
-              return null;
             },
             shouldOverrideUrlLoading: (controller, navigationAction) async {
               // Permettre toutes les navigations vers le meme host
@@ -296,17 +285,20 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               return NavigationActionPolicy.ALLOW;
             },
             onLoadStart: (controller, url) {
+              if (!mounted) return;
               setState(() {
                 _isLoading = true;
                 _errorMessage = null;
               });
             },
             onLoadStop: (controller, url) {
+              if (!mounted) return;
               setState(() {
                 _isLoading = false;
               });
             },
             onProgressChanged: (controller, progress) {
+              if (!mounted) return;
               setState(() {
                 _progress = progress / 100;
               });
@@ -321,17 +313,21 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
             onReceivedHttpAuthRequest: (controller, challenge) async {
               // Fournir les credentials pour l'authentification HTTP Basic
               debugPrint('HTTP Auth Request for: ${challenge.protectionSpace.host} (realm: ${challenge.protectionSpace.realm})');
+              // Only answer challenges coming from the configured controller
+              if (!_isChallengeFromController(challenge.protectionSpace)) {
+                return HttpAuthResponse(action: HttpAuthResponseAction.CANCEL);
+              }
               return HttpAuthResponse(
                 username: _connection!.username,
                 password: _password ?? '',
                 action: HttpAuthResponseAction.PROCEED,
-                permanentPersistence: true,
+                permanentPersistence: false,
               );
             },
             onReceivedError: (controller, request, error) {
               debugPrint('WebView Error: ${error.type} - ${error.description} for ${request.url}');
               // Ne pas afficher d'erreur pour les sous-ressources, seulement la page principale
-              if (request.url.toString() == _buildFullUrl()) {
+              if (mounted && request.url.toString() == _buildFullUrl()) {
                 setState(() {
                   _isLoading = false;
                   _errorMessage = '${error.type}: ${error.description}';
@@ -339,6 +335,8 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               }
             },
             onReceivedHttpError: (controller, request, response) {
+              // Ignore sub-resources (favicon, assets...): main frame only
+              if (!mounted || request.isForMainFrame != true) return;
               if (response.statusCode == 401) {
                 setState(() {
                   _errorMessage = 'Authentification echouee (401)';

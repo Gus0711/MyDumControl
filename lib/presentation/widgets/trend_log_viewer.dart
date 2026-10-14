@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../application/providers/trend_log_provider.dart';
 import '../../domain/models/trend_log.dart';
+import 'chart_downsample.dart';
 
 // =============================================================================
 // Système de couleurs pour les graphiques
@@ -326,8 +327,20 @@ class _ChartData {
     this.maxTimestampDate,
   });
 
-  /// Prépare les données pour le graphique à partir des records
+  // Cache par identité de la liste de records (évite tri/min/max à chaque build)
+  static final Expando<_ChartData> _cache = Expando<_ChartData>('chartData');
+
+  /// Version mémoïsée de [_compute] : recalcul seulement si la liste change.
   static _ChartData? fromRecords(List<TrendLogRecord> records) {
+    final cached = _cache[records];
+    if (cached != null) return cached;
+    final computed = _compute(records);
+    if (computed != null) _cache[records] = computed;
+    return computed;
+  }
+
+  /// Prépare les données pour le graphique à partir des records
+  static _ChartData? _compute(List<TrendLogRecord> records) {
     final valueRecords = records
         .where((r) => r.isValueRecord && r.numericValue != null)
         .toList();
@@ -1057,7 +1070,7 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
         chartData: chartData,
         units: widget.units,
         colorTheme: _colorTheme,
-        showDots: chartData.spots.length < 50,
+        showDots: true, // decided on visible points in _TrendChart
         dateFormat: 'HH:mm',
         enableZoom: false, // Désactivé en vue compacte
         showZoomControls: false,
@@ -1309,7 +1322,7 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
       chartData: chartData,
       units: widget.units,
       colorTheme: _colorTheme,
-      showDots: chartData.spots.length < 30,
+      showDots: true, // decided on visible points in _TrendChart
       showVerticalGrid: true,
       showAxisLabel: true,
       dateFormat: _isLandscape ? 'HH:mm' : 'dd/MM\nHH:mm',
@@ -1545,6 +1558,42 @@ class _TrendChartState extends State<_TrendChart> {
     );
   }
 
+  // Cache des spots affichés (fenêtre + décimation)
+  List<FlSpot>? _cachedSpots;
+  List<FlSpot>? _cachedSource;
+  double _cachedMinX = double.nan;
+  double _cachedMaxX = double.nan;
+
+  List<FlSpot> _getVisibleSpots(double fromX, double toX) {
+    final source = widget.chartData.spots;
+    if (_cachedSpots != null &&
+        identical(_cachedSource, source) &&
+        _cachedMinX == fromX &&
+        _cachedMaxX == toX) {
+      return _cachedSpots!;
+    }
+    final result = downsampleMinMax(
+      visibleWindow(source, fromX, toX).where((s) => !s.x.isNaN && !s.y.isNaN).toList(),
+    );
+    _cachedSpots = result;
+    _cachedSource = source;
+    _cachedMinX = fromX;
+    _cachedMaxX = toX;
+    return result;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TrendChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Nouvelles données : on repart d'une vue complète
+    if (!identical(oldWidget.chartData, widget.chartData) &&
+        !identical(oldWidget.chartData.spots, widget.chartData.spots)) {
+      _zoomLevel = 1.0;
+      _panOffsetX = 0.0;
+      _panOffsetY = 0.0;
+    }
+  }
+
   Widget _buildChart() {
     // Protection contre les valeurs invalides
     final minX = _visibleMinX;
@@ -1568,12 +1617,12 @@ class _TrendChartState extends State<_TrendChart> {
     final yRange = maxY - minY;
     final xRange = maxX - minX;
 
-    // Filtrer les spots visibles pour optimiser le rendu
-    final visibleSpots = widget.chartData.spots.where((spot) {
-      return spot.x >= minX - xRange * 0.1 &&
-             spot.x <= maxX + xRange * 0.1 &&
-             !spot.x.isNaN && !spot.y.isNaN;
-    }).toList();
+    // Fenêtre visible (recherche dichotomique) puis décimation, mise en cache
+    var visibleSpots = _getVisibleSpots(minX - xRange * 0.1, maxX + xRange * 0.1);
+    if (visibleSpots.isEmpty) {
+      visibleSpots = downsampleMinMax(widget.chartData.spots);
+    }
+    final richRendering = visibleSpots.length <= kRichRenderingMaxPoints;
 
     // Construire les lignes horizontales d'annotation
     final extraHorizontalLines = <HorizontalLine>[];
@@ -1727,26 +1776,26 @@ class _TrendChartState extends State<_TrendChart> {
         maxY: maxY,
         lineBarsData: [
           LineChartBarData(
-            spots: visibleSpots.isNotEmpty ? visibleSpots : widget.chartData.spots,
-            isCurved: true,
+            spots: visibleSpots,
+            isCurved: richRendering,
             curveSmoothness: 0.15, // Réduire pour moins d'overshoot
             preventCurveOverShooting: true, // Empêcher les dépassements
             preventCurveOvershootingThreshold: 0.0, // Strictement pas de dépassement
             color: widget.colorTheme.primaryColor,
             barWidth: 2.5,
-            shadow: Shadow(
-              color: widget.colorTheme.primaryColor.withAlpha(60),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
+            shadow: richRendering
+                ? Shadow(
+                    color: widget.colorTheme.primaryColor.withAlpha(60),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  )
+                : const Shadow(color: Colors.transparent),
             dotData: FlDotData(
               show: widget.showDots && visibleSpots.length < 50,
               getDotPainter: (spot, percent, barData, index) {
                 // Marqueurs spéciaux pour min/max
                 if (widget.annotations.showMinMaxMarkers) {
-                  final currentSpot = visibleSpots.isNotEmpty
-                      ? visibleSpots[index]
-                      : widget.chartData.spots[index];
+                  final currentSpot = visibleSpots[index];
 
                   // Vérifier si c'est le point min
                   if (widget.chartData.minSpot != null &&
@@ -1911,7 +1960,7 @@ class _TrendChartState extends State<_TrendChart> {
           },
         ),
       ),
-      duration: const Duration(milliseconds: 150),
+      duration: richRendering ? const Duration(milliseconds: 150) : Duration.zero,
       curve: Curves.easeOut,
     );
   }
@@ -2153,7 +2202,7 @@ class EmbeddedTrendChart extends ConsumerWidget {
         chartData: chartData,
         units: units,
         colorTheme: colorTheme,
-        showDots: chartData.spots.length < 30,
+        showDots: true, // decided on visible points in _TrendChart
         dateFormat: 'HH:mm',
         enableZoom: false,
         showZoomControls: false,

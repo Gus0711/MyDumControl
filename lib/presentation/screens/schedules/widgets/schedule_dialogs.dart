@@ -5,6 +5,14 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../../../../domain/models/schedule.dart';
 
+/// Formats minutes since midnight as HH:mm ('24:00' for end of day).
+String formatMinutesOfDay(int minutes) {
+  if (minutes >= 1440) return '24:00';
+  final hours = minutes ~/ 60;
+  final mins = minutes % 60;
+  return '${hours.toString().padLeft(2, '0')}:${mins.toString().padLeft(2, '0')}';
+}
+
 /// Dialogue pour ajouter ou modifier un créneau horaire
 class TimeSlotDialog extends StatefulWidget {
   final Schedule schedule;
@@ -46,13 +54,6 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
       _selectedValue = widget.schedule.valueType == ScheduleValueType.boolean ? true : 1;
       _isAllDay = false;
     }
-  }
-
-  String _formatMinutes(int minutes) {
-    if (minutes >= 1440) return '24:00';
-    final hours = minutes ~/ 60;
-    final mins = minutes % 60;
-    return '${hours.toString().padLeft(2, '0')}:${mins.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -188,7 +189,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              _formatMinutes(_startMinutes),
+              formatMinutesOfDay(_startMinutes),
               style: theme.textTheme.titleLarge?.copyWith(
                 fontFamily: 'monospace',
               ),
@@ -220,7 +221,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              _formatMinutes(_endMinutes),
+              formatMinutesOfDay(_endMinutes),
               style: theme.textTheme.titleLarge?.copyWith(
                 fontFamily: 'monospace',
               ),

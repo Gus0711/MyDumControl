@@ -25,15 +25,6 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
   bool _isEditing = false;
 
   @override
-  void initState() {
-    super.initState();
-    // Charger le schedule dans le provider d'édition
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(scheduleEditProvider.notifier).loadSchedule(widget.instance);
-    });
-  }
-
-  @override
   void dispose() {
     // Note: Ne pas utiliser ref.read() dans dispose() car le widget est déjà disposé
     // Le reset sera fait automatiquement si nécessaire lors du prochain chargement
@@ -176,8 +167,8 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
             icon: const Icon(Icons.refresh),
             tooltip: l10n.refresh,
             onPressed: () {
+              // Single read: the edit state is loaded only when entering edit mode
               ref.invalidate(scheduleDetailProvider(widget.instance));
-              ref.read(scheduleEditProvider.notifier).loadSchedule(widget.instance);
             },
           ),
         ],
@@ -185,15 +176,22 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
     );
   }
 
+  Future<void> _startEditing() async {
+    // The edit state is loaded lazily (the read-only view uses scheduleDetailProvider)
+    final notifier = ref.read(scheduleEditProvider.notifier);
+    await notifier.loadSchedule(widget.instance);
+    if (!mounted) return;
+    if (ref.read(scheduleEditProvider).editedSchedule == null) return;
+    setState(() => _isEditing = true);
+    notifier.setEditing(true);
+  }
+
   Widget? _buildFab(ScheduleEditState editState) {
     final l10n = AppLocalizations.of(context)!;
     if (_isEditing) return null;
 
     return FloatingActionButton.extended(
-      onPressed: () {
-        setState(() => _isEditing = true);
-        ref.read(scheduleEditProvider.notifier).setEditing(true);
-      },
+      onPressed: _startEditing,
       icon: const Icon(Icons.edit),
       label: Text(l10n.edit),
     );
@@ -258,10 +256,11 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
       builder: (context) => const SaveConfirmDialog(changeCount: 1),
     );
 
-    if (confirm == true) {
+    if (confirm == true && mounted) {
       final success = await ref.read(scheduleEditProvider.notifier).save();
       if (success && mounted) {
         setState(() => _isEditing = false);
+        ref.read(scheduleEditProvider.notifier).setEditing(false);
       }
     }
   }
@@ -273,13 +272,10 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
         context: context,
         builder: (context) => const DiscardChangesDialog(),
       );
-      if (discard == true) {
-        ref.read(scheduleEditProvider.notifier).revert();
-        setState(() => _isEditing = false);
-      }
-    } else {
-      setState(() => _isEditing = false);
+      if (!mounted || discard != true) return; // keep editing
+      ref.read(scheduleEditProvider.notifier).revert();
     }
+    setState(() => _isEditing = false);
     ref.read(scheduleEditProvider.notifier).setEditing(false);
   }
 }

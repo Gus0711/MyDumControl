@@ -116,15 +116,38 @@ class DashboardWidgetCard extends ConsumerWidget {
       );
     }
 
-    if (state.data == null || state.data!.records.isEmpty) {
-      // Charger les données si pas encore fait
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final notifier = ref.read(trendLogViewerProvider(config.trendLogInstance).notifier);
-        notifier.loadData(period: TrendPeriod.day);
-      });
+    if (state.data == null) {
+      // Pas encore chargé : un seul chargement, déclenché hors de build
+      return _LoadOnce(
+        onLoad: () => ref
+            .read(trendLogViewerProvider(config.trendLogInstance).notifier)
+            .loadData(period: TrendPeriod.day),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
-      return const Center(
-        child: CircularProgressIndicator(),
+    if (state.data!.records.isEmpty) {
+      // Vide = état final (pas de rechargement automatique)
+      if (state.isLoading) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              state.error != null ? Icons.error_outline : Icons.show_chart,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => ref
+                  .read(trendLogViewerProvider(config.trendLogInstance).notifier)
+                  .loadData(period: TrendPeriod.day),
+              child: const Text('Réessayer'),
+            ),
+          ],
+        ),
       );
     }
 
@@ -165,11 +188,16 @@ class DashboardWidgetCard extends ConsumerWidget {
 
     final state = ref.watch(trendLogViewerProvider(config.trendLogInstance));
 
-    // Charger les données si pas encore fait
     if (state.data == null && !state.isLoading && state.error == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(trendLogViewerProvider(config.trendLogInstance).notifier).loadData();
-      });
+      return _LoadOnce(
+        onLoad: () => ref
+            .read(trendLogViewerProvider(config.trendLogInstance).notifier)
+            .loadData(),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
     }
 
     return Padding(
@@ -438,4 +466,28 @@ class _StatChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Triggers [onLoad] once after the first frame (never from build repeatedly).
+class _LoadOnce extends StatefulWidget {
+  final VoidCallback onLoad;
+  final Widget child;
+
+  const _LoadOnce({required this.onLoad, required this.child});
+
+  @override
+  State<_LoadOnce> createState() => _LoadOnceState();
+}
+
+class _LoadOnceState extends State<_LoadOnce> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onLoad();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

@@ -519,13 +519,6 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
     _selectedValue = widget.slot.value;
   }
 
-  String _formatMinutes(int minutes) {
-    if (minutes >= 1440) return '24:00';
-    final hours = minutes ~/ 60;
-    final mins = minutes % 60;
-    return '${hours.toString().padLeft(2, '0')}:${mins.toString().padLeft(2, '0')}';
-  }
-
   Future<void> _selectStartTime() async {
     final result = await CustomTimePickerDialog.show(
       context: context,
@@ -664,7 +657,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
                     children: [
                       _buildTimeButton(
                         label: 'Début',
-                        time: _formatMinutes(_startMinutes),
+                        time: formatMinutesOfDay(_startMinutes),
                         onTap: _selectStartTime,
                       ),
                       const SizedBox(height: 6),
@@ -685,7 +678,7 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
                     children: [
                       _buildTimeButton(
                         label: 'Fin',
-                        time: _formatMinutes(_endMinutes),
+                        time: formatMinutesOfDay(_endMinutes),
                         onTap: _selectEndTime,
                         highlight: _endMinutes >= 1440,
                       ),
@@ -833,13 +826,6 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
     }
   }
 
-  String _formatMinutes(int minutes) {
-    if (minutes >= 1440) return '24:00';
-    final hours = minutes ~/ 60;
-    final mins = minutes % 60;
-    return '${hours.toString().padLeft(2, '0')}:${mins.toString().padLeft(2, '0')}';
-  }
-
   Future<void> _selectStartTime() async {
     final result = await CustomTimePickerDialog.show(
       context: context,
@@ -973,7 +959,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
                     children: [
                       _buildTimeButton(
                         label: 'Début',
-                        time: _formatMinutes(_startMinutes),
+                        time: formatMinutesOfDay(_startMinutes),
                         onTap: _selectStartTime,
                       ),
                       const SizedBox(height: 6),
@@ -994,7 +980,7 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
                     children: [
                       _buildTimeButton(
                         label: 'Fin',
-                        time: _formatMinutes(_endMinutes),
+                        time: formatMinutesOfDay(_endMinutes),
                         onTap: _selectEndTime,
                         highlight: _endMinutes >= 1440,
                       ),
