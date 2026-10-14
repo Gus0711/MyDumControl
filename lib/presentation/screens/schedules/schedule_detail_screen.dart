@@ -195,6 +195,8 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
     }
     final edited = ref.read(scheduleEditProvider).editedSchedule;
     if (edited == null || edited.instance != widget.instance) return;
+    // Unreadable weekly-schedule: read-only (never overwrite the controller)
+    if (!edited.weeklyScheduleReadable) return;
     setState(() => _isEditing = true);
     notifier.setEditing(true);
   }
@@ -202,6 +204,9 @@ class _ScheduleDetailScreenState extends ConsumerState<ScheduleDetailScreen> {
   Widget? _buildFab(ScheduleEditState editState) {
     final l10n = AppLocalizations.of(context)!;
     if (_isEditing) return null;
+    // Unreadable weekly-schedule: no edition
+    final schedule = ref.read(scheduleDetailProvider(widget.instance)).valueOrNull;
+    if (schedule != null && !schedule.weeklyScheduleReadable) return null;
 
     return FloatingActionButton.extended(
       onPressed: _startEditing,
@@ -328,6 +333,33 @@ class _ScheduleDetailContentState extends State<_ScheduleDetailContent> {
 
         // Légende des états
         _buildLegend(context, theme, colorScheme),
+
+        // Weekly-schedule illisible : lecture seule
+        if (!widget.schedule.weeklyScheduleReadable)
+          Builder(
+            builder: (context) {
+              final l10n = AppLocalizations.of(context)!;
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: colorScheme.errorContainer,
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber, size: 16, color: colorScheme.onErrorContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.weeklyScheduleUnreadable,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
 
         // Mode édition: indicateur
         if (widget.isEditing)

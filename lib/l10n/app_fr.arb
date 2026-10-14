@@ -200,6 +200,7 @@
   "closeEdit": "Fermer l'édition",
   "edit": "Modifier",
   "scheduleNotFound": "Schedule non trouvé",
+  "weeklyScheduleUnreadable": "Programme hebdomadaire illisible : modification désactivée pour ne pas écraser l'automate",
   "errorLoadingSchedule": "Erreur lors du chargement",
   "discardChanges": "Abandonner les modifications",
   "discardChangesMessage": "Vous avez des modifications non sauvegardées. Voulez-vous les abandonner ?",

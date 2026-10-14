@@ -267,7 +267,37 @@ class ConnectedApiClient {
   bool get hasAuthError => _lastError is ApiAuthException;
 
   /// Clears [lastError] (call it before an operation to check its outcome).
-  void clearLastError() => _lastError = null;
+  void clearLastError() {
+    _lastError = null;
+    _recentAuthErrors.clear();
+  }
+
+  /// Auth failures recorded since the last [clearLastError] (newest last).
+  /// Kept separately from [lastError] so that a failure on a parallel annex
+  /// request (device info, time...) is not mistaken for a failure of the
+  /// call being checked, and vice versa.
+  final List<ApiAuthException> _recentAuthErrors = [];
+  static const _maxRecentAuthErrors = 32;
+
+  /// URL fragments of the requests that read BACnet objects (points,
+  /// schedules): the objects path, plus the V2 batch endpoint.
+  List<String> get _objectsUrlFragments => [
+        '$_bacnetBasePath/objects',
+        if (apiVersion == 'V2') ApiConstants.v2Batch,
+      ];
+
+  /// The failure that prevented reading BACnet objects (points, schedules)
+  /// since the last [clearLastError]: a certificate mismatch, or a 401/403
+  /// on an objects request. Auth failures on other endpoints are ignored.
+  ApiException? objectsAccessFailure() {
+    if (_certificateMismatch != null) return _certificateMismatch;
+    final fragments = _objectsUrlFragments;
+    for (final error in _recentAuthErrors.reversed) {
+      final url = error.url ?? '';
+      if (fragments.any(url.contains)) return error;
+    }
+    return null;
+  }
 
   /// Requests in flight, used to deduplicate identical concurrent reads.
   final Map<String, Future<dynamic>> _inFlight = {};
@@ -344,6 +374,8 @@ class ConnectedApiClient {
     final error = ApiException.fromStatus(statusCode, url: url);
     _lastError = error;
     if (error is ApiAuthException) {
+      _recentAuthErrors.add(error);
+      if (_recentAuthErrors.length > _maxRecentAuthErrors) _recentAuthErrors.removeAt(0);
       logger.w('ConnectedApiClient: authentication failure ($statusCode) on $url');
       onAuthError?.call(error);
     }
@@ -890,7 +922,8 @@ class ConnectedApiClient {
 
     logger.d(() => '_getObjectsSummaryV1: response status=${response.statusCode}');
     logger.d(() => '_getObjectsSummaryV1: response data=${response.data}');
-    _throwIfAuthError(response);
+    // A 401/403 here is not fatal: the objects list was readable (limited
+    // account), the per-type fallback below counts what is allowed.
 
     if (response.statusCode == 200 && response.data != null) {
       return parseObjectsSummaryFromRpm(response.data);
@@ -963,6 +996,7 @@ class ConnectedApiClient {
     }
 
     var failures = 0;
+    ApiException? fallbackError;
     const batchSize = 4;
     for (var i = 0; i < typesToCount.length; i += batchSize) {
       final batch = typesToCount.skip(i).take(batchSize);
@@ -973,6 +1007,10 @@ class ConnectedApiClient {
             counts[t.$1] = (response.data as List).length;
           } else {
             failures++;
+            final status = response.statusCode;
+            if (status != null && status >= 400) {
+              fallbackError = ApiException.fromStatus(status, url: response.requestOptions.uri.toString());
+            }
           }
         } catch (e) {
           failures++;
@@ -980,9 +1018,10 @@ class ConnectedApiClient {
       }));
     }
 
-    // Tout a échoué : lever une erreur plutôt qu'un résumé vide qui écraserait le cache
+    // Tout a échoué : lever une erreur plutôt qu'un résumé vide qui écraserait le cache.
+    // Uses this call's own error (not [lastError], shared with parallel requests).
     if (typesToCount.isNotEmpty && failures == typesToCount.length) {
-      throw _lastError ?? const ApiException('Impossible de compter les objets');
+      throw fallbackError ?? const ApiException('Impossible de compter les objets');
     }
 
     return _summaryFromCounts(counts);
@@ -1718,12 +1757,26 @@ class ConnectedApiClient {
 
   /// Force une entrée en mettant out-of-service à true puis en écrivant present-value
   /// Utilisé pour les entrées (AI, BI, MSI) qui n'ont pas de priority-array
-  Future<bool> forceInput(BacnetObjectType type, int instance, dynamic value) async {
+  ///
+  /// [wasOutOfService]: the input was already out-of-service (already forced)
+  /// before this call. On failure, out-of-service is then left as is: the
+  /// compensation only releases what this call has set.
+  Future<bool> forceInput(
+    BacnetObjectType type,
+    int instance,
+    dynamic value, {
+    bool wasOutOfService = false,
+  }) async {
     if (apiVersion == 'V2') {
-      return _forceInputV2(type, instance, value);
+      return _forceInputV2(type, instance, value, wasOutOfService: wasOutOfService);
     }
-    return _forceInputV1(type, instance, value);
+    return _forceInputV1(type, instance, value, wasOutOfService: wasOutOfService);
   }
+
+  /// True if a failed write may nevertheless have been applied by the
+  /// controller (request sent, answer not received in time).
+  static bool _mayHaveBeenApplied(Object error) =>
+      error is DioException && error.type == DioExceptionType.receiveTimeout;
 
   /// Libère une entrée forcée en remettant out-of-service à false
   Future<bool> releaseInput(BacnetObjectType type, int instance) async {
@@ -1954,13 +2007,19 @@ class ConnectedApiClient {
   /// write-property-multiple (les deux références sont appliquées ensemble).
   /// En cas d'échec, tente de remettre out-of-service à false pour ne pas
   /// laisser un capteur gelé à une valeur obsolète.
-  Future<bool> _forceInputV1(BacnetObjectType type, int instance, dynamic value) async {
+  Future<bool> _forceInputV1(
+    BacnetObjectType type,
+    int instance,
+    dynamic value, {
+    bool wasOutOfService = false,
+  }) async {
     final url = '$baseUrl$_bacnetBasePath/objects/write-property-multiple';
     final body = buildForceInputV1Body(type, instance, value);
 
     logger.i('_forceInputV1: out-of-service=true + present-value for ${ApiTypeNames.v1Name(type)}:$instance');
 
     int? status;
+    var mayHaveBeenApplied = false;
     try {
       final response = await _postJson(url, body);
       status = response.statusCode;
@@ -1968,10 +2027,12 @@ class ConnectedApiClient {
       if (isHttpOk(status)) return true;
     } catch (e) {
       logger.e('_forceInputV1 error: $e');
+      mayHaveBeenApplied = _mayHaveBeenApplied(e);
     }
 
-    // 401/403 : rien n'a été écrit, pas de compensation
-    if (status != 401 && status != 403) {
+    // Pas de compensation si : 401/403 (rien n'a été écrit), entrée déjà
+    // forcée avant l'appel, ou timeout de réponse (forçage peut-être appliqué)
+    if (status != 401 && status != 403 && !wasOutOfService && !mayHaveBeenApplied) {
       logger.w('_forceInputV1: failed, releasing out-of-service (compensation)');
       await _releaseInputV1(type, instance);
     }
@@ -2137,7 +2198,12 @@ class ConnectedApiClient {
   /// Force une entrée V2 en mettant out-of-service à true puis en écrivant present-value.
   /// Si l'écriture de present-value échoue, out-of-service est remis à false
   /// (compensation) pour ne pas laisser l'entrée gelée.
-  Future<bool> _forceInputV2(BacnetObjectType type, int instance, dynamic value) async {
+  Future<bool> _forceInputV2(
+    BacnetObjectType type,
+    int instance,
+    dynamic value, {
+    bool wasOutOfService = false,
+  }) async {
     final typePath = ApiTypeNames.v2Path(type);
     final formattedValue = _formatValueForWrite(type, value);
 
@@ -2166,6 +2232,16 @@ class ConnectedApiClient {
       if (isHttpOk(pvResponse.statusCode)) return true;
     } catch (e) {
       logger.e('_forceInputV2: present-value error: $e');
+      if (_mayHaveBeenApplied(e)) {
+        logger.w('_forceInputV2: response timeout, value may be applied: no compensation');
+        return false;
+      }
+    }
+
+    // Already forced before this call: keep it forced (previous value)
+    if (wasOutOfService) {
+      logger.w('_forceInputV2: present-value write failed, input was already out-of-service: no compensation');
+      return false;
     }
 
     // Compensation : ne pas laisser l'entrée hors service à une valeur obsolète
@@ -3016,8 +3092,8 @@ class ConnectedApiClient {
       final weeklyResponse = results[1] as Response;
       final stateTexts = results[2] as List<ScheduleStateText>;
 
-      // Planning illisible : ne JAMAIS substituer un planning vide (il serait
-      // ensuite écrasable par une sauvegarde)
+      // Planning illisible : planning vide affiché en lecture seule
+      // (weeklyScheduleReadable=false), jamais sauvegardé sur l'automate
       final weeklySchedule = parseWeeklyScheduleResponse(
         weeklyResponse.statusCode,
         weeklyResponse.data,
@@ -3025,8 +3101,7 @@ class ConnectedApiClient {
       );
       if (weeklySchedule == null) {
         logger.e('_getScheduleDetailV1: weekly-schedule unreadable '
-            '(status=${weeklyResponse.statusCode}), schedule $instance not returned');
-        return null;
+            '(status=${weeklyResponse.statusCode}), schedule $instance read-only');
       }
 
       String objectName = 'Schedule $instance';
@@ -3066,7 +3141,9 @@ class ConnectedApiClient {
         instance: instance,
         objectName: objectName,
         description: description,
-        weeklySchedule: weeklySchedule,
+        // Unreadable: empty placeholder, flagged read-only (never saved)
+        weeklySchedule: weeklySchedule ?? WeeklySchedule.empty(),
+        weeklyScheduleReadable: weeklySchedule != null,
         stateTexts: stateTexts,
         valueType: valueType,
         presentValue: presentValue,
@@ -3208,7 +3285,7 @@ class ConnectedApiClient {
         return null;
       }
 
-      // Planning illisible : ne jamais renvoyer un planning vide écrasable
+      // Planning illisible : planning vide en lecture seule (jamais sauvegardé)
       final weeklySchedule = parseWeeklyScheduleResponse(
         weeklyResponse.statusCode,
         weeklyResponse.data,
@@ -3216,8 +3293,7 @@ class ConnectedApiClient {
       );
       if (weeklySchedule == null) {
         logger.e('_getScheduleDetailV2: weekly-schedule unreadable '
-            '(status=${weeklyResponse.statusCode}), schedule $instance not returned');
-        return null;
+            '(status=${weeklyResponse.statusCode}), schedule $instance read-only');
       }
 
       final data = response.data as Map<String, dynamic>;
@@ -3266,7 +3342,9 @@ class ConnectedApiClient {
         instance: instance,
         objectName: objectName,
         description: description,
-        weeklySchedule: weeklySchedule,
+        // Unreadable: empty placeholder, flagged read-only (never saved)
+        weeklySchedule: weeklySchedule ?? WeeklySchedule.empty(),
+        weeklyScheduleReadable: weeklySchedule != null,
         stateTexts: stateTexts,
         valueType: ScheduleValueType.fromValue(presentValue),
         presentValue: presentValue,

@@ -18,6 +18,7 @@ class FakeBacnetService extends BacnetService {
   BacnetResponse Function(int propertyId, dynamic value, int? priority) onWrite =
       (_, _, _) => BacnetResponse(type: BacnetResponseType.simpleAck);
   Completer<List<BacnetObject>>? discoverCompleter;
+  int discoverCalls = 0;
 
   @override
   Future<BacnetResponse> writeProperty({
@@ -62,6 +63,7 @@ class FakeBacnetService extends BacnetService {
     required int deviceId,
     List<int>? objectTypesFilter,
   }) {
+    discoverCalls++;
     return discoverCompleter!.future;
   }
 }
@@ -153,6 +155,26 @@ void main() {
       ]);
     });
 
+    test('forceInput on an already forced input keeps it out-of-service on failure', () async {
+      final ai = BacnetObject(
+        type: BacnetObjectType.analogInput,
+        instance: 1,
+        objectName: 'P1',
+        presentValue: 1.0,
+        outOfService: true,
+      );
+      await seedPoints([ai]);
+      bacnet.onWrite = (prop, _, _) => prop == BacnetPropertyId.presentValue
+          ? BacnetResponse.error('value-out-of-range')
+          : BacnetResponse(type: BacnetResponseType.simpleAck);
+
+      expect(await notifier().forceInput(ai, 12.0), isFalse);
+      expect(bacnet.writes.map((w) => (w.propertyId, w.value)).toList(), [
+        (BacnetPropertyId.outOfService, true),
+        (BacnetPropertyId.presentValue, 12.0),
+      ]);
+    });
+
     test('releaseInput / writeDescription return false when refused', () async {
       final ai = _point(BacnetObjectType.analogInput, 1);
       await seedPoints([ai]);
@@ -238,5 +260,32 @@ void main() {
       final data = parseTrendLogBuffer('not json at all');
       expect(data, isNotNull);
     });
+  });
+
+  test('loadPoints(forceRefresh) during an in-flight load reloads afterwards', () async {
+    final first = Completer<List<BacnetObject>>();
+    bacnet.discoverCompleter = first;
+    final initial = notifier().loadPoints();
+    final forced1 = notifier().loadPoints(forceRefresh: true);
+    final forced2 = notifier().loadPoints(forceRefresh: true);
+    expect(bacnet.discoverCalls, 1);
+
+    bacnet.discoverCompleter = Completer()..complete([_point(BacnetObjectType.analogValue, 2)]);
+    first.complete([_point(BacnetObjectType.analogValue, 1)]);
+    await Future.wait([initial, forced1, forced2]);
+
+    // One shared forced reload after the in-flight one, with fresh data
+    expect(bacnet.discoverCalls, 2);
+    expect(container.read(pointsProvider).points.single.instance, 2);
+  });
+
+  test('loadPoints without forceRefresh joins the in-flight load', () async {
+    final first = Completer<List<BacnetObject>>();
+    bacnet.discoverCompleter = first;
+    final a = notifier().loadPoints();
+    final b = notifier().loadPoints();
+    first.complete([_point(BacnetObjectType.analogValue, 1)]);
+    await Future.wait([a, b]);
+    expect(bacnet.discoverCalls, 1);
   });
 }

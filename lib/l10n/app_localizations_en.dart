@@ -620,6 +620,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scheduleNotFound => 'Schedule not found';
 
   @override
+  String get weeklyScheduleUnreadable =>
+      'Weekly program unreadable: editing disabled so as not to overwrite the controller';
+
+  @override
   String get errorLoadingSchedule => 'Error loading schedule';
 
   @override

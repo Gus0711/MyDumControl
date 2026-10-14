@@ -237,6 +237,14 @@ void main() {
       expect(certificateEndpointChanged(c, host: '127.0.0.1', port: 8443, useHttps: true), isTrue);
       expect(certificateEndpointChanged(c, host: '127.0.0.1', port: 443, useHttps: false), isTrue);
     });
+
+    test('fingerprint seen by a connection test wins over the pinned one', () {
+      final c = _connection(fingerprint: 'AA');
+      expect(fingerprintAfterEdit(c, endpointChanged: false, testedFingerprint: 'BB'), 'BB');
+      expect(fingerprintAfterEdit(c, endpointChanged: true, testedFingerprint: 'BB'), 'BB');
+      expect(fingerprintAfterEdit(c, endpointChanged: false), 'AA');
+      expect(fingerprintAfterEdit(c, endpointChanged: true), isNull);
+    });
   });
 
   group('messages', () {

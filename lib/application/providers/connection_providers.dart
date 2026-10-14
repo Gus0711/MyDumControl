@@ -35,6 +35,18 @@ bool certificateEndpointChanged(
   return existing.host != host || existing.port != port || existing.useHttps != useHttps;
 }
 
+/// Certificate fingerprint to store after an edit. The one seen by a
+/// successful connection test on the edited endpoint ([testedFingerprint])
+/// always wins; otherwise the pinned one is kept, unless the endpoint changed.
+String? fingerprintAfterEdit(
+  Connection existing, {
+  required bool endpointChanged,
+  String? testedFingerprint,
+}) {
+  if (testedFingerprint != null) return testedFingerprint;
+  return endpointChanged ? null : existing.certificateFingerprint;
+}
+
 /// Provider pour le stockage sécurisé des mots de passe
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage(
@@ -140,9 +152,11 @@ class ConnectionRepository {
       port: port,
       useHttps: useHttps,
     );
-    final newFingerprint = endpointChanged
-        ? certificateFingerprint
-        : (existing.certificateFingerprint ?? certificateFingerprint);
+    final newFingerprint = fingerprintAfterEdit(
+      existing,
+      endpointChanged: endpointChanged,
+      testedFingerprint: certificateFingerprint,
+    );
 
     // Si un nouveau mot de passe est fourni, le mettre à jour
     if (password != null && password.isNotEmpty) {

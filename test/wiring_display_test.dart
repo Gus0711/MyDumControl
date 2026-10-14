@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myglobaldc/application/providers/schedule_provider.dart';
+import 'package:myglobaldc/application/providers/super_favorites_provider.dart';
 import 'package:myglobaldc/application/providers/trend_log_provider.dart';
 import 'package:myglobaldc/data/services/api_service.dart';
 import 'package:myglobaldc/domain/models/bacnet_object.dart';
@@ -83,11 +84,19 @@ void main() {
   group('throwIfAuthFailed', () {
     late HttpServer server;
     late ConnectedApiClient client;
+    // 401 on the paths matching this predicate, 200 (empty JSON) elsewhere
+    var unauthorized = (String path) => true;
 
     setUp(() async {
+      unauthorized = (_) => true;
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((r) async {
-        r.response.statusCode = 401;
+        if (unauthorized(r.uri.path)) {
+          r.response.statusCode = 401;
+        } else {
+          r.response.headers.contentType = ContentType.json;
+          r.response.write('{}');
+        }
         await r.response.close();
       });
       client = ConnectedApiClient(
@@ -115,6 +124,32 @@ void main() {
     test('no error when the result is not empty or no auth failure', () {
       client.clearLastError();
       expect(() => throwIfAuthFailed(isEmpty: true, client: client), returnsNormally);
+    });
+
+    test('a 401 on a parallel annex request is not a schedules auth error', () async {
+      unauthorized = (path) => path.contains('/platform');
+      client.clearLastError();
+      final results = await Future.wait([
+        client.getSchedules(),
+        client.getControllerTime().then((_) {}, onError: (_) {}),
+      ]);
+      final schedules = results[0] as List<ScheduleSummary>;
+      expect(schedules, isEmpty);
+      expect(() => throwIfAuthFailed(isEmpty: true, client: client), returnsNormally);
+    });
+
+    test('super-favorites: annex 401 is ignored, objects 401 reported only if no point read', () async {
+      unauthorized = (path) => path.contains('/platform');
+      client.clearLastError();
+      await client.getControllerTime().then((_) {}, onError: (_) {});
+      await client.readMultiplePoints(['analog-value:1']);
+      expect(superFavoritesRefreshFailure(noPointRead: true, client: client), isNull);
+
+      unauthorized = (_) => true;
+      client.clearLastError();
+      await client.getSchedules();
+      expect(superFavoritesRefreshFailure(noPointRead: true, client: client), isA<ApiAuthException>());
+      expect(superFavoritesRefreshFailure(noPointRead: false, client: client), isNull);
     });
   });
 }

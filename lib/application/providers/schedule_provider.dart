@@ -84,12 +84,14 @@ final schedulesListProvider = FutureProvider<List<ScheduleSummary>>((ref) async 
 
 /// Throws the client's auth error when an empty API result (empty list /
 /// null) was caused by invalid credentials, so the screen shows an error
-/// (AsyncError) instead of "no data".
+/// (AsyncError) instead of "no data". Only failures on the BACnet objects
+/// endpoints count: a 401/403 on a parallel annex request (device info,
+/// time...) must not turn the schedules into an auth error.
 @visibleForTesting
 void throwIfAuthFailed({required bool isEmpty, required ConnectedApiClient client}) {
-  if (!isEmpty || !client.hasAuthError) return;
-  final error = client.lastError;
-  throw error ?? const ApiAuthException();
+  if (!isEmpty) return;
+  final error = client.objectsAccessFailure();
+  if (error != null) throw error;
 }
 
 /// Schedules just written by [ScheduleEditNotifier.save], keyed by
@@ -259,6 +261,7 @@ Schedule _convertBacnetScheduleInfoToSchedule(BacnetScheduleInfo info) {
     valueType: valueType,
     presentValue: info.presentValue,
     scheduleDefault: info.scheduleDefault,
+    weeklyScheduleReadable: info.weeklySchedule != null,
   );
 }
 
@@ -409,8 +412,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   /// chargement a échoué puis que l'écran a relu le détail avec succès)
   int? _lastInstance;
 
-  /// Édition possible : un planning est chargé et aucune sauvegarde en cours
-  bool get _canEdit => state.editedSchedule != null && !state.isSaving;
+  /// Édition possible : un planning lisible est chargé et aucune sauvegarde
+  /// en cours (un weekly-schedule illisible ne doit jamais être écrasé)
+  bool get _canEdit =>
+      state.editedSchedule != null &&
+      state.editedSchedule!.weeklyScheduleReadable &&
+      !state.isSaving;
 
   /// Charge un schedule pour édition
   /// Supporte les connexions API (V1/V2) et BACnet natives
@@ -472,6 +479,11 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
           selectedDay: WeekDay.monday,
         );
       }
+    }
+    // Weekly-schedule illisible : lecture seule
+    if (editing && state.editedSchedule?.weeklyScheduleReadable == false) {
+      logger.w('ScheduleEditNotifier.setEditing: weekly-schedule unreadable, editing refused');
+      return;
     }
     state = state.copyWith(isEditing: editing, clearError: true, clearSuccess: true);
   }
@@ -793,6 +805,8 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   /// Supporte les connexions API (V1/V2) et BACnet natives
   Future<bool> save() async {
     if (state.editedSchedule == null || !state.hasChanges || state.isSaving) return false;
+    // Never write a placeholder over an unreadable controller planning
+    if (!state.editedSchedule!.weeklyScheduleReadable) return false;
 
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {

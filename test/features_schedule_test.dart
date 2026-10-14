@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myglobaldc/application/providers/schedule_provider.dart';
 import 'package:myglobaldc/data/services/bacnet_service.dart';
@@ -132,6 +133,47 @@ void main() {
       expect(s.copyWith(description: null).description, isNull);
       expect(s.copyWith(scheduleDefault: null).scheduleDefault, isNull);
       expect(s.copyWith().description, 'd');
+    });
+  });
+
+  group('unreadable weekly-schedule', () {
+    Schedule schedule({required bool readable}) => Schedule(
+          instance: 1,
+          objectName: 'S',
+          weeklySchedule: WeeklySchedule.empty(),
+          weeklyScheduleReadable: readable,
+        );
+
+    test('defaults to readable and survives copyWith', () {
+      final s = Schedule(instance: 1, objectName: 'S', weeklySchedule: WeeklySchedule.empty());
+      expect(s.weeklyScheduleReadable, isTrue);
+      expect(schedule(readable: false).copyWith(objectName: 'x').weeklyScheduleReadable, isFalse);
+    });
+
+    test('editing, changes and save are refused', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(scheduleEditProvider.notifier);
+
+      notifier.loadFrom(schedule(readable: false));
+      notifier.setEditing(true);
+      expect(container.read(scheduleEditProvider).isEditing, isFalse);
+
+      notifier.addTransition(WeekDay.monday, ScheduleTransition(time: '08:00:00.00', value: true));
+      expect(container.read(scheduleEditProvider).hasChanges, isFalse);
+      expect(await notifier.save(), isFalse);
+    });
+
+    test('a readable schedule can still be edited', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(scheduleEditProvider.notifier);
+
+      notifier.loadFrom(schedule(readable: true));
+      notifier.setEditing(true);
+      expect(container.read(scheduleEditProvider).isEditing, isTrue);
+      notifier.addTransition(WeekDay.monday, ScheduleTransition(time: '08:00:00.00', value: true));
+      expect(container.read(scheduleEditProvider).hasChanges, isTrue);
     });
   });
 }

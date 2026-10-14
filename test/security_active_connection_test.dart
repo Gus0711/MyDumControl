@@ -21,6 +21,8 @@ import 'security_test_certificate.dart';
 class _TlsController {
   late HttpServer _server;
   int status = 200;
+  /// Optional per-path status (overrides [status]).
+  int Function(String path)? statusFor;
   int get port => _server.port;
 
   Future<void> start() async {
@@ -29,7 +31,7 @@ class _TlsController {
       ..usePrivateKeyBytes(utf8.encode(testKeyPem));
     _server = await HttpServer.bindSecure(InternetAddress.loopbackIPv4, 0, context);
     _server.listen((request) async {
-      request.response.statusCode = status;
+      request.response.statusCode = statusFor?.call(request.uri.path) ?? status;
       request.response.headers.contentType = ContentType.json;
       request.response.write(jsonEncode(<String, Object>{}));
       await request.response.close();
@@ -123,6 +125,33 @@ void main() {
 
   test('401 during initial load: invalid credentials failure', () async {
     controller.status = 401;
+    final id = await addConnection(fingerprint: testCertFingerprint);
+    await container.read(activeConnectionProvider.notifier).connect(id);
+    await _waitFor(() => container.read(activeConnectionProvider).failure != null);
+
+    final state = container.read(activeConnectionProvider);
+    expect(state.isConnected, isFalse);
+    expect(state.failure, isA<ApiAuthException>());
+  });
+
+  test('401 on annex requests only: connection kept with a warning', () async {
+    controller.statusFor = (path) => path.contains('/bacnet/local/objects') ? 200 : 401;
+    final id = await addConnection(fingerprint: testCertFingerprint);
+    await container.read(activeConnectionProvider.notifier).connect(id);
+    await _waitFor(() {
+      final s = container.read(activeConnectionProvider);
+      return !s.isLoadingDeviceInfo && !s.isLoadingSummary;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    final state = container.read(activeConnectionProvider);
+    expect(state.isConnected, isTrue);
+    expect(state.failure, isNull);
+    expect(state.authWarning, isNotNull);
+  });
+
+  test('401 on the objects list: invalid credentials failure', () async {
+    controller.statusFor = (path) => path.contains('/bacnet/local/objects') ? 401 : 200;
     final id = await addConnection(fingerprint: testCertFingerprint);
     await container.read(activeConnectionProvider.notifier).connect(id);
     await _waitFor(() => container.read(activeConnectionProvider).failure != null);

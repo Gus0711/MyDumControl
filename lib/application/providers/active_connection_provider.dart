@@ -104,6 +104,13 @@ class ActiveConnectionState {
 }
 
 /// Notifier pour gérer la connexion active
+/// True when reading the BACnet objects list failed because the controller
+/// rejected the credentials (HTTP 401): the points cannot be read at all, so
+/// the connection is dropped. Any other failure (403, network, parsing) keeps
+/// the connection.
+bool isFatalObjectsError(Object error) =>
+    error is ApiAuthException && error.statusCode == 401;
+
 class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   final Ref _ref;
 
@@ -396,7 +403,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
 
     // CHARGER LES DONNÉES FRAÎCHES EN ARRIÈRE-PLAN (sans bloquer)
     // Cela mettra à jour le cache et l'UI
-    _loadDataInBackground(client, connection.id, connection.name, token);
+    _loadDataInBackground(client, connection, token);
 
     return true;
   }
@@ -416,15 +423,14 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     );
   }
 
-  /// 401 during the initial load (device info not loaded yet): credentials
-  /// are wrong for the whole controller (Basic auth), the connection is
-  /// dropped. Otherwise (403, or a later 401 on a single request) a non-fatal
-  /// warning is shown and the connection is kept.
+  /// 401/403 on any request: a non-fatal warning is shown and the connection
+  /// is kept. An annex request (device info, time, network...) may be denied
+  /// to a limited account while points remain readable. The connection is
+  /// only dropped when the BACnet objects list itself is refused with a 401
+  /// (see [isFatalObjectsError], decided in [_loadDataInBackground]).
   void _onAuthError(ApiAuthException e, Connection connection, int token) {
     if (!_isCurrent(token)) return;
-    if (e.statusCode == 401 && state.isLoadingDeviceInfo) {
-      _failConnection(e, connection, token);
-    } else if (state.authWarning == null) {
+    if (state.authWarning == null) {
       state = state.copyWith(authWarning: '${e.message} (HTTP ${e.statusCode})');
     }
   }
@@ -445,7 +451,9 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
   /// Met également à jour le cache local
   /// [token] identifies the connection; results are dropped if it changed
   /// (another automate connected meanwhile, or disconnected).
-  void _loadDataInBackground(ConnectedApiClient client, int connectionId, String fallbackName, int token) {
+  void _loadDataInBackground(ConnectedApiClient client, Connection connection, int token) {
+    final connectionId = connection.id;
+    final fallbackName = connection.name;
     final cacheService = _ref.read(cacheServiceProvider);
 
     // Charger deviceInfo (en arrière-plan)
@@ -502,6 +510,11 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
       }
     }).catchError((e) {
       logger.w('Background: getObjectsSummary failed: $e');
+      if (isFatalObjectsError(e)) {
+        // The objects list cannot be read at all: invalid credentials
+        _failConnection(e as ApiException, connection, token);
+        return;
+      }
       if (_isCurrent(token)) {
         // Si on a des données du cache, on les garde
         if (state.objectsSummary == null) {
@@ -610,7 +623,7 @@ class ActiveConnectionNotifier extends StateNotifier<ActiveConnectionState> {
     );
 
     // Recharger en arrière-plan
-    _loadDataInBackground(client, connectionId, connection.name, token);
+    _loadDataInBackground(client, connection, token);
   }
 
   @override

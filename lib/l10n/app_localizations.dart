@@ -1262,6 +1262,12 @@ abstract class AppLocalizations {
   /// **'Schedule non trouvé'**
   String get scheduleNotFound;
 
+  /// No description provided for @weeklyScheduleUnreadable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Programme hebdomadaire illisible : modification désactivée pour ne pas écraser l\'automate'**
+  String get weeklyScheduleUnreadable;
+
   /// No description provided for @errorLoadingSchedule.
   ///
   /// In fr, this message translates to:

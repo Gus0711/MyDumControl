@@ -57,6 +57,17 @@ String superFavoriteFailureMessage(ApiException failure) {
   return failure.message;
 }
 
+/// Failure to report for a whole super-favorites refresh, or null. Only when
+/// no point could be read ([noPointRead]) and the failure concerns the points
+/// requests: a 401/403 on the parallel device info / time requests must not
+/// turn every super-favorite into "invalid credentials".
+ApiException? superFavoritesRefreshFailure({
+  required bool noPointRead,
+  required ConnectedApiClient client,
+}) {
+  return noPointRead ? client.objectsAccessFailure() : null;
+}
+
 /// Durée minimale entre deux refresh (anti-spam)
 const superFavoriteRefreshCooldown = Duration(seconds: 30);
 
@@ -343,13 +354,18 @@ class SuperFavoritesNotifier extends StateNotifier<SuperFavoritesState> {
     final deviceInfo = results[1] as DeviceInfo?;
     final controllerTime = results[2] as ControllerTime?;
 
-    // Auth / certificate failures: show the cause instead of "point not found"
-    final failure = apiClient.lastError;
-    if (failure is CertificateMismatchException || failure is ApiAuthException) {
+    // Auth / certificate failures: show the cause instead of "point not found",
+    // but only when no point could be read and the failure concerns the
+    // points requests (not the parallel device info / time requests).
+    final failure = superFavoritesRefreshFailure(
+      noPointRead: pointsResults.isEmpty,
+      client: apiClient,
+    );
+    if (failure != null) {
       if (!mounted) return;
       logger.w('_refreshApiConnection: $failure');
       if (failure is CertificateMismatchException) _disposeCachedClient(connectionId);
-      _setError(connectionId, superFavoriteFailureMessage(failure!));
+      _setError(connectionId, superFavoriteFailureMessage(failure));
       return;
     }
 

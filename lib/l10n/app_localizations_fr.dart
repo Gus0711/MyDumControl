@@ -620,6 +620,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get scheduleNotFound => 'Schedule non trouvé';
 
   @override
+  String get weeklyScheduleUnreadable =>
+      'Programme hebdomadaire illisible : modification désactivée pour ne pas écraser l\'automate';
+
+  @override
   String get errorLoadingSchedule => 'Erreur lors du chargement';
 
   @override

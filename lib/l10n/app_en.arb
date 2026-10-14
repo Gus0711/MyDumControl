@@ -194,6 +194,7 @@
   "closeEdit": "Close edit",
   "edit": "Edit",
   "scheduleNotFound": "Schedule not found",
+  "weeklyScheduleUnreadable": "Weekly program unreadable: editing disabled so as not to overwrite the controller",
   "errorLoadingSchedule": "Error loading schedule",
   "discardChanges": "Discard changes",
   "discardChangesMessage": "You have unsaved changes. Do you want to discard them?",

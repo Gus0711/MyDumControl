@@ -648,6 +648,11 @@ class Schedule {
   final dynamic presentValue;
   final dynamic scheduleDefault;
 
+  /// False when the weekly-schedule property could not be read: the schedule
+  /// is shown with an empty [weeklySchedule] placeholder and must not be
+  /// edited or saved (it would overwrite the controller's real planning).
+  final bool weeklyScheduleReadable;
+
   Schedule({
     required this.instance,
     required this.objectName,
@@ -657,6 +662,7 @@ class Schedule {
     this.valueType = ScheduleValueType.boolean,
     this.presentValue,
     this.scheduleDefault,
+    this.weeklyScheduleReadable = true,
   });
 
   /// Identifiant unique
@@ -749,6 +755,7 @@ class Schedule {
     ScheduleValueType? valueType,
     Object? presentValue = _unset,
     Object? scheduleDefault = _unset,
+    bool? weeklyScheduleReadable,
   }) {
     return Schedule(
       instance: instance ?? this.instance,
@@ -759,6 +766,7 @@ class Schedule {
       valueType: valueType ?? this.valueType,
       presentValue: identical(presentValue, _unset) ? this.presentValue : presentValue,
       scheduleDefault: identical(scheduleDefault, _unset) ? this.scheduleDefault : scheduleDefault,
+      weeklyScheduleReadable: weeklyScheduleReadable ?? this.weeklyScheduleReadable,
     );
   }
 }

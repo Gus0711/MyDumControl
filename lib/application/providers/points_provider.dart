@@ -224,6 +224,9 @@ class PointsNotifier extends StateNotifier<PointsState> {
   Future<void>? _loadInFlight;
   Future<void>? _refreshInFlight;
 
+  /// Forced reload queued behind [_loadInFlight] (see [loadPoints]).
+  Future<void>? _forcedReloadPending;
+
   /// Connection id for which the static points cache was written during this
   /// session. The cache is only rewritten on first load or forceRefresh.
   int? _staticCacheWrittenFor;
@@ -239,6 +242,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
   void reset() {
     _generation++;
     _loadInFlight = null;
+    _forcedReloadPending = null;
     _refreshInFlight = null;
     _staticCacheWrittenFor = null;
     state = PointsState();
@@ -264,7 +268,18 @@ class PointsNotifier extends StateNotifier<PointsState> {
   /// Utilise le cache local pour les propriétés statiques (nom, unité, description)
   Future<void> loadPoints({bool forceRefresh = false}) {
     final inFlight = _loadInFlight;
-    if (inFlight != null) return inFlight;
+    if (inFlight != null) {
+      if (!forceRefresh) return inFlight;
+      // A forced refresh must not be swallowed by a load already in flight
+      // (possibly from the cache): reload once it completes. Concurrent
+      // forced requests share a single reload.
+      final generation = _generation;
+      return _forcedReloadPending ??= inFlight.catchError((Object _) {}).then((_) {
+        _forcedReloadPending = null;
+        if (!mounted || generation != _generation) return null;
+        return loadPoints(forceRefresh: true);
+      });
+    }
     final generation = _generation;
     final future = _loadPointsImpl(forceRefresh: forceRefresh, generation: generation);
     _loadInFlight = future;
@@ -974,6 +989,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         point.type,
         point.instance,
         value,
+        wasOutOfService: point.outOfService == true,
       );
 
       if (success) {
@@ -1025,6 +1041,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
           value: value,
         );
       } catch (e) {
+        // Already forced before this call: keep it forced, no rollback
+        if (point.outOfService == true) {
+          logger.e('_forceInputBacnet: present-value write failed (input already out-of-service): $e');
+          return false;
+        }
         // Rollback: do not leave the input out-of-service with a stale value
         logger.e('_forceInputBacnet: present-value write failed, rolling back out-of-service: $e');
         try {

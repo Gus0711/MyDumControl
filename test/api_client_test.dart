@@ -11,6 +11,7 @@ class _FakeController {
   final requests = <String>[];
   final bodies = <String>[];
   (int, Object?) Function(HttpRequest request, String body) handler = (_, _) => (404, null);
+  Duration Function(HttpRequest request) delay = (_) => Duration.zero;
 
   String get baseUrl => 'http://${_server.address.host}:${_server.port}';
 
@@ -21,6 +22,8 @@ class _FakeController {
       requests.add('${request.method} ${request.uri}');
       bodies.add(body);
       final (status, data) = handler(request, body);
+      final wait = delay(request);
+      if (wait > Duration.zero) await Future<void>.delayed(wait);
       request.response.statusCode = status;
       if (data != null) {
         request.response.headers.contentType = ContentType.json;
@@ -43,13 +46,23 @@ void main() {
 
   tearDown(() => controller.stop());
 
-  ConnectedApiClient client(String version, {void Function(ApiAuthException)? onAuthError}) =>
+  ConnectedApiClient client(
+    String version, {
+    void Function(ApiAuthException)? onAuthError,
+    Duration? receiveTimeout,
+  }) =>
       ConnectedApiClient(
         baseUrl: controller.baseUrl,
         basicAuth: 'Basic dGVzdDp0ZXN0',
         apiVersion: version,
         onAuthError: onAuthError,
+        receiveTimeout: receiveTimeout,
       );
+
+  List<String> oosBodies() => [
+        for (var i = 0; i < controller.requests.length; i++)
+          if (controller.requests[i].endsWith('/out-of-service')) controller.bodies[i],
+      ];
 
   test('401 is exposed as ApiAuthException without changing the return contract', () async {
     controller.handler = (_, _) => (401, null);
@@ -65,15 +78,123 @@ void main() {
     api.dispose();
   });
 
-  test('V2 schedule detail returns null when weekly-schedule is unreadable', () async {
+  test('V2 schedule detail with unreadable weekly-schedule is returned read-only', () async {
     controller.handler = (request, _) {
       if (request.uri.path.endsWith('/weekly-schedule')) return (404, null);
       return (200, {'object-name': 'Sched', 'present-value': true});
     };
     final api = client('V2');
 
-    expect(await api.getScheduleDetail(1), isNull);
+    final schedule = await api.getScheduleDetail(1);
+    expect(schedule, isNotNull);
+    expect(schedule!.objectName, 'Sched');
+    expect(schedule.weeklyScheduleReadable, isFalse);
+    expect(schedule.weeklySchedule.days.values.every((d) => d.transitions.isEmpty), isTrue);
     api.dispose();
+  });
+
+  test('V1 schedule detail with unreadable weekly-schedule is returned read-only', () async {
+    controller.handler = (request, _) {
+      if (request.uri.path.endsWith('/weekly-schedule')) return (403, null);
+      return (200, {'propertyReferences': <Object>[]});
+    };
+    final api = client('V1');
+
+    final schedule = await api.getScheduleDetail(3);
+    expect(schedule, isNotNull);
+    expect(schedule!.weeklyScheduleReadable, isFalse);
+    api.dispose();
+  });
+
+  test('V2 forceInput on an already forced input does not release it on failure', () async {
+    controller.handler = (request, body) {
+      if (request.uri.path.endsWith('/present-value')) return (400, {'error': 'bad value'});
+      return (200, {});
+    };
+    final api = client('V2');
+
+    final ok = await api.forceInput(BacnetObjectType.analogInput, 1, 12.5, wasOutOfService: true);
+
+    expect(ok, isFalse);
+    expect(oosBodies().map(jsonDecode), [
+      {r'$value': true},
+    ]);
+    api.dispose();
+  });
+
+  test('V2 forceInput does not compensate on a response timeout', () async {
+    controller.handler = (_, _) => (200, {});
+    controller.delay = (request) => request.uri.path.endsWith('/present-value')
+        ? const Duration(milliseconds: 600)
+        : Duration.zero;
+    final api = client('V2', receiveTimeout: const Duration(milliseconds: 200));
+
+    final ok = await api.forceInput(BacnetObjectType.analogInput, 1, 12.5);
+
+    expect(ok, isFalse);
+    expect(oosBodies(), hasLength(1));
+    api.dispose();
+  });
+
+  test('V1 forceInput compensates only when the input was not already forced', () async {
+    controller.handler = (request, _) =>
+        request.uri.path.endsWith('/write-property-multiple') ? (500, null) : (200, {});
+    final api = client('V1');
+
+    expect(await api.forceInput(BacnetObjectType.analogInput, 7, 3), isFalse);
+    final released = controller.requests.length;
+    expect(released, greaterThan(1)); // write + compensation
+
+    controller.requests.clear();
+    expect(await api.forceInput(BacnetObjectType.analogInput, 7, 3, wasOutOfService: true), isFalse);
+    expect(controller.requests, hasLength(1)); // write only
+    api.dispose();
+  });
+
+  test('V1 forceInput does not compensate on a response timeout', () async {
+    controller.handler = (_, _) => (200, {});
+    controller.delay = (_) => const Duration(milliseconds: 600);
+    final api = client('V1', receiveTimeout: const Duration(milliseconds: 200));
+
+    expect(await api.forceInput(BacnetObjectType.analogInput, 7, 3), isFalse);
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    expect(controller.requests, hasLength(1));
+    api.dispose();
+  });
+
+  group('objectsAccessFailure', () {
+    test('ignores auth failures on annex endpoints', () async {
+      controller.handler = (request, _) =>
+          request.uri.path.contains('/platform') ? (401, null) : (200, <String, Object>{});
+      final api = client('V2');
+      api.clearLastError();
+
+      await api.getControllerTime().then((_) {}, onError: (_) {});
+      final schedules = await api.getSchedules();
+
+      expect(schedules, isEmpty);
+      expect(api.hasAuthError, isTrue); // sticky lastError polluted by the annex request
+      expect(api.objectsAccessFailure(), isNull);
+      api.dispose();
+    });
+
+    test('reports a 401 on the objects endpoints, even if a later error overwrote lastError', () async {
+      controller.handler = (request, _) {
+        if (request.uri.path.contains('/objects')) return (401, null);
+        return (500, null);
+      };
+      final api = client('V2');
+      api.clearLastError();
+
+      await api.getSchedules();
+      await api.getControllerTime().then((_) {}, onError: (_) {});
+
+      expect(api.lastError, isNot(isA<ApiAuthException>()));
+      expect(api.objectsAccessFailure(), isA<ApiAuthException>());
+      api.clearLastError();
+      expect(api.objectsAccessFailure(), isNull);
+      api.dispose();
+    });
   });
 
   test('V2 forceInput releases out-of-service when present-value write fails', () async {
