@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../providers/connection_providers.dart';
 import '../providers/database_provider.dart';
 import '../providers/folder_providers.dart';
 import '../../data/database/app_database.dart';
@@ -67,11 +68,6 @@ class AppSettings {
   }
 }
 
-/// Provider pour SharedPreferences
-final sharedPreferencesProvider = FutureProvider<SharedPreferences>((ref) async {
-  return await SharedPreferences.getInstance();
-});
-
 /// Provider principal des paramètres
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {
   return SettingsNotifier(ref);
@@ -81,17 +77,25 @@ final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((r
 class SettingsNotifier extends StateNotifier<AppSettings> {
   SharedPreferences? _prefs;
 
+  /// Completes once preferences are loaded. Setters await it so a value set
+  /// early is neither lost (no-op write) nor overwritten by the initial load.
+  late final Future<void> _ready;
+
   SettingsNotifier(Ref ref) : super(const AppSettings()) {
-    _init();
+    _ready = _init();
   }
 
   Future<void> _init() async {
-    _prefs = await SharedPreferences.getInstance();
-    _loadSettings();
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      _loadSettings();
+    } catch (e) {
+      debugPrint('SettingsNotifier: failed to load preferences: $e');
+    }
   }
 
   void _loadSettings() {
-    if (_prefs == null) return;
+    if (_prefs == null || !mounted) return;
 
     final themeModeIndex = _prefs!.getInt(SettingsKeys.themeMode) ?? 0;
     final themeMode = ThemeMode.values[themeModeIndex.clamp(0, ThemeMode.values.length - 1)];
@@ -109,47 +113,65 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
+    await _ready;
+    if (!mounted) return;
     state = state.copyWith(themeMode: mode);
     await _prefs?.setInt(SettingsKeys.themeMode, mode.index);
   }
 
   Future<void> setLocale(String locale) async {
+    await _ready;
+    if (!mounted) return;
     state = state.copyWith(locale: locale);
     await _prefs?.setString(SettingsKeys.locale, locale);
   }
 
   Future<void> setConnectionTimeout(int seconds) async {
+    await _ready;
+    if (!mounted) return;
     state = state.copyWith(connectionTimeoutSeconds: seconds);
     await _prefs?.setInt(SettingsKeys.connectionTimeout, seconds);
   }
 
   Future<void> setRefreshInterval(int seconds) async {
+    await _ready;
+    if (!mounted) return;
     state = state.copyWith(refreshIntervalSeconds: seconds);
     await _prefs?.setInt(SettingsKeys.refreshInterval, seconds);
   }
 
   Future<void> setDefaultBacnetPort(int port) async {
+    await _ready;
+    if (!mounted) return;
     state = state.copyWith(defaultBacnetPort: port);
     await _prefs?.setInt(SettingsKeys.defaultBacnetPort, port);
   }
 
   Future<void> setTemperatureUnit(String unit) async {
+    await _ready;
+    if (!mounted) return;
     state = state.copyWith(temperatureUnit: unit);
     await _prefs?.setString(SettingsKeys.temperatureUnit, unit);
   }
 
   Future<void> setUse24HourFormat(bool use24Hour) async {
+    await _ready;
+    if (!mounted) return;
     state = state.copyWith(use24HourFormat: use24Hour);
     await _prefs?.setBool(SettingsKeys.use24HourFormat, use24Hour);
   }
 
   Future<void> setDecimalPlaces(int places) async {
+    await _ready;
+    if (!mounted) return;
     state = state.copyWith(decimalPlaces: places);
     await _prefs?.setInt(SettingsKeys.decimalPlaces, places);
   }
 
   /// Réinitialise tous les paramètres aux valeurs par défaut
   Future<void> resetToDefaults() async {
+    await _ready;
+    if (!mounted) return;
     state = const AppSettings();
     await _prefs?.remove(SettingsKeys.themeMode);
     await _prefs?.remove(SettingsKeys.locale);
@@ -198,8 +220,8 @@ class DataExportService {
     final db = _ref.read(databaseProvider);
 
     // Récupérer les données
-    final connections = await db.allConnections;
-    final folders = await db.allFolders;
+    final connections = await db.getAllConnections();
+    final folders = await db.getAllFolders();
 
     final exportData = {
       'version': '1.0',
@@ -220,6 +242,7 @@ class DataExportService {
         'apiVersion': c.apiVersion,
         'connectionType': c.connectionType,
         'bacnetDeviceId': c.bacnetDeviceId,
+        'designerUrl': c.designerUrl,
         'folderName': folders.where((f) => f.id == c.folderId).firstOrNull?.name,
       }).toList(),
     };
@@ -244,40 +267,67 @@ class DataExportService {
 
   /// Importe les connexions depuis un JSON
   Future<ImportResult> importConnectionsFromJson(String jsonString) async {
-    try {
-      final data = jsonDecode(jsonString) as Map<String, dynamic>;
-      final db = _ref.read(databaseProvider);
+    final db = _ref.read(databaseProvider);
+    final result = await importConnectionsData(db, jsonString);
+    // Rafraîchir les providers
+    _ref.invalidate(foldersStreamProvider);
+    return result;
+  }
+}
 
-      int foldersImported = 0;
-      int connectionsImported = 0;
-      int connectionsSkipped = 0;
-      final errors = <String>[];
+/// Normalizes a connection type read from an export ('api' or unknown values
+/// from older exports map to 'distech_api').
+String normalizeImportedConnectionType(String? type) =>
+    type == 'bacnet' ? 'bacnet' : 'distech_api';
 
-      // Mapping des noms de dossiers vers leurs IDs
-      final folderNameToId = <String, int>{};
+/// Imports folders and connections from an export JSON into [db].
+///
+/// Runs in a single transaction. Each imported connection gets its own unique
+/// passwordKey; no secret is written, so Distech API connections need their
+/// password to be entered again (counted in [ImportResult.connectionsNeedingPassword]).
+Future<ImportResult> importConnectionsData(AppDatabase db, String jsonString) async {
+  try {
+    final data = jsonDecode(jsonString) as Map<String, dynamic>;
+
+    int foldersImported = 0;
+    int connectionsImported = 0;
+    int connectionsSkipped = 0;
+    int connectionsNeedingPassword = 0;
+    final errors = <String>[];
+
+    await db.transaction(() async {
+      // Load existing data once (no N+1 queries)
+      final folderNameToId = <String, int>{
+        for (final f in await db.getAllFolders()) f.name: f.id,
+      };
+      final existingTargets = <String>{
+        for (final c in await db.getAllConnections())
+          _connectionDedupKey(c.host, c.port, c.connectionType),
+      };
 
       // Importer les dossiers
       final foldersData = data['folders'] as List<dynamic>? ?? [];
       for (final folderData in foldersData) {
         try {
-          final name = folderData['name'] as String;
-          // Vérifier si le dossier existe déjà
-          final existingFolders = await db.allFolders;
-          final existing = existingFolders.where((f) => f.name == name).firstOrNull;
-
-          if (existing != null) {
-            folderNameToId[name] = existing.id;
-          } else {
-            final id = await db.insertFolder(FoldersCompanion.insert(
-              name: name,
-              icon: Value(folderData['icon'] as String? ?? 'folder'),
-              color: Value(folderData['color'] as String? ?? 'blue'),
-              sortOrder: Value(folderData['sortOrder'] as int? ?? 0),
-            ));
-            folderNameToId[name] = id;
-            foldersImported++;
+          final name = (folderData['name'] as String?)?.trim() ?? '';
+          if (name.isEmpty) {
+            errors.add('Erreur dossier: nom manquant');
+            continue;
           }
-        } catch (e) {
+          if (folderNameToId.containsKey(name)) continue;
+
+          final id = await db.insertFolder(FoldersCompanion.insert(
+            name: name,
+            icon: Value(folderData['icon'] as String? ?? 'folder'),
+            color: Value(folderData['color'] as String? ?? '#2196F3'),
+            sortOrder: Value(folderData['sortOrder'] as int? ?? 0),
+          ));
+          folderNameToId[name] = id;
+          foldersImported++;
+        } on Object catch (e) {
+          // Dart-side errors only (bad JSON types, Drift validation):
+          // no SQL statement failed, so the transaction stays usable.
+          if (e is! TypeError && e is! InvalidDataException) rethrow;
           errors.add('Erreur dossier: $e');
         }
       }
@@ -286,63 +336,76 @@ class DataExportService {
       final connectionsData = data['connections'] as List<dynamic>? ?? [];
       for (final connData in connectionsData) {
         try {
-          final host = connData['host'] as String;
+          final name = (connData['name'] as String?)?.trim() ?? '';
+          final host = (connData['host'] as String?)?.trim() ?? '';
           final port = connData['port'] as int;
+          final connectionType =
+              normalizeImportedConnectionType(connData['connectionType'] as String?);
+          final isBacnet = connectionType == 'bacnet';
+          var username = (connData['username'] as String?)?.trim() ?? '';
+          if (username.isEmpty && isBacnet) username = 'bacnet';
 
-          // Vérifier si la connexion existe déjà (même host:port)
-          final existingConnections = await db.allConnections;
-          final existing = existingConnections.where(
-            (c) => c.host == host && c.port == port
-          ).firstOrNull;
+          if (name.isEmpty || host.isEmpty || username.isEmpty) {
+            errors.add('Erreur connexion: champ manquant (${name.isEmpty ? host : name})');
+            continue;
+          }
 
-          if (existing != null) {
+          // Vérifier si la connexion existe déjà (même host:port:type)
+          final key = _connectionDedupKey(host, port, connectionType);
+          if (existingTargets.contains(key)) {
             connectionsSkipped++;
             continue;
           }
 
           // Trouver l'ID du dossier
           final folderName = connData['folderName'] as String?;
-          final folderId = (folderName != null && folderNameToId.containsKey(folderName))
-              ? folderNameToId[folderName]
-              : null;
+          final folderId = folderName != null ? folderNameToId[folderName] : null;
 
           await db.insertConnection(ConnectionsCompanion.insert(
-            name: connData['name'] as String,
+            name: name,
             host: host,
             port: Value(port),
             useHttps: Value(connData['useHttps'] as bool? ?? true),
-            username: connData['username'] as String? ?? '',
-            passwordKey: '', // L'utilisateur devra ressaisir le mot de passe
-            connectionType: Value(connData['connectionType'] as String? ?? 'api'),
+            username: username,
+            // Unique key per connection; the password itself is never exported
+            passwordKey: generatePasswordKey(),
+            apiVersion: Value(connData['apiVersion'] as String?),
+            connectionType: Value(connectionType),
+            bacnetDeviceId: Value(connData['bacnetDeviceId'] as int?),
+            designerUrl: Value(connData['designerUrl'] as String?),
             folderId: Value(folderId),
           ));
+          existingTargets.add(key);
           connectionsImported++;
-        } catch (e) {
+          if (!isBacnet) connectionsNeedingPassword++;
+        } on Object catch (e) {
+          if (e is! TypeError && e is! InvalidDataException) rethrow;
           errors.add('Erreur connexion: $e');
         }
       }
+    });
 
-      // Rafraîchir les providers
-      _ref.invalidate(foldersStreamProvider);
-
-      return ImportResult(
-        success: true,
-        foldersImported: foldersImported,
-        connectionsImported: connectionsImported,
-        connectionsSkipped: connectionsSkipped,
-        errors: errors,
-      );
-    } catch (e) {
-      return ImportResult(
-        success: false,
-        foldersImported: 0,
-        connectionsImported: 0,
-        connectionsSkipped: 0,
-        errors: ['Erreur de parsing: $e'],
-      );
-    }
+    return ImportResult(
+      success: true,
+      foldersImported: foldersImported,
+      connectionsImported: connectionsImported,
+      connectionsSkipped: connectionsSkipped,
+      connectionsNeedingPassword: connectionsNeedingPassword,
+      errors: errors,
+    );
+  } catch (e) {
+    return ImportResult(
+      success: false,
+      foldersImported: 0,
+      connectionsImported: 0,
+      connectionsSkipped: 0,
+      errors: ['Erreur de parsing: $e'],
+    );
   }
 }
+
+String _connectionDedupKey(String host, int port, String connectionType) =>
+    '${host.toLowerCase()}:$port:$connectionType';
 
 /// Résultat d'une importation
 class ImportResult {
@@ -350,6 +413,10 @@ class ImportResult {
   final int foldersImported;
   final int connectionsImported;
   final int connectionsSkipped;
+
+  /// Imported Distech API connections whose password must be entered again
+  /// (passwords are never exported).
+  final int connectionsNeedingPassword;
   final List<String> errors;
 
   const ImportResult({
@@ -357,6 +424,7 @@ class ImportResult {
     required this.foldersImported,
     required this.connectionsImported,
     required this.connectionsSkipped,
+    this.connectionsNeedingPassword = 0,
     required this.errors,
   });
 
@@ -368,30 +436,12 @@ class ImportResult {
     if (foldersImported > 0) parts.add('$foldersImported dossier(s)');
     if (connectionsImported > 0) parts.add('$connectionsImported connexion(s)');
     if (connectionsSkipped > 0) parts.add('$connectionsSkipped ignorée(s)');
-    return parts.isEmpty ? 'Rien à importer' : 'Importé: ${parts.join(', ')}';
+    if (parts.isEmpty) return 'Rien à importer';
+    final summary = 'Importé: ${parts.join(', ')}';
+    if (connectionsNeedingPassword > 0) {
+      return '$summary. Mot de passe à ressaisir (modifier la connexion) '
+          'pour $connectionsNeedingPassword connexion(s)';
+    }
+    return summary;
   }
-}
-
-/// Extension pour la base de données
-extension AppDatabaseCacheExtension on AppDatabase {
-  /// Vide tout le cache global
-  Future<void> clearAllCacheGlobal() async {
-    await delete(cachedPoints).go();
-    await delete(cachedDeviceInfo).go();
-    await delete(cachedObjectsSummary).go();
-    // Note: cachedTrendLogMappings fait partie du même cache
-  }
-
-  /// Obtient les statistiques globales du cache
-  Future<({int totalPoints, int totalDevices})> getGlobalCacheStats() async {
-    final pointsList = await select(cachedPoints).get();
-    final devicesList = await select(cachedDeviceInfo).get();
-    return (totalPoints: pointsList.length, totalDevices: devicesList.length);
-  }
-
-  /// Récupère tous les dossiers
-  Future<List<Folder>> get allFolders => select(folders).get();
-
-  /// Récupère toutes les connexions
-  Future<List<Connection>> get allConnections => select(connections).get();
 }
