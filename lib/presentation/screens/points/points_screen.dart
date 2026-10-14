@@ -85,6 +85,19 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
   bool _showSearch = false;
   Timer? _autoRefreshTimer;
 
+  /// Manual refresh in progress (API refreshes do not set isLoading)
+  bool _isRefreshing = false;
+
+  Future<void> _manualRefresh() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      await ref.read(pointsProvider.notifier).refresh();
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
+  }
+
   /// Les catégories dans l'ordre des onglets
   static const _categories = [
     PointCategory.inputs,
@@ -218,6 +231,12 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
     // Écouter les changements de favoris pour mettre à jour le tri
     ref.listen(favoritesProvider, (_, _) => _updateFavoriteIds());
 
+    // Le réglage d'intervalle change : l'appliquer au timer
+    ref.listen(settingsProvider.select((s) => s.refreshIntervalSeconds), (_, next) {
+      ref.read(autoRefreshIntervalProvider.notifier).state = next;
+      _setupAutoRefresh();
+    });
+
     return Scaffold(
       appBar: GradientAppBar(
         titleWidget: _showSearch ? _buildSearchField(l10n) : Text(l10n.points),
@@ -264,10 +283,14 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
             _buildAutoRefreshButton(l10n),
           // Rafraîchir (optimisé pour BACnet)
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: pointsState.isLoading
-                ? null
-                : () => ref.read(pointsProvider.notifier).refresh(),
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: pointsState.isLoading || _isRefreshing ? null : _manualRefresh,
           ),
         ],
         bottom: TabBar(
