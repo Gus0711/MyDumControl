@@ -425,6 +425,10 @@ class _DayTimelinePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DayTimelinePainter oldDelegate) {
     return oldDelegate.daySchedule != daySchedule ||
-        oldDelegate.colorScheme != colorScheme;
+        oldDelegate.colorScheme != colorScheme ||
+        oldDelegate.schedule.valueType != schedule.valueType ||
+        oldDelegate.hourWidth != hourWidth ||
+        oldDelegate.startHour != startHour ||
+        oldDelegate.endHour != endHour;
   }
 }
