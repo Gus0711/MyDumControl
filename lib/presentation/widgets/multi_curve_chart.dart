@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/formatters.dart';
 import '../../application/providers/multi_curve_provider.dart';
 import '../../application/providers/trend_log_provider.dart';
 import '../../domain/models/multi_curve_chart.dart';
@@ -603,7 +604,7 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
                     getTitlesWidget: (value, meta) => Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Text(
-                        _formatValue(value),
+                        formatNumber(value),
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 10,
@@ -631,7 +632,7 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
                       );
 
                       return LineTooltipItem(
-                        '${curve.name}\n${DateFormat('HH:mm').format(timestamp)}: ${_formatValue(spot.y)}${curve.units != null ? ' ${curve.units}' : ''}',
+                        '${curve.name}\n${DateFormat('HH:mm').format(timestamp)}: ${formatNumber(spot.y)}${curve.units != null ? ' ${curve.units}' : ''}',
                         TextStyle(
                           color: colorTheme.tooltipText,
                           fontWeight: FontWeight.bold,
@@ -802,7 +803,7 @@ class _StatColumn extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    _formatValue(v.value),
+                    formatNumber(v.value),
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
@@ -914,9 +915,3 @@ class _EmptyState extends StatelessWidget {
 // Utilitaires
 // =============================================================================
 
-String _formatValue(double value) {
-  if (value == value.truncateToDouble()) {
-    return value.toInt().toString();
-  }
-  return value.toStringAsFixed(2);
-}

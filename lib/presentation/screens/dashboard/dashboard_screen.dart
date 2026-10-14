@@ -11,6 +11,7 @@ import '../../widgets/curve_selection_dialog.dart';
 import 'widgets/dashboard_widget_card.dart';
 import 'widgets/add_widget_dialog.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/confirm_dialog.dart';
 
 /// Écran affichant un dashboard avec sa grille de widgets
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -372,23 +373,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Future<void> _deleteWidget(DashboardWidget widgetData) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.dashboardDeleteWidgetConfirm),
-        content: Text(l10n.dashboardDeleteWidgetMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(l10n.delete),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.dashboardDeleteWidgetConfirm,
+      message: l10n.dashboardDeleteWidgetMessage,
+      confirmLabel: l10n.delete,
+      destructive: true,
     );
 
     if (confirmed == true && mounted) {
@@ -590,23 +580,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Future<void> _confirmDelete(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.deleteDashboardConfirm),
-        content: Text(l10n.dashboardDeletePermanentMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(l10n.delete),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.deleteDashboardConfirm,
+      message: l10n.dashboardDeletePermanentMessage,
+      confirmLabel: l10n.delete,
+      destructive: true,
     );
 
     if (confirmed == true && mounted) {

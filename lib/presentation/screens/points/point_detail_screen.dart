@@ -936,14 +936,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     );
   }
 
-  String _formatAlarmTimestamp(DateTime timestamp) {
-    final d = timestamp.day.toString().padLeft(2, '0');
-    final m = timestamp.month.toString().padLeft(2, '0');
-    final y = timestamp.year;
-    final h = timestamp.hour.toString().padLeft(2, '0');
-    final min = timestamp.minute.toString().padLeft(2, '0');
-    return '$d/$m/$y $h:$min';
-  }
+  String _formatAlarmTimestamp(DateTime timestamp) => DisplayPreferences.formatDateTime(timestamp);
 
   Widget _buildOverrideCard(BuildContext context, BacnetObject point, AppLocalizations l10n) {
     return Card(

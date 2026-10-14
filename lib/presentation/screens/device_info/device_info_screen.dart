@@ -5,6 +5,7 @@ import 'package:myglobaldc/l10n/app_localizations.dart';
 import '../../../application/providers/active_connection_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../domain/models/display_preferences.dart';
 import '../../widgets/gradient_app_bar.dart';
 
 /// Écran d'informations détaillées sur l'appareil connecté
@@ -531,11 +532,5 @@ class DeviceInfoScreen extends ConsumerWidget {
     );
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day.toString().padLeft(2, '0')}/'
-        '${dateTime.month.toString().padLeft(2, '0')}/'
-        '${dateTime.year} '
-        '${dateTime.hour.toString().padLeft(2, '0')}:'
-        '${dateTime.minute.toString().padLeft(2, '0')}';
-  }
+  String _formatDateTime(DateTime dateTime) => DisplayPreferences.formatDateTime(dateTime);
 }

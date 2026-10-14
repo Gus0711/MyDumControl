@@ -56,4 +56,14 @@ class DisplayPreferences {
     final h12 = h24 % 12 == 0 ? 12 : h24 % 12;
     return '$h12:$mm $suffix';
   }
+
+  /// Formats a date and time as dd/MM/yyyy + time of day (see
+  /// [formatHourMinute]). [withSeconds] adds :ss in 24-hour mode only.
+  static String formatDateTime(DateTime dt, {bool withSeconds = false}) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final time = formatHourMinute(dt.hour, dt.minute);
+    final seconds = withSeconds && use24HourFormat ? ':${dt.second.toString().padLeft(2, '0')}' : '';
+    return '$d/$m/${dt.year} $time$seconds';
+  }
 }

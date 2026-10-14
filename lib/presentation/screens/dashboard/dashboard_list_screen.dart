@@ -7,6 +7,7 @@ import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
 import '../../widgets/gradient_app_bar.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/confirm_dialog.dart';
 
 /// Écran listant tous les dashboards de la connexion active
 class DashboardListScreen extends ConsumerStatefulWidget {
@@ -217,23 +218,12 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
 
   Future<void> _showDeleteConfirmation(BuildContext context, Dashboard dashboard) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.deleteDashboardConfirm),
-        content: Text(l10n.deleteDashboardMessage(dashboard.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(l10n.delete),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.deleteDashboardConfirm,
+      message: l10n.deleteDashboardMessage(dashboard.name),
+      confirmLabel: l10n.delete,
+      destructive: true,
     );
 
     if (confirmed == true && mounted) {

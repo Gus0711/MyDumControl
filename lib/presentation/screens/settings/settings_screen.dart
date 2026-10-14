@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../../application/providers/settings_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/confirm_dialog.dart';
 
 /// Écran des paramètres de l'application
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -435,22 +436,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _clearCache(BuildContext context, AppLocalizations l10n) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.clearCacheConfirm),
-        content: Text(l10n.clearCacheMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.clear),
-          ),
-        ],
-      ),
+    final confirm = await showConfirmDialog(
+      context,
+      title: l10n.clearCacheConfirm,
+      message: l10n.clearCacheMessage,
+      confirmLabel: l10n.clear,
     );
 
     if (confirm == true && mounted) {
@@ -608,22 +598,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _resetSettings(BuildContext context, AppLocalizations l10n) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.resetConfirm),
-        content: Text(l10n.resetMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.reset),
-          ),
-        ],
-      ),
+    final confirm = await showConfirmDialog(
+      context,
+      title: l10n.resetConfirm,
+      message: l10n.resetMessage,
+      confirmLabel: l10n.reset,
     );
 
     if (confirm == true) {

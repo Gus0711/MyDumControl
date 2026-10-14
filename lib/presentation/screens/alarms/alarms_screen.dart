@@ -5,6 +5,7 @@ import '../../../application/providers/alarms_provider.dart';
 import '../../../application/providers/points_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../domain/models/display_preferences.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/gradient_app_bar.dart';
@@ -397,13 +398,7 @@ class _AlarmTile extends StatelessWidget {
     final now = DateTime.now();
     final diff = now.difference(timestamp);
 
-    final d = timestamp.day.toString().padLeft(2, '0');
-    final m = timestamp.month.toString().padLeft(2, '0');
-    final y = timestamp.year;
-    final h = timestamp.hour.toString().padLeft(2, '0');
-    final min = timestamp.minute.toString().padLeft(2, '0');
-
-    String dateStr = '$d/$m/$y $h:$min';
+    String dateStr = DisplayPreferences.formatDateTime(timestamp);
 
     // Ajouter une indication relative
     if (diff.inMinutes < 60) {

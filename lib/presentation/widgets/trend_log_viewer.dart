@@ -6,6 +6,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../core/utils/formatters.dart';
 import '../../application/providers/trend_log_provider.dart';
 import '../../domain/models/trend_log.dart';
 import '../../l10n/app_localizations.dart';
@@ -337,13 +338,6 @@ class _ColorThemeSelector extends StatelessWidget {
 // Utilitaires partagés
 // =============================================================================
 
-/// Formate une valeur numérique pour l'affichage
-String _formatValue(double value) {
-  if (value == value.truncateToDouble()) {
-    return value.toInt().toString();
-  }
-  return value.toStringAsFixed(2);
-}
 
 /// Données préparées pour le graphique
 class _ChartData {
@@ -716,21 +710,21 @@ class _StatisticsBar extends StatelessWidget {
           if (data.minValue != null)
             _StatItem(
               label: l10n.statisticsMin,
-              value: _formatValue(data.minValue!),
+              value: formatNumber(data.minValue!),
               color: theme.primaryColor,
               icon: Icons.arrow_downward,
             ),
           if (data.maxValue != null)
             _StatItem(
               label: l10n.statisticsMax,
-              value: _formatValue(data.maxValue!),
+              value: formatNumber(data.maxValue!),
               color: theme.primaryColor,
               icon: Icons.arrow_upward,
             ),
           if (data.avgValue != null)
             _StatItem(
               label: l10n.statisticsAvg,
-              value: _formatValue(data.avgValue!),
+              value: formatNumber(data.avgValue!),
               color: theme.primaryColor,
               icon: Icons.horizontal_rule,
             ),
@@ -946,7 +940,7 @@ class _DataTable extends StatelessWidget {
         )),
         DataCell(Text(
           record.numericValue != null
-              ? '${_formatValue(record.numericValue!)}${units != null ? ' $units' : ''}'
+              ? '${formatNumber(record.numericValue!)}${units != null ? ' $units' : ''}'
               : record.value?.toString() ?? '-',
           style: TextStyle(fontWeight: FontWeight.w500, fontSize: fontSize),
         )),
@@ -1693,7 +1687,7 @@ class _TrendChartState extends State<_TrendChart> {
             fontSize: 10,
             fontWeight: FontWeight.bold,
           ),
-          labelResolver: (line) => l10n.trendAvgLineLabel(_formatValue(line.y)),
+          labelResolver: (line) => l10n.trendAvgLineLabel(formatNumber(line.y)),
         ),
       ));
     }
@@ -1713,7 +1707,7 @@ class _TrendChartState extends State<_TrendChart> {
             fontSize: 10,
             fontWeight: FontWeight.w500,
           ),
-          labelResolver: (line) => 'Min: ${_formatValue(line.y)}',
+          labelResolver: (line) => 'Min: ${formatNumber(line.y)}',
         ),
       ));
     }
@@ -1733,7 +1727,7 @@ class _TrendChartState extends State<_TrendChart> {
             fontSize: 10,
             fontWeight: FontWeight.w500,
           ),
-          labelResolver: (line) => 'Max: ${_formatValue(line.y)}',
+          labelResolver: (line) => 'Max: ${formatNumber(line.y)}',
         ),
       ));
     }
@@ -1796,7 +1790,7 @@ class _TrendChartState extends State<_TrendChart> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: Text(
-                    _formatValue(value),
+                    formatNumber(value),
                     style: TextStyle(color: widget.colorTheme.axisColor, fontSize: 10),
                   ),
                 );
@@ -1938,7 +1932,7 @@ class _TrendChartState extends State<_TrendChart> {
                 buffer.write('\n');
 
                 // Valeur principale
-                buffer.write(_formatValue(spot.y));
+                buffer.write(formatNumber(spot.y));
                 if (widget.units != null) {
                   buffer.write(' ${widget.units}');
                 }
@@ -1946,7 +1940,7 @@ class _TrendChartState extends State<_TrendChart> {
                 // Delta par rapport à la moyenne (si annotations activées)
                 if (widget.annotations.showAverageLine && !isMin && !isMax) {
                   buffer.write('\n');
-                  buffer.write('$deltaSign${_formatValue(deltaFromAvg)}');
+                  buffer.write('$deltaSign${formatNumber(deltaFromAvg)}');
                   buffer.write(' ($deltaSign${deltaPercent.toStringAsFixed(1)}%)');
                 }
 

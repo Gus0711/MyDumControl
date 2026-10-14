@@ -9,8 +9,10 @@ import '../../../application/providers/super_favorites_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../domain/models/display_preferences.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/confirm_dialog.dart';
 
 /// Écran de liste des connexions sauvegardées organisées par dossiers
 class ConnectionsListScreen extends ConsumerStatefulWidget {
@@ -485,23 +487,12 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     AppLocalizations l10n,
     Folder folder,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.connectionsDeleteFolder),
-        content: Text(l10n.connectionsDeleteFolderMessage(folder.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(l10n.delete),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.connectionsDeleteFolder,
+      message: l10n.connectionsDeleteFolderMessage(folder.name),
+      confirmLabel: l10n.delete,
+      destructive: true,
     );
 
     if (confirmed == true && mounted) {
@@ -522,23 +513,12 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     AppLocalizations l10n,
     Connection connection,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.deleteConfirmTitle),
-        content: Text(l10n.connectionsDeleteConfirm(connection.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(l10n.delete),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.deleteConfirmTitle,
+      message: l10n.connectionsDeleteConfirm(connection.name),
+      confirmLabel: l10n.delete,
+      destructive: true,
     );
 
     if (confirmed == true && mounted) {
@@ -992,15 +972,8 @@ class _ConnectionCard extends ConsumerWidget {
   }
 
   /// Formate la date/heure de l'automate (DD/MM/YYYY HH:MM)
-  String _formatControllerDateTime(ControllerTime controllerTime) {
-    final dt = controllerTime.controllerDateTime;
-    final d = dt.day.toString().padLeft(2, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final y = dt.year;
-    final h = dt.hour.toString().padLeft(2, '0');
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '$d/$m/$y $h:$min';
-  }
+  String _formatControllerDateTime(ControllerTime controllerTime) =>
+      DisplayPreferences.formatDateTime(controllerTime.controllerDateTime);
 
   /// Construit la ligne d'affichage de l'heure de l'automate
   Widget _buildControllerTimeRow(BuildContext context, ControllerTime controllerTime, bool isDark) {

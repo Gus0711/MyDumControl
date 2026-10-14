@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/utils/formatters.dart';
 import '../../../../application/providers/dashboard_provider.dart';
 import '../../../../application/providers/trend_log_provider.dart';
 import '../../../../data/database/app_database.dart';
@@ -240,7 +241,7 @@ class DashboardWidgetCard extends ConsumerWidget {
         if (config.showMin && data.minValue != null)
           _StatChip(
             label: l10n.statisticsMin,
-            value: _formatValue(data.minValue!),
+            value: formatNumber(data.minValue!),
             unit: config.units,
             icon: Icons.arrow_downward,
             color: Colors.blue,
@@ -248,7 +249,7 @@ class DashboardWidgetCard extends ConsumerWidget {
         if (config.showMax && data.maxValue != null)
           _StatChip(
             label: l10n.statisticsMax,
-            value: _formatValue(data.maxValue!),
+            value: formatNumber(data.maxValue!),
             unit: config.units,
             icon: Icons.arrow_upward,
             color: Colors.red,
@@ -256,7 +257,7 @@ class DashboardWidgetCard extends ConsumerWidget {
         if (config.showAvg && data.avgValue != null)
           _StatChip(
             label: l10n.statisticsAvg,
-            value: _formatValue(data.avgValue!),
+            value: formatNumber(data.avgValue!),
             unit: config.units,
             icon: Icons.horizontal_rule,
             color: colorScheme.primary,
@@ -295,13 +296,6 @@ class DashboardWidgetCard extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  String _formatValue(double value) {
-    if (value == value.truncateToDouble()) {
-      return value.toInt().toString();
-    }
-    return value.toStringAsFixed(1);
   }
 }
 

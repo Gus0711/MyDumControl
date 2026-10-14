@@ -1,5 +1,5 @@
 import 'display_preferences.dart';
-import '../../../data/services/bacnet/bacnet_constants.dart';
+import '../../data/services/bacnet/bacnet_constants.dart';
 
 /// Types d'objets BACnet
 enum BacnetObjectType {
@@ -849,18 +849,8 @@ class ControllerTime {
   }
 
   /// Date et heure formatées complètes
-  String get formattedDateTime {
-    final d = controllerDateTime.day.toString().padLeft(2, '0');
-    final m = controllerDateTime.month.toString().padLeft(2, '0');
-    final y = controllerDateTime.year;
-    final s = controllerDateTime.second.toString().padLeft(2, '0');
-    if (!DisplayPreferences.use24HourFormat) {
-      return '$d/$m/$y ${DisplayPreferences.formatHourMinute(controllerDateTime.hour, controllerDateTime.minute)}';
-    }
-    final h = controllerDateTime.hour.toString().padLeft(2, '0');
-    final min = controllerDateTime.minute.toString().padLeft(2, '0');
-    return '$d/$m/$y $h:$min:$s';
-  }
+  String get formattedDateTime =>
+      DisplayPreferences.formatDateTime(controllerDateTime, withSeconds: true);
 
   /// Description du décalage pour l'affichage
   String get offsetDescription {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../domain/models/display_preferences.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Utilitaires partagés pour les types BACnet
@@ -136,11 +137,7 @@ class BacnetTypeUtils {
     }
 
     if (value is num) {
-      final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
-      if (point.units != null && point.units!.isNotEmpty) {
-        return '$formatted ${point.units}';
-      }
-      return formatted;
+      return DisplayPreferences.formatAnalog(value, point.units);
     }
 
     return value.toString();
@@ -196,11 +193,7 @@ class BacnetTypeUtils {
     }
 
     if (value is num) {
-      final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
-      if (point.units != null && point.units!.isNotEmpty) {
-        return '$formatted ${point.units}';
-      }
-      return formatted;
+      return DisplayPreferences.formatAnalog(value, point.units);
     }
 
     return value.toString();

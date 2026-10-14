@@ -7,6 +7,7 @@ import '../../../data/database/app_database.dart';
 import '../../../data/database/tables/synoptic_bindings_table.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/confirm_dialog.dart';
 
 /// Écran d'édition des liaisons d'un synoptique
 class SynopticEditorScreen extends ConsumerStatefulWidget {
@@ -848,23 +849,12 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
 
   Future<void> _deleteBinding() async {
     final l10n = AppLocalizations.of(context)!;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.synopticDeleteBindingTitle),
-        content: Text(l10n.synopticIrreversible),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(l10n.delete),
-          ),
-        ],
-      ),
+    final confirm = await showConfirmDialog(
+      context,
+      title: l10n.synopticDeleteBindingTitle,
+      message: l10n.synopticIrreversible,
+      confirmLabel: l10n.delete,
+      destructive: true,
     );
 
     if (confirm == true && mounted) {

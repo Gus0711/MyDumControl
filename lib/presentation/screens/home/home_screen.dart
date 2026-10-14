@@ -12,6 +12,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../data/services/api_exceptions.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../domain/models/display_preferences.dart';
 import '../../widgets/skeleton_loading.dart';
 import '../../widgets/gradient_app_bar.dart';
 
@@ -1303,16 +1304,7 @@ class _ControllerTimeDisplayState extends State<_ControllerTimeDisplay>
     );
   }
 
-  String _formatLocalTime() {
-    final now = DateTime.now();
-    final d = now.day.toString().padLeft(2, '0');
-    final m = now.month.toString().padLeft(2, '0');
-    final y = now.year;
-    final h = now.hour.toString().padLeft(2, '0');
-    final min = now.minute.toString().padLeft(2, '0');
-    final s = now.second.toString().padLeft(2, '0');
-    return '$d/$m/$y $h:$min:$s';
-  }
+  String _formatLocalTime() => DisplayPreferences.formatDateTime(DateTime.now(), withSeconds: true);
 
   Widget _buildInfoRow(String label, String value, {Color? valueColor}) {
     return Padding(
