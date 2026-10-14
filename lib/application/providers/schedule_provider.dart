@@ -381,6 +381,10 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   /// chargement précédent (autre planning) est ignorée.
   int _loadToken = 0;
 
+  /// Dernière instance demandée (pour récupérer le planning si le premier
+  /// chargement a échoué puis que l'écran a relu le détail avec succès)
+  int? _lastInstance;
+
   /// Édition possible : un planning est chargé et aucune sauvegarde en cours
   bool get _canEdit => state.editedSchedule != null && !state.isSaving;
 
@@ -391,6 +395,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   /// aucun planning précédent (périmé ou d'une autre instance) ne reste chargé.
   Future<void> loadSchedule(int instance) async {
     final token = ++_loadToken;
+    _lastInstance = instance;
     state = const ScheduleEditState();
 
     Schedule? schedule;
@@ -420,6 +425,18 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
 
   /// Active/désactive le mode édition
   void setEditing(bool editing) {
+    // Rien de chargé (échec précédent, puis "Réessayer" sur l'écran) :
+    // reprendre le planning déjà lu par scheduleDetailProvider s'il existe
+    if (editing && state.editedSchedule == null && _lastInstance != null) {
+      final schedule = _ref.read(scheduleDetailProvider(_lastInstance!)).valueOrNull;
+      if (schedule != null) {
+        state = ScheduleEditState(
+          originalSchedule: schedule,
+          editedSchedule: schedule,
+          selectedDay: WeekDay.monday,
+        );
+      }
+    }
     state = state.copyWith(isEditing: editing, clearError: true, clearSuccess: true);
   }
 
@@ -830,6 +847,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   /// Reset complet
   void reset() {
     _loadToken++; // ignorer un chargement en cours
+    _lastInstance = null;
     state = const ScheduleEditState();
   }
 
