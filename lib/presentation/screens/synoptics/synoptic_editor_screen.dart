@@ -20,6 +20,20 @@ class SynopticEditorScreen extends ConsumerStatefulWidget {
 class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
   String? _selectedElementId;
 
+  /// Right panel: fixed width on wide screens, expanded below the preview on narrow ones.
+  Widget _sidePanel({required bool narrow, required Color borderColor, required Widget child}) {
+    final decorated = Container(
+      width: narrow ? null : 350,
+      decoration: BoxDecoration(
+        border: narrow
+            ? Border(top: BorderSide(color: borderColor))
+            : Border(left: BorderSide(color: borderColor)),
+      ),
+      child: child,
+    );
+    return narrow ? Expanded(flex: 3, child: decorated) : decorated;
+  }
+
   @override
   Widget build(BuildContext context) {
     final synopticAsync = ref.watch(synopticByIdProvider(widget.synopticId));
@@ -61,7 +75,11 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
           final borderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade300;
           final bgColor = isDark ? Colors.grey.shade900 : Colors.grey.shade100;
 
-          return Row(
+          // Narrow screens (phones): stack the preview above the element list
+          final narrow = MediaQuery.of(context).size.width < 700;
+
+          return Flex(
+            direction: narrow ? Axis.vertical : Axis.horizontal,
             children: [
               // Panneau gauche: SVG
               Expanded(
@@ -97,11 +115,9 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
               ),
 
               // Panneau droit: Liste des éléments
-              Container(
-                width: 350,
-                decoration: BoxDecoration(
-                  border: Border(left: BorderSide(color: borderColor)),
-                ),
+              _sidePanel(
+                narrow: narrow,
+                borderColor: borderColor,
                 child: Column(
                   children: [
                     // Header
