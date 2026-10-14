@@ -22,7 +22,6 @@ class Routes {
 
   // Routes des synoptiques
   static const String synoptics = '/synoptics';
-  static const String synopticCreate = '/synoptics/create';
   static const String synopticView = '/synoptics/:id';
   static const String synopticEdit = '/synoptics/:id/edit';
   static const String envysionViewer = '/envysion/:connectionId';

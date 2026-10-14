@@ -212,6 +212,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   break;
                 case 'disconnect':
                   ref.read(activeConnectionProvider.notifier).disconnect();
+                  ref.read(autoRefreshIntervalProvider.notifier).state = 0;
                   context.go(Routes.connections);
                   break;
               }
@@ -518,7 +519,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 Text(
                   connection != null ? '${connection.host}:${connection.port}' : '',
-                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14),
                 ),
               ],
             ),
@@ -554,6 +555,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             title: Text(l10n.disconnect, style: const TextStyle(color: Colors.red)),
             onTap: () {
               ref.read(activeConnectionProvider.notifier).disconnect();
+              ref.read(autoRefreshIntervalProvider.notifier).state = 0;
               Navigator.pop(context);
               context.go(Routes.connections);
             },

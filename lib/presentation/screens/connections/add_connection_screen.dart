@@ -6,6 +6,7 @@ import 'package:myglobaldc/l10n/app_localizations.dart';
 import '../../../application/providers/api_provider.dart';
 import '../../../application/providers/connection_providers.dart';
 import '../../../application/providers/bacnet_provider.dart';
+import '../../../application/providers/settings_provider.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/router/routes.dart';
@@ -94,7 +95,8 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       _connectionType = type;
       // Ajuster le port par defaut selon le type
       if (type == ConnectionType.bacnet) {
-        _portController.text = '47808';
+        _portController.text =
+            ref.read(settingsProvider).defaultBacnetPort.toString();
         _useHttps = false;
       } else {
         _portController.text = _useHttps
@@ -487,7 +489,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
@@ -513,7 +515,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                         Text(
                           l10n.discoverEclypseSubtitle,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 12,
                           ),
                         ),
@@ -522,7 +524,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                   ),
                   Icon(
                     Icons.chevron_right,
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                   ),
                 ],
               ),
@@ -558,7 +560,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
@@ -584,7 +586,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                         Text(
                           l10n.broadcastDiscoverySubtitle,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 12,
                           ),
                         ),
@@ -593,7 +595,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
                   ),
                   Icon(
                     Icons.chevron_right,
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                   ),
                 ],
               ),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart' as log;
 
 /// Logger global de l'application
@@ -17,7 +18,7 @@ class AppLogger {
         printEmojis: true,
         dateTimeFormat: log.DateTimeFormat.onlyTimeAndSinceStart,
       ),
-      level: log.Level.debug,
+      level: kReleaseMode ? log.Level.warning : log.Level.debug,
     );
   }
 

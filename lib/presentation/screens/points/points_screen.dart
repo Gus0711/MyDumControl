@@ -7,6 +7,7 @@ import '../../../application/providers/trend_log_provider.dart';
 import '../../../application/providers/favorites_provider.dart';
 import '../../../application/providers/active_connection_provider.dart';
 import '../../../application/providers/bacnet_provider.dart';
+import '../../../application/providers/settings_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
@@ -107,6 +108,11 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
       }
       // Mettre à jour les favoris pour le tri
       _updateFavoriteIds();
+      // Intervalle initial = réglage persistant, si l'utilisateur n'en a pas choisi un
+      final configured = ref.read(settingsProvider).refreshIntervalSeconds;
+      if (ref.read(autoRefreshIntervalProvider) == 0 && configured > 0) {
+        ref.read(autoRefreshIntervalProvider.notifier).state = configured;
+      }
       // Démarrer l'auto-refresh si configuré
       _setupAutoRefresh();
     });
@@ -134,6 +140,11 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
   }
 
   void _doAutoRefresh() {
+    if (!mounted) return;
+    // Connexion fermée : plus rien à rafraîchir
+    if (!ref.read(activeConnectionProvider).isConnected) return;
+    // Écran recouvert (détail/édition d'un point) : on ne rafraîchit pas
+    if (ModalRoute.of(context)?.isCurrent == false) return;
     final pointsState = ref.read(pointsProvider);
     if (!pointsState.isLoading) {
       ref.read(pointsProvider.notifier).refresh();
@@ -521,7 +532,7 @@ class _PointsCategoryTab extends ConsumerWidget {
               itemCount: filteredPoints.length,
               itemBuilder: (context, index) {
                 final point = filteredPoints[index];
-                return _PointTile(point: point);
+                return _PointTile(key: ValueKey(point.objectId), point: point);
               },
             ),
           ),
@@ -535,7 +546,7 @@ class _PointsCategoryTab extends ConsumerWidget {
 class _PointTile extends ConsumerWidget {
   final BacnetObject point;
 
-  const _PointTile({required this.point});
+  const _PointTile({super.key, required this.point});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

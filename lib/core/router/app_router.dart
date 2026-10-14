@@ -33,7 +33,7 @@ class AppRouter {
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: Routes.splash,
-    debugLogDiagnostics: true,
+    debugLogDiagnostics: kDebugMode,
     routes: [
       // Splash screen
       GoRoute(
@@ -190,16 +190,6 @@ class AppRouter {
           child: const SynopticsListScreen(),
         ),
         routes: [
-          // Créer un synoptique
-          GoRoute(
-            path: 'create',
-            name: 'synopticCreate',
-            pageBuilder: (context, state) => PageTransitions.fadeTransition(
-              context: context,
-              state: state,
-              child: const SynopticsListScreen(),
-            ),
-          ),
           // Visualiser un synoptique
           GoRoute(
             path: ':id',
