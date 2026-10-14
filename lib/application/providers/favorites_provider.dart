@@ -42,20 +42,15 @@ final _favoriteStatesByRefProvider = Provider<AsyncValue<Map<String, FavoriteSta
       );
 });
 
-/// Provider pour l'état complet du favori (none, favorite, superFavorite)
-/// Dérivé de [favoritesProvider] : la tuile ne se reconstruit que si l'état
-/// de SON point change.
-final favoriteStateProvider = Provider.autoDispose.family<AsyncValue<FavoriteState>, String>((ref, pointRef) {
-  return ref.watch(
-    _favoriteStatesByRefProvider.select((async) => async.whenData((states) => states[pointRef] ?? FavoriteState.none)),
-  );
-});
-
 /// Notifier pour gérer les actions sur les favoris
 class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
   final Ref _ref;
 
   FavoritesNotifier(this._ref) : super(const AsyncValue.data(null));
+
+  /// Last known favorite state of [pointRef] (from the shared favorites stream)
+  FavoriteState _currentState(String pointRef) =>
+      _ref.read(_favoriteStatesByRefProvider).valueOrNull?[pointRef] ?? FavoriteState.none;
 
   /// pointRefs dont le cycle est en cours (évite un double tap concurrent)
   final Set<String> _cycling = {};
@@ -75,7 +70,7 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
 
     if (!_cycling.add(object.objectId)) {
       _logger.d('cycleFavoriteState: ${object.objectId} already cycling, ignored');
-      return _ref.read(favoriteStateProvider(object.objectId)).valueOrNull ?? FavoriteState.none;
+      return _currentState(object.objectId);
     }
 
     try {
@@ -132,7 +127,7 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<void>> {
     } catch (e, st) {
       _logger.e('cycleFavoriteState error: $e');
       state = AsyncValue.error(e, st);
-      return _ref.read(favoriteStateProvider(object.objectId)).valueOrNull ?? FavoriteState.none;
+      return _currentState(object.objectId);
     } finally {
       _cycling.remove(object.objectId);
     }

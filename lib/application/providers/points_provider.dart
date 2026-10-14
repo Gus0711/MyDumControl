@@ -247,6 +247,12 @@ class PointsNotifier extends StateNotifier<PointsState> {
     _logger.i('PointsNotifier: reset');
   }
 
+  /// The local cache was purged: loaded points stay displayed, but the static
+  /// properties will be written to the cache again on the next load.
+  void onCacheCleared() {
+    _staticCacheWrittenFor = null;
+  }
+
   /// Sort points by type, then by name.
   static void _sortByTypeThenName(List<BacnetObject> points) {
     points.sort((a, b) {
