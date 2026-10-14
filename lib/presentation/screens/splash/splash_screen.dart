@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/router/routes.dart';
 
@@ -43,14 +45,20 @@ class _SplashScreenState extends State<SplashScreen>
     _initializeAndNavigate();
   }
 
+  Timer? _minDelayTimer;
+
   @override
   void dispose() {
+    _minDelayTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
 
   Future<void> _initializeAndNavigate() async {
-    await Future.delayed(const Duration(seconds: 2));
+    // Real init (settings storage) + a short minimum delay for the animation
+    final minDelay = Completer<void>();
+    _minDelayTimer = Timer(const Duration(milliseconds: 1000), minDelay.complete);
+    await Future.wait([SharedPreferences.getInstance(), minDelay.future]);
 
     if (mounted) {
       context.go(Routes.connections);
@@ -86,7 +94,7 @@ class _SplashScreenState extends State<SplashScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      const Color(0xFF0F3460).withOpacity(0.3),
+                      const Color(0xFF0F3460).withValues(alpha: 0.3),
                       Colors.transparent,
                     ],
                   ),
@@ -103,7 +111,7 @@ class _SplashScreenState extends State<SplashScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      const Color(0xFF1A1A2E).withOpacity(0.5),
+                      const Color(0xFF1A1A2E).withValues(alpha: 0.5),
                       Colors.transparent,
                     ],
                   ),
@@ -132,7 +140,7 @@ class _SplashScreenState extends State<SplashScreen>
                         borderRadius: BorderRadius.circular(28),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF0F3460).withOpacity(0.5),
+                            color: const Color(0xFF0F3460).withValues(alpha: 0.5),
                             blurRadius: 30,
                             spreadRadius: 5,
                           ),
@@ -174,7 +182,7 @@ class _SplashScreenState extends State<SplashScreen>
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w300,
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         letterSpacing: 2,
                       ),
                     ),
@@ -185,10 +193,10 @@ class _SplashScreenState extends State<SplashScreen>
                       height: 40,
                       child: CircularProgressIndicator(
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.white.withOpacity(0.8),
+                          Colors.white.withValues(alpha: 0.8),
                         ),
                         strokeWidth: 2,
-                        backgroundColor: Colors.white.withOpacity(0.1),
+                        backgroundColor: Colors.white.withValues(alpha: 0.1),
                       ),
                     ),
                   ],
@@ -205,7 +213,7 @@ class _SplashScreenState extends State<SplashScreen>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.white.withOpacity(0.3),
+                  color: Colors.white.withValues(alpha: 0.3),
                 ),
               ),
             ),

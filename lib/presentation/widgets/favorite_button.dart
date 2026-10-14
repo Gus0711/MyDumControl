@@ -1,7 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../application/providers/active_connection_provider.dart';
+import '../../application/providers/database_provider.dart';
 import '../../application/providers/favorites_provider.dart';
 import '../../domain/models/bacnet_object.dart';
+
+/// Id of the active connection only (does not change on refresh/state ticks).
+final _activeConnectionIdProvider = Provider<int?>((ref) {
+  return ref.watch(activeConnectionProvider.select((s) => s.connection?.id));
+});
+
+/// Favorite state of every favorite point of the active connection, keyed by
+/// pointRef. One single Drift stream shared by all FavoriteButtons (a point
+/// absent from the map is not a favorite).
+final favoriteStatesMapProvider =
+    StreamProvider<Map<String, FavoriteState>>((ref) {
+  final connectionId = ref.watch(_activeConnectionIdProvider);
+  if (connectionId == null) return Stream.value(const {});
+  final database = ref.watch(databaseProvider);
+  return database.watchFavoritesByConnection(connectionId).map((favorites) => {
+        for (final f in favorites)
+          f.pointRef: f.isSuperFavorite
+              ? FavoriteState.superFavorite
+              : FavoriteState.favorite,
+      });
+});
 
 /// Bouton pour gérer l'état favori d'un point (cycle à 3 états)
 /// ☆ (gris) → ⭐ (jaune) → ✨ (orange) → ☆ (gris)
@@ -17,20 +40,11 @@ class FavoriteButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final favoriteStateAsync = ref.watch(favoriteStateProvider(point.objectId));
-
-    return favoriteStateAsync.when(
-      data: (state) => _buildButton(context, ref, state),
-      loading: () => SizedBox(
-        width: size + 8,
-        height: size + 8,
-        child: const Padding(
-          padding: EdgeInsets.all(4),
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
-      error: (_, _) => _buildButton(context, ref, FavoriteState.none),
-    );
+    // Select only this point's state so a tile rebuilds only when it changes.
+    final state = ref.watch(favoriteStatesMapProvider.select(
+      (async) => async.valueOrNull?[point.objectId] ?? FavoriteState.none,
+    ));
+    return _buildButton(context, ref, state);
   }
 
   Widget _buildButton(BuildContext context, WidgetRef ref, FavoriteState state) {

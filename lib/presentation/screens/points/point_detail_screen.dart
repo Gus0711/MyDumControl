@@ -794,6 +794,16 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
     );
   }
 
+  /// Runs a write action; any exception counts as a failure so that
+  /// `_isWriting` is always reset by the caller.
+  Future<bool> _safe(Future<bool> Function() action) async {
+    try {
+      return await action();
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _writeValue(BacnetObject point, dynamic value, AppLocalizations l10n) async {
     setState(() => _isWriting = true);
 
@@ -802,7 +812,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
     // Les entrées utilisent une méthode différente (out-of-service)
     if (point.type.isInput) {
-      success = await ref.read(pointsProvider.notifier).forceInput(point, value);
+      success = await _safe(() => ref.read(pointsProvider.notifier).forceInput(point, value));
       successMessage = l10n.inputForced;
     } else {
       // Déterminer le mode d'écriture effectif
@@ -812,13 +822,13 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       switch (effectiveMode) {
         case WriteMode.regler:
           // Écriture simple (sans priorité)
-          success = await ref.read(pointsProvider.notifier).writeValue(point, value);
+          success = await _safe(() => ref.read(pointsProvider.notifier).writeValue(point, value));
           successMessage = l10n.valueSet;
           break;
 
         case WriteMode.forcage:
           // Forçage avec priorité 1
-          success = await ref.read(pointsProvider.notifier).writeOverride(point, value, priority: 1);
+          success = await _safe(() => ref.read(pointsProvider.notifier).writeOverride(point, value, priority: 1));
           successMessage = l10n.valueForcedPriority1;
           break;
 
@@ -826,11 +836,11 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
           // Mode Auto: libération normale puis urgence en succession
           // D'abord, libération normale à la priorité détectée (ou 1 par défaut)
           final priority = point.overridePriority ?? 1;
-          success = await ref.read(pointsProvider.notifier).releaseOverride(point, priority: priority);
+          success = await _safe(() => ref.read(pointsProvider.notifier).releaseOverride(point, priority: priority));
 
           // Ensuite, libération d'urgence (toutes les priorités)
           if (success) {
-            success = await ref.read(pointsProvider.notifier).emergencyRelease(point);
+            success = await _safe(() => ref.read(pointsProvider.notifier).emergencyRelease(point));
           }
 
           successMessage = success ? l10n.pointSetToAuto : l10n.errorSettingAuto;
@@ -1044,7 +1054,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
   Future<void> _releaseInput(BacnetObject point, AppLocalizations l10n) async {
     setState(() => _isWriting = true);
 
-    final success = await ref.read(pointsProvider.notifier).releaseInput(point);
+    final success = await _safe(() => ref.read(pointsProvider.notifier).releaseInput(point));
 
     if (mounted) {
       setState(() => _isWriting = false);
@@ -1069,10 +1079,10 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
   Future<void> _releaseOverride(BacnetObject point, AppLocalizations l10n) async {
     setState(() => _isWriting = true);
 
-    final success = await ref.read(pointsProvider.notifier).releaseOverride(
-      point,
-      priority: point.overridePriority ?? 8,
-    );
+    final success = await _safe(() => ref.read(pointsProvider.notifier).releaseOverride(
+          point,
+          priority: point.overridePriority ?? 8,
+        ));
 
     if (mounted) {
       setState(() => _isWriting = false);
@@ -1124,11 +1134,11 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       ),
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
     setState(() => _isWriting = true);
 
-    final success = await ref.read(pointsProvider.notifier).emergencyRelease(point);
+    final success = await _safe(() => ref.read(pointsProvider.notifier).emergencyRelease(point));
 
     if (mounted) {
       setState(() => _isWriting = false);

@@ -1,8 +1,8 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart' if (dart.library.html) 'package:file_picker/file_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../application/providers/settings_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/gradient_app_bar.dart';
@@ -458,13 +458,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       try {
         await ref.read(cacheOperationsProvider).clearAllCache();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(this.context).showSnackBar(
             SnackBar(content: Text(l10n.cacheCleared)),
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(this.context).showSnackBar(
             SnackBar(content: Text('${l10n.error}: $e')),
           );
         }
@@ -497,7 +497,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(dataExportProvider).exportAndShare();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(content: Text(l10n.exportError(e.toString()))),
         );
       }
@@ -530,23 +530,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
+        withData: true,
       );
 
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
-        final jsonString = await file.readAsString();
+      final bytes = result?.files.single.bytes;
+      if (bytes != null) {
+        final jsonString = utf8.decode(bytes);
 
         final importResult = await ref.read(dataExportProvider).importConnectionsFromJson(jsonString);
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(this.context).showSnackBar(
             SnackBar(content: Text(importResult.summary)),
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(content: Text(l10n.importError(e.toString()))),
         );
       }
@@ -628,7 +629,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirm == true) {
       await ref.read(settingsProvider.notifier).resetToDefaults();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(content: Text(l10n.settingsReset)),
         );
       }
