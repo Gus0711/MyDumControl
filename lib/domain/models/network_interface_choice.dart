@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 /// Représente une interface réseau disponible pour la communication BACnet
 class NetworkInterfaceChoice {
   final String name;
@@ -60,6 +62,7 @@ class NetworkInterfaceChoice {
     } catch (e) {
       // En cas d'erreur, retourner une liste vide
       // L'appelant utilisera le fallback sur toutes les interfaces
+      debugPrint('NetworkInterfaceChoice.listAvailable failed: $e');
     }
 
     return result;
