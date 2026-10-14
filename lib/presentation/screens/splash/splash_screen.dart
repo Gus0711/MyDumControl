@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
@@ -44,18 +45,20 @@ class _SplashScreenState extends State<SplashScreen>
     _initializeAndNavigate();
   }
 
+  Timer? _minDelayTimer;
+
   @override
   void dispose() {
+    _minDelayTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
 
   Future<void> _initializeAndNavigate() async {
     // Real init (settings storage) + a short minimum delay for the animation
-    await Future.wait([
-      SharedPreferences.getInstance(),
-      Future.delayed(const Duration(milliseconds: 1000)),
-    ]);
+    final minDelay = Completer<void>();
+    _minDelayTimer = Timer(const Duration(milliseconds: 1000), minDelay.complete);
+    await Future.wait([SharedPreferences.getInstance(), minDelay.future]);
 
     if (mounted) {
       context.go(Routes.connections);
