@@ -216,15 +216,59 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
   PointsNotifier(this._ref) : super(PointsState());
 
+  /// Generation token, bumped on every reset() (connection change).
+  /// Background results captured with an older generation are dropped.
+  int _generation = 0;
+
+  /// In-flight guards: avoid overlapping loads/refreshes (auto-refresh +
+  /// pull-to-refresh) for the same generation.
+  Future<void>? _loadInFlight;
+  Future<void>? _refreshInFlight;
+
+  /// Connection id for which the static points cache was written during this
+  /// session. The cache is only rewritten on first load or forceRefresh.
+  int? _staticCacheWrittenFor;
+
+  /// True if a result started with [generation] for [connectionId] may still
+  /// be written to the state.
+  bool _isCurrent(int generation, int? connectionId) {
+    if (!mounted || generation != _generation) return false;
+    return _ref.read(activeConnectionProvider).connection?.id == connectionId;
+  }
+
   /// Réinitialise l'état (appelé lors du changement d'automate)
   void reset() {
+    _generation++;
+    _loadInFlight = null;
+    _refreshInFlight = null;
+    _staticCacheWrittenFor = null;
     state = PointsState();
     _logger.i('PointsNotifier: reset');
   }
 
+  /// Sort points by type, then by name.
+  static void _sortByTypeThenName(List<BacnetObject> points) {
+    points.sort((a, b) {
+      final typeCompare = a.type.index.compareTo(b.type.index);
+      if (typeCompare != 0) return typeCompare;
+      return a.objectName.compareTo(b.objectName);
+    });
+  }
+
   /// Charge tous les points depuis l'automate
   /// Utilise le cache local pour les propriétés statiques (nom, unité, description)
-  Future<void> loadPoints({bool forceRefresh = false}) async {
+  Future<void> loadPoints({bool forceRefresh = false}) {
+    final inFlight = _loadInFlight;
+    if (inFlight != null) return inFlight;
+    final generation = _generation;
+    final future = _loadPointsImpl(forceRefresh: forceRefresh, generation: generation);
+    _loadInFlight = future;
+    return future.whenComplete(() {
+      if (_generation == generation) _loadInFlight = null;
+    });
+  }
+
+  Future<void> _loadPointsImpl({required bool forceRefresh, required int generation}) async {
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
       state = state.copyWith(
@@ -238,14 +282,15 @@ class PointsNotifier extends StateNotifier<PointsState> {
     // CONNEXION BACNET NATIVE
     // ========================================
     if (connectionState.isBacnetConnection) {
-      await _loadPointsBacnet(forceRefresh: forceRefresh);
+      await _loadPointsBacnet(forceRefresh: forceRefresh, generation: generation);
       return;
     }
 
     // ========================================
     // CONNEXION API DISTECH
     // ========================================
-    if (connectionState.client == null) {
+    final client = connectionState.client;
+    if (client == null) {
       state = state.copyWith(
         error: 'Client API non disponible',
         isLoading: false,
@@ -259,16 +304,13 @@ class PointsNotifier extends StateNotifier<PointsState> {
     // ÉTAPE 1: Charger immédiatement depuis le cache (si disponible et non forcé)
     if (!forceRefresh && state.points.isEmpty) {
       final cachedPoints = await cacheService.getStaticPointsCache(connectionId);
+      if (!_isCurrent(generation, connectionId)) return;
       if (cachedPoints != null && cachedPoints.isNotEmpty) {
         // Créer des BacnetObject à partir du cache (sans valeurs live)
         final pointsFromCache = cacheService.createFromCache(cachedPoints);
 
         // Trier par type puis par nom
-        pointsFromCache.sort((a, b) {
-          final typeCompare = a.type.index.compareTo(b.type.index);
-          if (typeCompare != 0) return typeCompare;
-          return a.objectName.compareTo(b.objectName);
-        });
+        _sortByTypeThenName(pointsFromCache);
 
         _logger.i('loadPoints: ${pointsFromCache.length} points loaded from cache (instant!)');
 
@@ -287,19 +329,24 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
     // ÉTAPE 2: Charger les données fraîches de l'API
     try {
-      final points = await connectionState.client!.getAllPointsOptimized();
+      final points = await client.getAllPointsOptimized();
+      if (!_isCurrent(generation, connectionId)) {
+        _logger.w('loadPoints: stale result ignored (connection changed)');
+        return;
+      }
 
       // Trier par type puis par nom
-      points.sort((a, b) {
-        final typeCompare = a.type.index.compareTo(b.type.index);
-        if (typeCompare != 0) return typeCompare;
-        return a.objectName.compareTo(b.objectName);
-      });
+      _sortByTypeThenName(points);
 
       _logger.i('loadPoints: ${points.length} points loaded from API');
 
       // ÉTAPE 3: Mettre à jour le cache des propriétés statiques (en arrière-plan)
-      cacheService.cacheStaticPoints(connectionId, points);
+      // Only on first load of the session or on explicit forceRefresh:
+      // static properties do not change between refreshes.
+      if (forceRefresh || _staticCacheWrittenFor != connectionId) {
+        _staticCacheWrittenFor = connectionId;
+        cacheService.cacheStaticPoints(connectionId, points);
+      }
 
       state = state.copyWith(
         points: points,
@@ -308,6 +355,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       );
     } catch (e) {
       _logger.e('loadPoints error: $e');
+      if (!_isCurrent(generation, connectionId)) return;
 
       // En cas d'erreur, garder les données du cache si disponibles
       if (state.points.isNotEmpty && state.fromCache) {
@@ -326,8 +374,9 @@ class PointsNotifier extends StateNotifier<PointsState> {
   }
 
   /// Charge les points via BACnet natif
-  Future<void> _loadPointsBacnet({bool forceRefresh = false}) async {
+  Future<void> _loadPointsBacnet({bool forceRefresh = false, required int generation}) async {
     final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
+    final connectionId = _ref.read(activeConnectionProvider).connection?.id;
 
     if (bacnetConnection == null) {
       state = state.copyWith(
@@ -364,13 +413,13 @@ class PointsNotifier extends StateNotifier<PointsState> {
         deviceId: bacnetConnection.deviceId!,
         objectTypesFilter: objectTypesFilter,
       );
+      if (!_isCurrent(generation, connectionId)) {
+        _logger.w('_loadPointsBacnet: stale result ignored (connection changed)');
+        return;
+      }
 
       // Trier par type puis par nom
-      points.sort((a, b) {
-        final typeCompare = a.type.index.compareTo(b.type.index);
-        if (typeCompare != 0) return typeCompare;
-        return a.objectName.compareTo(b.objectName);
-      });
+      _sortByTypeThenName(points);
 
       _logger.i('_loadPointsBacnet: ${points.length} points discovered via BACnet');
 
@@ -381,6 +430,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       );
     } catch (e) {
       _logger.e('_loadPointsBacnet error: $e');
+      if (!_isCurrent(generation, connectionId)) return;
       state = state.copyWith(
         error: 'Erreur BACnet: $e',
         isLoading: false,
@@ -390,8 +440,19 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
   /// Rafraîchit les valeurs des points
   /// Pour BACnet: rafraîchit uniquement les present-value (rapide)
-  /// Pour API: recharge tous les points
-  Future<void> refresh() async {
+  /// Pour API: refetch silencieux (pas de spinner, pas de réécriture du cache)
+  Future<void> refresh() {
+    final inFlight = _refreshInFlight ?? _loadInFlight;
+    if (inFlight != null) return inFlight;
+    final generation = _generation;
+    final future = _refreshImpl(generation);
+    _refreshInFlight = future;
+    return future.whenComplete(() {
+      if (_generation == generation) _refreshInFlight = null;
+    });
+  }
+
+  Future<void> _refreshImpl(int generation) async {
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) return;
 
@@ -399,25 +460,54 @@ class PointsNotifier extends StateNotifier<PointsState> {
     // CONNEXION BACNET NATIVE - Refresh optimisé
     // ========================================
     if (connectionState.isBacnetConnection) {
-      await _refreshAllValuesBacnet();
+      await _refreshAllValuesBacnet(generation);
       return;
     }
 
     // ========================================
     // CONNEXION API DISTECH
     // ========================================
-    await loadPoints();
+    await _refreshValuesApi(generation);
+  }
+
+  /// Silent API refresh: no isLoading toggle and no static cache rewrite.
+  /// The API has no values-only endpoint, so all points are fetched, but the
+  /// state is only replaced if the connection is unchanged.
+  Future<void> _refreshValuesApi(int generation) async {
+    if (state.points.isEmpty || state.fromCache) {
+      // Nothing loaded yet (or only static cache data): full load
+      await loadPoints();
+      return;
+    }
+
+    final connectionState = _ref.read(activeConnectionProvider);
+    final client = connectionState.client;
+    final connectionId = connectionState.connection?.id;
+    if (client == null) return;
+
+    try {
+      final points = await client.getAllPointsOptimized();
+      if (!_isCurrent(generation, connectionId)) {
+        _logger.w('_refreshValuesApi: stale result ignored (connection changed)');
+        return;
+      }
+      _sortByTypeThenName(points);
+      state = state.copyWith(points: points, fromCache: false, clearError: true);
+    } catch (e) {
+      _logger.e('_refreshValuesApi error: $e');
+    }
   }
 
   /// Rafraîchit toutes les valeurs BACnet en parallèle (optimisé)
   /// Inclut aussi les infos de forçage (priority-array) pour les objets commandables
-  Future<void> _refreshAllValuesBacnet() async {
+  Future<void> _refreshAllValuesBacnet(int generation) async {
     final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
     if (bacnetConnection == null) return;
+    final connectionId = _ref.read(activeConnectionProvider).connection?.id;
 
     if (state.points.isEmpty) {
       // Pas de points chargés, faire une découverte complète
-      await _loadPointsBacnet();
+      await loadPoints();
       return;
     }
 
@@ -441,6 +531,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
         points: pointsToRefresh,
         batchSize: 10, // 10 requêtes en parallèle
       );
+
+      if (!_isCurrent(generation, connectionId)) {
+        _logger.w('_refreshAllValuesBacnet: stale result ignored (connection changed)');
+        return;
+      }
 
       _logger.i('_refreshAllValuesBacnet: got ${refreshedData.length} points');
 
@@ -483,14 +578,16 @@ class PointsNotifier extends StateNotifier<PointsState> {
     // ========================================
     // CONNEXION API DISTECH
     // ========================================
-    // Pour l'API, on recharge tous les points (pas d'endpoint individuel)
-    await loadPoints();
+    // Pour l'API, pas d'endpoint individuel : refresh silencieux de tous les points
+    await refresh();
   }
 
   /// Rafraîchit la valeur d'un point via BACnet natif
   Future<void> _refreshPointValueBacnet(BacnetObject point) async {
     final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
     if (bacnetConnection == null) return;
+    final generation = _generation;
+    final connectionId = _ref.read(activeConnectionProvider).connection?.id;
 
     try {
       final bacnetService = _ref.read(bacnetServiceProvider);
@@ -503,6 +600,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         objectInstance: point.instance,
       );
 
+      if (!_isCurrent(generation, connectionId)) return;
       _updatePointLocally(point, presentValue: newValue);
     } catch (e) {
       _logger.e('_refreshPointValueBacnet error: $e');
@@ -583,6 +681,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
+      _logger.e('writeValue (API) error: $e');
       return false;
     }
   }
@@ -656,6 +755,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
+      _logger.e('writeOverride (API) error: $e');
       return false;
     }
   }
@@ -728,6 +828,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
+      _logger.e('releaseOverride (API) error: $e');
       return false;
     }
   }
@@ -771,13 +872,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
     // CONNEXION BACNET NATIVE
     // ========================================
     if (connectionState.isBacnetConnection) {
-      // En BACnet natif, on libère les priorités courantes (1-16)
-      // Pour une libération complète, on libère seulement les priorités 1-15
-      for (int priority = 1; priority <= 15; priority++) {
-        await _releaseOverrideBacnet(point, priority: priority);
-      }
-      _updatePointLocally(point, isOverridden: false);
-      return true;
+      return _emergencyReleaseBacnet(point);
     }
 
     // ========================================
@@ -800,8 +895,53 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
+      _logger.e('emergencyRelease (API) error: $e');
       return false;
     }
+  }
+
+  /// Libération d'urgence via BACnet natif : relinquish des priorités 1 à 16
+  /// (la 16 est la plus basse priorité de commande ; relinquish-default n'est
+  /// pas une priorité). Lancées par petits lots en parallèle ; ne retourne
+  /// true (et ne met à jour l'état local) que si toutes ont réussi.
+  Future<bool> _emergencyReleaseBacnet(BacnetObject point) async {
+    final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
+    if (bacnetConnection == null) return false;
+
+    final bacnetService = _ref.read(bacnetServiceProvider);
+    final objectTypeCode = _bacnetObjectTypeToCode(point.type);
+    final failed = <int>[];
+
+    Future<void> release(int priority) async {
+      try {
+        await bacnetService.writePointValue(
+          host: bacnetConnection.host,
+          port: bacnetConnection.port,
+          objectType: objectTypeCode,
+          objectInstance: point.instance,
+          value: null, // null = relinquish
+          priority: priority,
+        );
+      } catch (e) {
+        _logger.w('_emergencyReleaseBacnet: priority $priority failed: $e');
+        failed.add(priority);
+      }
+    }
+
+    const batchSize = 4;
+    for (var start = 1; start <= 16; start += batchSize) {
+      final end = (start + batchSize - 1).clamp(1, 16);
+      await Future.wait([for (var p = start; p <= end; p++) release(p)]);
+    }
+
+    if (failed.isNotEmpty) {
+      failed.sort();
+      _logger.e('_emergencyReleaseBacnet: failed priorities: $failed');
+      return false;
+    }
+
+    _updatePointLocally(point, isOverridden: false);
+    return true;
   }
 
   /// Force une entrée (AI, BI, MSI) via out-of-service + present-value
@@ -843,6 +983,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
+      _logger.e('forceInput (API) error: $e');
       return false;
     }
   }
@@ -857,7 +998,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       final objectTypeCode = _bacnetObjectTypeToCode(point.type);
 
       // 1. Mettre out-of-service à true
-      await bacnetService.writeProperty(
+      final oosResponse = await bacnetService.writeProperty(
         host: bacnetConnection.host,
         port: bacnetConnection.port,
         objectType: objectTypeCode,
@@ -865,15 +1006,42 @@ class PointsNotifier extends StateNotifier<PointsState> {
         propertyId: BacnetPropertyId.outOfService,
         value: true,
       );
+      if (!oosResponse.isSuccess) {
+        _logger.e('_forceInputBacnet: out-of-service write refused: ${oosResponse.errorMessage ?? oosResponse.type}');
+        return false;
+      }
 
       // 2. Écrire la valeur
-      await bacnetService.writePointValue(
-        host: bacnetConnection.host,
-        port: bacnetConnection.port,
-        objectType: objectTypeCode,
-        objectInstance: point.instance,
-        value: value,
-      );
+      try {
+        await bacnetService.writePointValue(
+          host: bacnetConnection.host,
+          port: bacnetConnection.port,
+          objectType: objectTypeCode,
+          objectInstance: point.instance,
+          value: value,
+        );
+      } catch (e) {
+        // Rollback: do not leave the input out-of-service with a stale value
+        _logger.e('_forceInputBacnet: present-value write failed, rolling back out-of-service: $e');
+        try {
+          final rollback = await bacnetService.writeProperty(
+            host: bacnetConnection.host,
+            port: bacnetConnection.port,
+            objectType: objectTypeCode,
+            objectInstance: point.instance,
+            propertyId: BacnetPropertyId.outOfService,
+            value: false,
+          );
+          if (!rollback.isSuccess) {
+            _logger.e('_forceInputBacnet: rollback refused, input left out-of-service');
+            _updatePointLocally(point, outOfService: true);
+          }
+        } catch (e2) {
+          _logger.e('_forceInputBacnet: rollback failed, input left out-of-service: $e2');
+          _updatePointLocally(point, outOfService: true);
+        }
+        return false;
+      }
 
       // Mettre à jour localement
       _updatePointLocally(
@@ -922,6 +1090,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       return success;
     } catch (e) {
+      _logger.e('releaseInput (API) error: $e');
       return false;
     }
   }
@@ -936,7 +1105,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       final objectTypeCode = _bacnetObjectTypeToCode(point.type);
 
       // Remettre out-of-service à false
-      await bacnetService.writeProperty(
+      final response = await bacnetService.writeProperty(
         host: bacnetConnection.host,
         port: bacnetConnection.port,
         objectType: objectTypeCode,
@@ -944,6 +1113,10 @@ class PointsNotifier extends StateNotifier<PointsState> {
         propertyId: BacnetPropertyId.outOfService,
         value: false,
       );
+      if (!response.isSuccess) {
+        _logger.e('_releaseInputBacnet: write refused: ${response.errorMessage ?? response.type}');
+        return false;
+      }
 
       // Mettre à jour localement
       _updatePointLocally(point, outOfService: false);
@@ -1003,7 +1176,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       final bacnetService = _ref.read(bacnetServiceProvider);
       final objectTypeCode = _bacnetObjectTypeToCode(point.type);
 
-      await bacnetService.writeProperty(
+      final response = await bacnetService.writeProperty(
         host: bacnetConnection.host,
         port: bacnetConnection.port,
         objectType: objectTypeCode,
@@ -1011,6 +1184,10 @@ class PointsNotifier extends StateNotifier<PointsState> {
         propertyId: BacnetPropertyId.description,
         value: description,
       );
+      if (!response.isSuccess) {
+        _logger.e('_writeDescriptionBacnet: write refused: ${response.errorMessage ?? response.type}');
+        return false;
+      }
 
       // Mettre à jour localement
       _updatePointLocally(point, description: description);
@@ -1101,15 +1278,13 @@ const autoRefreshOptions = [
 ];
 
 /// Provider pour un point spécifique
+/// Only rebuilds when this point's object changes (not on search/sort/filter).
 final pointDetailProvider = Provider.family<BacnetObject?, (BacnetObjectType, int)>((ref, params) {
-  final state = ref.watch(pointsProvider);
   final (type, instance) = params;
-
-  try {
-    return state.points.firstWhere(
-      (p) => p.type == type && p.instance == instance,
-    );
-  } catch (e) {
+  return ref.watch(pointsProvider.select((s) {
+    for (final p in s.points) {
+      if (p.type == type && p.instance == instance) return p;
+    }
     return null;
-  }
+  }));
 });
