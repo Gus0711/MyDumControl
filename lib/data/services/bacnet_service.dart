@@ -751,6 +751,14 @@ class BacnetService {
       }
     });
 
+    final helpers = await _openDiscoverySockets();
+    final socket = _socket!;
+    // Who-Is also sent from the helper's dynamic port (see _openDiscoverySockets)
+    void send(List<int> packet, InternetAddress address) {
+      socket.send(packet, address, port);
+      helpers.sender?.send(packet, address, port);
+    }
+
     try {
       // Obtenir les adresses de broadcast du réseau local
       final broadcastAddresses = await _getLocalBroadcastAddresses();
@@ -767,7 +775,7 @@ class BacnetService {
       for (final broadcastAddr in broadcastAddresses) {
         try {
           final address = InternetAddress(broadcastAddr);
-          _socket!.send(whoIsRouterPacket, address, port);
+          send(whoIsRouterPacket, address);
         } catch (e) {
           // Ignorer les erreurs
         }
@@ -775,7 +783,7 @@ class BacnetService {
       if (sendGlobalBroadcast) {
         try {
           final globalBroadcast = InternetAddress('255.255.255.255');
-          _socket!.send(whoIsRouterPacket, globalBroadcast, port);
+          send(whoIsRouterPacket, globalBroadcast);
         } catch (e) {
           // Ignorer
         }
@@ -809,7 +817,7 @@ class BacnetService {
         for (final broadcastAddr in broadcastAddresses) {
           try {
             final address = InternetAddress(broadcastAddr);
-            _socket!.send(packet, address, port);
+            send(packet, address);
           } catch (e) {
             logger.w('Failed to send to $broadcastAddr: $e');
           }
@@ -818,7 +826,7 @@ class BacnetService {
         if (sendGlobalBroadcast) {
           try {
             final globalBroadcast = InternetAddress('255.255.255.255');
-            _socket!.send(packet, globalBroadcast, port);
+            send(packet, globalBroadcast);
           } catch (e) {
             logger.w('Failed to send global broadcast: $e');
           }
@@ -835,7 +843,7 @@ class BacnetService {
           for (final broadcastAddr in broadcastAddresses) {
             try {
               final address = InternetAddress(broadcastAddr);
-              _socket!.send(networkWhoIs, address, port);
+              send(networkWhoIs, address);
               logger.d('Who-Is sent to network $networkNumber via $broadcastAddr');
             } catch (e) {
               // Ignorer
@@ -855,7 +863,67 @@ class BacnetService {
     } finally {
       await deviceSubscription.cancel();
       await routerSubscription.cancel();
+      for (final helper in helpers.all) {
+        helper.close();
+      }
     }
+  }
+
+  /// Extra sockets kept open for the duration of a discovery.
+  ///
+  /// Another BACnet stack on this PC (YABE, a supervisor...) usually binds
+  /// `<interface IP>:47808`. Being more specific than our socket, it takes
+  /// the I-Am broadcast to 47808 when ours fell back to a dynamic port, and
+  /// the unicast I-Am sent back to 47808 when ours is on 0.0.0.0:47808.
+  /// - [listeners]: `<interface IP>:47808` shared with SO_REUSEADDR, so
+  ///   broadcasts reach us as well (Windows delivers them to every shared
+  ///   socket). Linux and the like do not deliver broadcasts to a socket bound
+  ///   to a unicast IP: there we share 0.0.0.0:47808 when ours is not on it.
+  /// - [sender]: a dynamic port also sending Who-Is when ours is on 47808,
+  ///   for devices that answer to the source port.
+  /// Every datagram goes through the usual handler (duplicate I-Am are
+  /// merged by device ID).
+  Future<({List<RawDatagramSocket> all, RawDatagramSocket? sender})> _openDiscoverySockets() async {
+    final sockets = <RawDatagramSocket>[];
+    RawDatagramSocket? sender;
+
+    Future<RawDatagramSocket?> open(InternetAddress address, int port) async {
+      try {
+        final s = await RawDatagramSocket.bind(address, port, reuseAddress: port != 0);
+        s.broadcastEnabled = true;
+        s.listen((event) {
+          if (event != RawSocketEvent.read) return;
+          Datagram? datagram;
+          while ((datagram = s.receive()) != null) {
+            if (_isInitialized) _handleDatagram(datagram!);
+          }
+        });
+        sockets.add(s);
+        return s;
+      } catch (e) {
+        logger.d('Discovery socket ${address.address}:$port not opened: $e');
+        return null;
+      }
+    }
+
+    final mainAddress = _socket?.address.address;
+    if (Platform.isWindows) {
+      final bound = _boundInterface;
+      for (final iface in await BacnetNetwork.listIpv4Interfaces()) {
+        if (BacnetNetwork.isVirtualInterface(iface.name) || iface.address.startsWith('127.')) continue;
+        if (bound != null && iface.address != bound.address) continue;
+        if (_isUsingStandardPort && iface.address == mainAddress) continue;
+        await open(InternetAddress(iface.address), standardBacnetPort);
+      }
+    } else if (!_isUsingStandardPort) {
+      await open(InternetAddress.anyIPv4, standardBacnetPort);
+    }
+
+    if (_isUsingStandardPort) {
+      sender = await open(InternetAddress(mainAddress ?? InternetAddress.anyIPv4.address), 0);
+    }
+    logger.d('Discovery helper sockets: ${sockets.map((s) => '${s.address.address}:${s.port}').join(', ')}');
+    return (all: sockets, sender: sender);
   }
 
   /// Récupère les adresses de broadcast
