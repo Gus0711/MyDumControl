@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myglobaldc/data/services/bacnet/bacnet_constants.dart';
 import 'package:myglobaldc/data/services/bacnet/bacnet_decoder.dart';
+import 'package:myglobaldc/data/services/bacnet/bacnet_network.dart';
 import 'package:myglobaldc/data/services/bacnet_service.dart';
 
 /// BVLC Original-Unicast + NPDU without routing around an APDU
@@ -111,6 +112,28 @@ void main() {
     }
   });
 
+  test('47808 held on an interface IP (YABE): dynamic port', () async {
+    // YABE binds <interface IP>:47808: more specific than our 0.0.0.0:47808,
+    // it would receive every unicast reply sent to that interface.
+    final iface = (await BacnetNetwork.listIpv4Interfaces())
+        .where((i) => !BacnetNetwork.isVirtualInterface(i.name) && !i.address.startsWith('127.'))
+        .firstOrNull;
+    if (iface == null) return markTestSkipped('no physical IPv4 interface');
+    final ip = InternetAddress(iface.address);
+    RawDatagramSocket? other;
+    try {
+      other = await RawDatagramSocket.bind(ip, BacnetService.standardBacnetPort, reuseAddress: false);
+    } on SocketException {
+      // Already held by another program: same situation
+    }
+    try {
+      await service.init();
+      expect(service.isUsingStandardPort, isFalse);
+    } finally {
+      other?.close();
+    }
+  }, skip: !Platform.isWindows);
+
   test('a lost request is retried with the same invoke ID (A9)', () async {
     final device = await fake();
     device.onDatagram = (d) {
@@ -135,7 +158,8 @@ void main() {
   test('RPM timeout does not cascade into one ReadProperty per property (A11)', () async {
     final device = await fake();
     final result = await service.testConnection(host: device.host, port: device.port, deviceId: 1);
-    expect(result.success, isTrue);
+    // No answer is a failure, not a device without a name
+    expect(result.success, isFalse);
     expect(result.deviceName, isNull);
     // 1 RPM + 1 retry, no ReadProperty fallback
     expect(device.requests, hasLength(2));

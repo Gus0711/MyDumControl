@@ -133,6 +133,11 @@ class BacnetService {
     try {
       socket = await RawDatagramSocket.bind(bindAddress, standardBacnetPort, reuseAddress: false);
       standardPort = true;
+      final owner = bindOnInterfaceIp ? null : await _interfaceHoldingStandardPort(bindInterface);
+      if (owner != null) {
+        socket.close();
+        throw SocketException('port $standardBacnetPort already bound on $owner by another program');
+      }
     } catch (e) {
       logger.w('Could not bind to port $standardBacnetPort: $e. Using dynamic port.');
       socket = await RawDatagramSocket.bind(bindAddress, 0, reuseAddress: false);
@@ -151,6 +156,26 @@ class BacnetService {
       'BACnet service bound to ${bindAddress.address}:${socket.port} '
       '(interface: ${bindInterface?.address ?? "all"}), broadcast enabled',
     );
+  }
+
+  /// Windows: another BACnet program (YABE, a supervisor...) that bound
+  /// `<interface IP>:47808` is more specific than our 0.0.0.0:47808 and
+  /// receives every unicast reply sent to that interface: our requests would
+  /// all time out. Returns that interface address, or null when 47808 is
+  /// free on every interface (an exclusive test bind succeeds).
+  Future<String?> _interfaceHoldingStandardPort(NetworkInterfaceChoice? bindInterface) async {
+    if (!Platform.isWindows) return null;
+    for (final iface in await BacnetNetwork.listIpv4Interfaces()) {
+      if (BacnetNetwork.isVirtualInterface(iface.name) || iface.address.startsWith('127.')) continue;
+      if (bindInterface != null && iface.address != bindInterface.address) continue;
+      try {
+        final probe = await RawDatagramSocket.bind(InternetAddress(iface.address), standardBacnetPort, reuseAddress: false);
+        probe.close();
+      } on SocketException {
+        return iface.address;
+      }
+    }
+    return null;
   }
 
   /// Ferme le socket et fait échouer les requêtes en attente
@@ -652,12 +677,20 @@ class BacnetService {
         propertyIds: [BacnetPropertyId.objectName, BacnetPropertyId.vendorName, BacnetPropertyId.modelName],
       );
 
+      if (props == null || props.isEmpty) {
+        return BacnetConnectionResult(
+          success: false,
+          deviceId: targetDeviceId,
+          errorMessage: 'Device $targetDeviceId did not answer',
+        );
+      }
+
       return BacnetConnectionResult(
         success: true,
         deviceId: targetDeviceId,
-        deviceName: props?[BacnetPropertyId.objectName]?.toString(),
-        vendorName: props?[BacnetPropertyId.vendorName]?.toString(),
-        modelName: props?[BacnetPropertyId.modelName]?.toString(),
+        deviceName: props[BacnetPropertyId.objectName]?.toString(),
+        vendorName: props[BacnetPropertyId.vendorName]?.toString(),
+        modelName: props[BacnetPropertyId.modelName]?.toString(),
       );
     } catch (e) {
       return BacnetConnectionResult(success: false, errorMessage: e.toString());
