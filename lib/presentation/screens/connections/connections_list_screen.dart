@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:myglobaldc/l10n/app_localizations.dart';
+import '../../../application/providers/active_connection_provider.dart';
+import '../../../application/providers/api_provider.dart';
 import '../../../application/providers/connection_providers.dart';
 import '../../../application/providers/folder_providers.dart';
 import '../../../application/providers/super_favorites_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
+import '../../../data/services/api_exceptions.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../../domain/models/display_preferences.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
@@ -666,6 +669,7 @@ class _ConnectionCard extends ConsumerWidget {
     final connectionInfo = superFavsState.getConnectionInfo(connection.id);
 
     // Connexion importée sans son mot de passe : à ressaisir
+    final isDistech = connection.connectionType != 'bacnet';
     final missingPassword = connection.connectionType != 'bacnet' &&
         ref.watch(connectionHasPasswordProvider(connection.passwordKey)).valueOrNull == false;
 
@@ -723,6 +727,7 @@ class _ConnectionCard extends ConsumerWidget {
                         // Badges : Modèle (depuis DB) + API version (toujours visibles)
                         if (connection.modelName != null ||
                             connection.apiVersion != null ||
+                            isDistech ||
                             missingPassword) ...[
                           const SizedBox(height: 4),
                           Wrap(
@@ -776,22 +781,31 @@ class _ConnectionCard extends ConsumerWidget {
                                     ],
                                   ),
                                 ),
-                              // Badge API version
-                              if (connection.apiVersion != null)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.shade100,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    'API ${connection.apiVersion}',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      color: Colors.blue.shade800,
+                              // Badge API version ("API ?" : détectée à la connexion)
+                              if (connection.apiVersion != null || isDistech)
+                                Tooltip(
+                                  message: connection.apiVersion != null
+                                      ? l10n.apiVersionBadgeTooltip
+                                      : l10n.apiVersionUnknownTooltip,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: connection.apiVersion != null
+                                          ? Colors.blue.shade100
+                                          : Colors.orange.shade100,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'API ${connection.apiVersion ?? '?'}',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: connection.apiVersion != null
+                                            ? Colors.blue.shade800
+                                            : Colors.orange.shade900,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -819,6 +833,9 @@ class _ConnectionCard extends ConsumerWidget {
                         case 'move':
                           onMoveToFolder();
                           break;
+                        case 'redetect':
+                          _redetectApiVersion(context, ref, l10n);
+                          break;
                         case 'delete':
                           onDelete();
                           break;
@@ -835,6 +852,17 @@ class _ConnectionCard extends ConsumerWidget {
                           ],
                         ),
                       ),
+                      if (isDistech)
+                        PopupMenuItem(
+                          value: 'redetect',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.manage_search, size: 20),
+                              const SizedBox(width: 8),
+                              Text(l10n.redetectApiVersion),
+                            ],
+                          ),
+                        ),
                       PopupMenuItem(
                         value: 'move',
                         child: Row(
@@ -874,6 +902,35 @@ class _ConnectionCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Re-détecte la version d'API (automate mis à jour ou remplacé à la même
+  /// adresse) et l'enregistre ; la connexion active est rouverte pour
+  /// utiliser les bonnes routes.
+  Future<void> _redetectApiVersion(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(SnackBar(content: Text(l10n.redetectingApiVersion)));
+    String message;
+    Color color;
+    try {
+      final version = await ref.read(apiClientFactoryProvider).redetectApiVersion(connection);
+      if (version == null) {
+        message = l10n.redetectApiVersionFailed;
+        color = Colors.red;
+      } else {
+        message = l10n.redetectApiVersionDone(version);
+        color = Colors.green;
+        final active = ref.read(activeConnectionProvider);
+        if (active.connection?.id == connection.id && version != connection.apiVersion) {
+          await ref.read(activeConnectionProvider.notifier).connect(connection.id);
+        }
+      }
+    } on ApiException catch (e) {
+      message = e.message;
+      color = Colors.red;
+    }
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
   }
 
   /// Construit la liste des super favoris

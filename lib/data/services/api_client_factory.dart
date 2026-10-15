@@ -71,6 +71,18 @@ class ApiClientFactory {
     return configFor(connection, password);
   }
 
+  /// Detects the API version of [connection] again (controller upgraded,
+  /// or replaced at the same address) and stores it. Returns the stored
+  /// version, or null if the controller could not be reached.
+  /// Throws [PasswordMissingException] if no password is stored.
+  Future<String?> redetectApiVersion(Connection connection) async {
+    final password = await secureStorage.read(key: connection.passwordKey);
+    if (password == null) throw const PasswordMissingException();
+    final version = await _detectApiVersion(connection, password);
+    if (version != null) await database.updateApiVersion(connection.id, version);
+    return version;
+  }
+
   Future<String?> _detectApiVersion(Connection connection, String password) async {
     try {
       final result = await ApiService().testConnection(

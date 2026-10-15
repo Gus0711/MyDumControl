@@ -1330,6 +1330,29 @@ class AppLocalizationsFr extends AppLocalizations {
   String get passwordMissingBadge => 'Mot de passe à ressaisir';
 
   @override
+  String get apiVersionBadgeTooltip =>
+      'Version de l\'API REST Distech utilisée pour cet automate';
+
+  @override
+  String get apiVersionUnknownTooltip =>
+      'Version d\'API pas encore détectée : elle le sera à la prochaine connexion';
+
+  @override
+  String get redetectApiVersion => 'Re-détecter la version API';
+
+  @override
+  String get redetectingApiVersion => 'Détection de la version d\'API…';
+
+  @override
+  String redetectApiVersionDone(String version) {
+    return 'Version d\'API détectée : $version';
+  }
+
+  @override
+  String get redetectApiVersionFailed =>
+      'Automate injoignable : version d\'API non détectée';
+
+  @override
   String invalidCredentialsMessage(String status) {
     return 'Identifiants invalides ($status). Vérifiez le nom d\'utilisateur et le mot de passe de la connexion.';
   }

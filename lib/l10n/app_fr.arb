@@ -444,6 +444,13 @@
   "certificateFingerprintPinnedInfo": "Elle sera enregistrée et vérifiée à chaque connexion.",
   "httpCleartextWarning": "HTTP non chiffré : le mot de passe circule en clair sur le réseau. Préférez HTTPS si l'automate le permet.",
   "passwordMissingBadge": "Mot de passe à ressaisir",
+  "apiVersionBadgeTooltip": "Version de l'API REST Distech utilisée pour cet automate",
+  "apiVersionUnknownTooltip": "Version d'API pas encore détectée : elle le sera à la prochaine connexion",
+  "redetectApiVersion": "Re-détecter la version API",
+  "redetectingApiVersion": "Détection de la version d'API…",
+  "redetectApiVersionDone": "Version d'API détectée : {version}",
+  "@redetectApiVersionDone": {"placeholders": {"version": {"type": "String"}}},
+  "redetectApiVersionFailed": "Automate injoignable : version d'API non détectée",
   "invalidCredentialsMessage": "Identifiants invalides ({status}). Vérifiez le nom d'utilisateur et le mot de passe de la connexion.",
   "@invalidCredentialsMessage": {
     "placeholders": {

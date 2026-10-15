@@ -1324,6 +1324,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get passwordMissingBadge => 'Password required';
 
   @override
+  String get apiVersionBadgeTooltip =>
+      'Distech REST API version used for this controller';
+
+  @override
+  String get apiVersionUnknownTooltip =>
+      'API version not detected yet: it will be on the next connection';
+
+  @override
+  String get redetectApiVersion => 'Re-detect API version';
+
+  @override
+  String get redetectingApiVersion => 'Detecting the API version…';
+
+  @override
+  String redetectApiVersionDone(String version) {
+    return 'API version detected: $version';
+  }
+
+  @override
+  String get redetectApiVersionFailed =>
+      'Controller unreachable: API version not detected';
+
+  @override
   String invalidCredentialsMessage(String status) {
     return 'Invalid credentials ($status). Check the connection user name and password.';
   }

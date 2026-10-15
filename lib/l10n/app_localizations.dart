@@ -2504,6 +2504,42 @@ abstract class AppLocalizations {
   /// **'Mot de passe à ressaisir'**
   String get passwordMissingBadge;
 
+  /// No description provided for @apiVersionBadgeTooltip.
+  ///
+  /// In fr, this message translates to:
+  /// **'Version de l\'API REST Distech utilisée pour cet automate'**
+  String get apiVersionBadgeTooltip;
+
+  /// No description provided for @apiVersionUnknownTooltip.
+  ///
+  /// In fr, this message translates to:
+  /// **'Version d\'API pas encore détectée : elle le sera à la prochaine connexion'**
+  String get apiVersionUnknownTooltip;
+
+  /// No description provided for @redetectApiVersion.
+  ///
+  /// In fr, this message translates to:
+  /// **'Re-détecter la version API'**
+  String get redetectApiVersion;
+
+  /// No description provided for @redetectingApiVersion.
+  ///
+  /// In fr, this message translates to:
+  /// **'Détection de la version d\'API…'**
+  String get redetectingApiVersion;
+
+  /// No description provided for @redetectApiVersionDone.
+  ///
+  /// In fr, this message translates to:
+  /// **'Version d\'API détectée : {version}'**
+  String redetectApiVersionDone(String version);
+
+  /// No description provided for @redetectApiVersionFailed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Automate injoignable : version d\'API non détectée'**
+  String get redetectApiVersionFailed;
+
   /// No description provided for @invalidCredentialsMessage.
   ///
   /// In fr, this message translates to:
