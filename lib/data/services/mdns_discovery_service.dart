@@ -27,8 +27,8 @@ class EclypseDevice {
 /// Service de découverte mDNS pour les automates ECLYPSE Distech
 /// Implémentation manuelle compatible Windows
 class MdnsDiscoveryService {
-  RawDatagramSocket? _socket;
-  StreamSubscription<RawSocketEvent>? _subscription; // Pour cleanup propre
+  final List<RawDatagramSocket> _sockets = [];
+  final List<StreamSubscription<RawSocketEvent>> _subscriptions = []; // Pour cleanup propre
 
   /// Adresse multicast mDNS
   static const String mdnsAddress = '224.0.0.251';
@@ -47,61 +47,74 @@ class MdnsDiscoveryService {
 
     logger.i('Starting mDNS discovery for ECLYPSE devices...');
 
-    try {
-      // Créer le socket UDP
-      _socket = await RawDatagramSocket.bind(
-        InternetAddress.anyIPv4,
-        0, // Port dynamique
-        reuseAddress: true,
-      );
-
-      // Joindre le groupe multicast
+    void onDatagram(Datagram datagram) {
       try {
-        _socket!.joinMulticast(InternetAddress(mdnsAddress));
+        final device = _parseMdnsResponse(datagram.data, datagram.address);
+        if (device != null && !deviceNames.contains(device.name)) {
+          deviceNames.add(device.name);
+          devices.add(device);
+          logger.i('Discovered ECLYPSE: ${device.name} at ${device.ipAddress}');
+          onDeviceFound?.call(device);
+        }
       } catch (e) {
-        logger.w('Could not join multicast group: $e');
+        // Ignorer les paquets non parsables
       }
+    }
 
-      // Écouter les réponses avec référence pour cleanup
-      _subscription = _socket!.listen((event) {
-        if (event == RawSocketEvent.read) {
-          final datagram = _socket?.receive();
-          if (datagram != null) {
-            try {
-              final device = _parseMdnsResponse(datagram.data, datagram.address);
-              if (device != null && !deviceNames.contains(device.name)) {
-                deviceNames.add(device.name);
-                devices.add(device);
-                logger.i('Discovered ECLYPSE: ${device.name} at ${device.ipAddress}');
-                onDeviceFound?.call(device);
-              }
-            } catch (e) {
-              // Ignorer les paquets non parsables
+    try {
+      // Un socket par interface IPv4 : sous Windows (VPN, Tailscale,
+      // plusieurs cartes) l'interface multicast par défaut n'est souvent pas
+      // celle du réseau des automates. Les requêtes ont le bit QU, les
+      // réponses reviennent donc en unicast sur le socket émetteur.
+      final addresses = <InternetAddress>[InternetAddress.anyIPv4];
+      try {
+        final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
+        for (final iface in interfaces) {
+          for (final addr in iface.addresses) {
+            if (!addr.isLoopback && !addr.address.startsWith('169.254.')) {
+              addresses.add(addr);
             }
           }
         }
-      });
+      } catch (e) {
+        logger.w('mDNS: could not list network interfaces: $e');
+      }
 
-      // Envoyer la requête mDNS pour _eclypse._tcp.local
-      final query = _buildMdnsQuery(eclypseServiceType);
-      _socket!.send(query, InternetAddress(mdnsAddress), mdnsPort);
-      logger.d('mDNS query sent for $eclypseServiceType');
+      final queries = [
+        _buildMdnsQuery(eclypseServiceType),
+        _buildMdnsQuery('_dcconf._udp.local'),
+      ];
 
-      // Envoyer aussi pour _dcconf._udp.local
-      final query2 = _buildMdnsQuery('_dcconf._udp.local');
-      _socket!.send(query2, InternetAddress(mdnsAddress), mdnsPort);
+      for (final address in addresses) {
+        try {
+          final socket = await RawDatagramSocket.bind(address, 0, reuseAddress: true);
+          _sockets.add(socket);
+          try {
+            socket.joinMulticast(InternetAddress(mdnsAddress));
+          } catch (e) {
+            // Non bloquant : les réponses QU arrivent en unicast
+          }
+          _subscriptions.add(socket.listen((event) {
+            if (event == RawSocketEvent.read) {
+              final datagram = socket.receive();
+              if (datagram != null) onDatagram(datagram);
+            }
+          }));
+          for (final query in queries) {
+            socket.send(query, InternetAddress(mdnsAddress), mdnsPort);
+          }
+          logger.d('mDNS query sent from ${address.address}');
+        } catch (e) {
+          logger.w('mDNS: could not query from ${address.address}: $e');
+        }
+      }
 
       // Attendre les réponses
       await Future.delayed(timeout);
-
     } catch (e) {
       logger.e('mDNS discovery error: $e');
     } finally {
-      // Cleanup propre
-      await _subscription?.cancel();
-      _subscription = null;
-      _socket?.close();
-      _socket = null;
+      stop();
     }
 
     logger.i('mDNS discovery completed: ${devices.length} ECLYPSE found');
@@ -282,9 +295,13 @@ class MdnsDiscoveryService {
 
   /// Arrête la découverte en cours
   void stop() {
-    _subscription?.cancel();
-    _subscription = null;
-    _socket?.close();
-    _socket = null;
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    _subscriptions.clear();
+    for (final socket in _sockets) {
+      socket.close();
+    }
+    _sockets.clear();
   }
 }
