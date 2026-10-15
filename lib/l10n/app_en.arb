@@ -48,6 +48,8 @@
   "loading": "Loading...",
   "error": "Error",
   "retry": "Retry",
+  "bacnetReadingDeviceName": "Reading name…",
+  "bacnetDeviceNameUnavailable": "Name not read (the device does not answer)",
   "noData": "No data",
   "search": "Search",
   "refresh": "Refresh",

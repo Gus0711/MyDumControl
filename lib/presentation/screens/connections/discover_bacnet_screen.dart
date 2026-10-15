@@ -7,6 +7,9 @@ import '../../../application/providers/bacnet_provider.dart';
 import '../../../application/providers/settings_provider.dart';
 import '../../../data/services/bacnet_service.dart';
 
+/// Lecture du nom / fabricant / modèle d'un device découvert
+enum DeviceDetailsStatus { loading, done, failed }
+
 /// Resultat de decouverte BACnet
 class DiscoveredBacnetDevice {
   final String host;
@@ -17,6 +20,7 @@ class DiscoveredBacnetDevice {
   final String? modelName;
   final bool hasConflict;
   final List<String> conflictingHosts;
+  final DeviceDetailsStatus detailsStatus;
 
   DiscoveredBacnetDevice({
     required this.host,
@@ -27,6 +31,7 @@ class DiscoveredBacnetDevice {
     this.modelName,
     this.hasConflict = false,
     this.conflictingHosts = const [],
+    this.detailsStatus = DeviceDetailsStatus.loading,
   });
 
   DiscoveredBacnetDevice copyWith({
@@ -38,6 +43,7 @@ class DiscoveredBacnetDevice {
     String? modelName,
     bool? hasConflict,
     List<String>? conflictingHosts,
+    DeviceDetailsStatus? detailsStatus,
   }) {
     return DiscoveredBacnetDevice(
       host: host ?? this.host,
@@ -48,6 +54,7 @@ class DiscoveredBacnetDevice {
       modelName: modelName ?? this.modelName,
       hasConflict: hasConflict ?? this.hasConflict,
       conflictingHosts: conflictingHosts ?? this.conflictingHosts,
+      detailsStatus: detailsStatus ?? this.detailsStatus,
     );
   }
 }
@@ -70,6 +77,9 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
   /// Device details requests: one per (deviceId, address), at most
   /// [_maxConcurrentDetails] in flight, the others wait in [_detailsQueue]
   static const int _maxConcurrentDetails = 4;
+
+  /// Essais de lecture des détails d'un device avant d'abandonner
+  static const int _detailsAttempts = 3;
   final Set<String> _detailsRequested = {};
   final List<({String host, int port, int deviceId})> _detailsQueue = [];
   int _detailsInFlight = 0;
@@ -180,6 +190,9 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
       try {
         await bacnetService.discoverLocalDevices(
           port: ref.read(settingsProvider).defaultBacnetPort,
+          // Envois étalés : un device qui a manqué un Who-Is répond au suivant
+          sendCount: 4,
+          sendInterval: const Duration(milliseconds: 800),
         );
       } finally {
         await subscription.cancel();
@@ -326,32 +339,57 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
     }
   }
 
-  /// Recupere les details d'un device
+  /// Récupère nom, fabricant et modèle d'un device, avec relances
+  /// automatiques : au premier échange avec le PC, un device perd souvent
+  /// la requête (résolution d'adresse) ; l'utilisateur n'a pas à actualiser.
   Future<void> _fetchDeviceDetails(BacnetService bacnetService, String host, int port, int deviceId) async {
-    try {
-      final result = await bacnetService.testConnection(
-        host: host,
-        port: port,
-        deviceId: deviceId,
-        // Premier contact : la 1re requête est souvent perdue (ARP), relance rapide
-        firstAttemptTimeout: const Duration(seconds: 1),
-      );
-
-      if (result.success && mounted) {
-        setState(() {
-          final index = _discoveredDevices.indexWhere((d) => d.deviceId == deviceId);
-          if (index != -1) {
-            _discoveredDevices[index] = _discoveredDevices[index].copyWith(
-              deviceName: result.deviceName,
-              vendorName: result.vendorName,
-              modelName: result.modelName,
-            );
-          }
-        });
+    _setDetailsStatus(deviceId, DeviceDetailsStatus.loading);
+    for (var attempt = 1; attempt <= _detailsAttempts; attempt++) {
+      if (!mounted) return;
+      try {
+        final result = await bacnetService.testConnection(
+          host: host,
+          port: port,
+          deviceId: deviceId,
+          // Relance rapide de la 1re requête, souvent perdue au premier contact
+          firstAttemptTimeout: const Duration(seconds: 1),
+        );
+        if (result.success) {
+          if (!mounted) return;
+          setState(() {
+            final index = _discoveredDevices.indexWhere((d) => d.deviceId == deviceId);
+            if (index != -1) {
+              _discoveredDevices[index] = _discoveredDevices[index].copyWith(
+                deviceName: result.deviceName,
+                vendorName: result.vendorName,
+                modelName: result.modelName,
+                detailsStatus: DeviceDetailsStatus.done,
+              );
+            }
+          });
+          return;
+        }
+      } catch (e) {
+        // Nouvel essai ci-dessous
       }
-    } catch (e) {
-      // Ignorer les erreurs - le device reste avec les infos de base
+      if (attempt < _detailsAttempts) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
     }
+    _setDetailsStatus(deviceId, DeviceDetailsStatus.failed);
+  }
+
+  void _setDetailsStatus(int deviceId, DeviceDetailsStatus status) {
+    if (!mounted) return;
+    final index = _discoveredDevices.indexWhere((d) => d.deviceId == deviceId);
+    if (index == -1 || _discoveredDevices[index].detailsStatus == status) return;
+    setState(() => _discoveredDevices[index] = _discoveredDevices[index].copyWith(detailsStatus: status));
+  }
+
+  /// Nouvelle lecture des détails à la demande (après un échec)
+  void _retryDetails(DiscoveredBacnetDevice device) {
+    _detailsRequested.remove('${device.deviceId}@${device.host}');
+    _queueDeviceDetails(ref.read(bacnetServiceProvider), device.host, device.port, device.deviceId);
   }
 
   void _selectDevice(DiscoveredBacnetDevice device) {
@@ -668,6 +706,7 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
               return _BacnetDeviceCard(
                 device: device,
                 onTap: () => _selectDevice(device),
+                onRetryDetails: () => _retryDetails(device),
               );
             },
           ),
@@ -680,10 +719,12 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
 class _BacnetDeviceCard extends StatelessWidget {
   final DiscoveredBacnetDevice device;
   final VoidCallback onTap;
+  final VoidCallback onRetryDetails;
 
   const _BacnetDeviceCard({
     required this.device,
     required this.onTap,
+    required this.onRetryDetails,
   });
 
   @override
@@ -786,6 +827,35 @@ class _BacnetDeviceCard extends StatelessWidget {
                           ),
                       ],
                     ),
+                    if (device.detailsStatus == DeviceDetailsStatus.loading)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5)),
+                            const SizedBox(width: 6),
+                            Text(l10n.bacnetReadingDeviceName, style: theme.textTheme.bodySmall),
+                          ],
+                        ),
+                      )
+                    else if (device.detailsStatus == DeviceDetailsStatus.failed)
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 14, color: theme.colorScheme.error),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              l10n.bacnetDeviceNameUnavailable,
+                              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: onRetryDetails,
+                            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                            child: Text(l10n.retry),
+                          ),
+                        ],
+                      ),
                     const SizedBox(height: 4),
                     Text(
                       '${l10n.host}: ${device.host}',

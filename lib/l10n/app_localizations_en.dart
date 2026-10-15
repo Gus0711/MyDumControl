@@ -153,6 +153,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get retry => 'Retry';
 
   @override
+  String get bacnetReadingDeviceName => 'Reading name…';
+
+  @override
+  String get bacnetDeviceNameUnavailable =>
+      'Name not read (the device does not answer)';
+
+  @override
   String get noData => 'No data';
 
   @override

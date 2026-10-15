@@ -386,6 +386,18 @@ abstract class AppLocalizations {
   /// **'Réessayer'**
   String get retry;
 
+  /// No description provided for @bacnetReadingDeviceName.
+  ///
+  /// In fr, this message translates to:
+  /// **'Lecture du nom…'**
+  String get bacnetReadingDeviceName;
+
+  /// No description provided for @bacnetDeviceNameUnavailable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nom non lu (l\'appareil ne répond pas)'**
+  String get bacnetDeviceNameUnavailable;
+
   /// No description provided for @noData.
   ///
   /// In fr, this message translates to:

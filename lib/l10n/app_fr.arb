@@ -54,6 +54,8 @@
   "loading": "Chargement...",
   "error": "Erreur",
   "retry": "Réessayer",
+  "bacnetReadingDeviceName": "Lecture du nom…",
+  "bacnetDeviceNameUnavailable": "Nom non lu (l'appareil ne répond pas)",
   "noData": "Aucune donnée",
   "search": "Rechercher",
   "refresh": "Actualiser",
