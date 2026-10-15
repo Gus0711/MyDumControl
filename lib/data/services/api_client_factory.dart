@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/utils/logger.dart';
 
@@ -58,7 +59,33 @@ class ApiClientFactory {
   Future<ApiClientConfig> resolve(Connection connection) async {
     final password = await secureStorage.read(key: connection.passwordKey);
     if (password == null) throw const PasswordMissingException();
+    if (connection.apiVersion == null) {
+      // Connection saved without a test: detect the API version once and
+      // store it, otherwise a V1 controller would be queried with V2 paths.
+      final version = await _detectApiVersion(connection, password);
+      if (version != null) {
+        await database.updateApiVersion(connection.id, version);
+        return configFor(connection.copyWith(apiVersion: Value(version)), password);
+      }
+    }
     return configFor(connection, password);
+  }
+
+  Future<String?> _detectApiVersion(Connection connection, String password) async {
+    try {
+      final result = await ApiService().testConnection(
+        host: connection.host,
+        port: connection.port,
+        useHttps: connection.useHttps,
+        username: connection.username,
+        password: password,
+      );
+      logger.i('ApiClientFactory: detected API ${result.apiVersion} for connection ${connection.id}');
+      return result.success ? result.apiVersion : null;
+    } catch (e) {
+      logger.w('ApiClientFactory: API version detection failed: $e');
+      return null;
+    }
   }
 
   /// Pure config computation (no I/O).

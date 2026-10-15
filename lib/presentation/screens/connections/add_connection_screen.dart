@@ -11,6 +11,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/router/routes.dart';
 import '../../../data/services/certificate_pinning.dart';
+import '../../../data/services/api_service.dart' show ConnectionTestResult;
 import '../../widgets/gradient_app_bar.dart';
 
 /// Types de connexion supportes
@@ -59,6 +60,10 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
   bool _isTesting = false;
   bool _isSaving = false;
   String? _detectedApiVersion;
+
+  /// Endpoint (scheme/host/port) on which [_detectedApiVersion] was detected:
+  /// a version detected on another endpoint must not be saved.
+  String? _detectedEndpoint;
   ConnectionType _connectionType = ConnectionType.distechApi;
 
   /// Certificate fingerprint seen by the last successful HTTPS test, and the
@@ -96,6 +101,8 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
         _usernameController.text = connection.username;
         _useHttps = connection.useHttps;
         _detectedApiVersion = connection.apiVersion;
+        _detectedEndpoint =
+            '${connection.useHttps ? 'https' : 'http'}://${connection.host}:${connection.port}';
         _storedFingerprint = connection.certificateFingerprint;
         _storedEndpoint =
             '${connection.useHttps ? 'https' : 'http'}://${connection.host}:${connection.port}';
@@ -730,6 +737,32 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
   }
 
   Future<void> _testDistechConnection() async {
+    final result = await _runDistechTest();
+
+    if (mounted) {
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context)!.connectionSuccess} (API ${result.apiVersion})',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? AppLocalizations.of(context)!.connectionFailed),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Tests the Distech connection with the form values and, on success,
+  /// records the API version and certificate for the current endpoint.
+  Future<ConnectionTestResult> _runDistechTest() async {
     final apiService = ref.read(apiServiceProvider);
     var password = _passwordController.text;
     // Editing: the password field is left empty, reuse the stored secret
@@ -749,30 +782,15 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
       password: password,
     );
 
-    if (mounted) {
-      if (result.success) {
-        setState(() {
-          _detectedApiVersion = result.apiVersion;
-          _testedFingerprint = result.certificateFingerprint;
-          _testedEndpoint = _currentEndpoint;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${AppLocalizations.of(context)!.connectionSuccess} (API ${result.apiVersion})',
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.errorMessage ?? AppLocalizations.of(context)!.connectionFailed),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    if (mounted && result.success) {
+      setState(() {
+        _detectedApiVersion = result.apiVersion;
+        _detectedEndpoint = _currentEndpoint;
+        _testedFingerprint = result.certificateFingerprint;
+        _testedEndpoint = _currentEndpoint;
+      });
     }
+    return result;
   }
 
   Future<void> _testBacnetConnection() async {
@@ -823,6 +841,28 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
     try {
       final repository = ref.read(connectionRepositoryProvider);
 
+      // Version API : jamais enregistrer une version absente ou detectee sur
+      // un autre endpoint, sinon un automate V1 serait interroge en V2 (404).
+      if (_connectionType == ConnectionType.distechApi &&
+          (_detectedApiVersion == null || _detectedEndpoint != _currentEndpoint)) {
+        try {
+          final result = await _runDistechTest();
+          if (!result.success && mounted) {
+            setState(() {
+              _detectedApiVersion = null;
+              _detectedEndpoint = null;
+            });
+          }
+        } catch (_) {
+          // Automate injoignable : la version sera detectee a la connexion
+        }
+        if (!mounted) return;
+      }
+      final apiVersion = _connectionType == ConnectionType.distechApi &&
+              _detectedEndpoint == _currentEndpoint
+          ? _detectedApiVersion
+          : null;
+
       // Preparer les valeurs selon le type de connexion
       final username = _connectionType == ConnectionType.bacnet
           ? 'bacnet'  // Placeholder pour BACnet
@@ -853,7 +893,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
           useHttps: _useHttps,
           username: username,
           password: password.isNotEmpty ? password : null,
-          apiVersion: _detectedApiVersion,
+          apiVersion: apiVersion,
           connectionType: _connectionType.value,
           bacnetDeviceId: bacnetDeviceId,
           designerUrl: designerUrl,
@@ -867,7 +907,7 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
           useHttps: _useHttps,
           username: username,
           password: password,
-          apiVersion: _detectedApiVersion,
+          apiVersion: apiVersion,
           connectionType: _connectionType.value,
           bacnetDeviceId: bacnetDeviceId,
           designerUrl: designerUrl,
