@@ -146,6 +146,44 @@ void main() {
     expect(invokeIdOf(device.requests[0]), invokeIdOf(device.requests[1]));
   });
 
+  test('firstAttemptTimeout resends a dropped first request quickly (ARP)', () async {
+    final slow = BacnetService(timeout: const Duration(seconds: 5));
+    try {
+      final device = await fake();
+      device.onDatagram = (d) {
+        if (device.requests.length == 2) device.send(d, frame(objectNameAck(invokeIdOf(d), 'AHU')));
+      };
+      final sw = Stopwatch()..start();
+      final r = await slow.readProperty(
+        host: device.host,
+        port: device.port,
+        objectType: BacnetObjectTypeCode.device,
+        objectInstance: 1,
+        propertyId: BacnetPropertyId.objectName,
+        firstAttemptTimeout: const Duration(milliseconds: 200),
+      );
+      expect(r.value, 'AHU');
+      expect(sw.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(invokeIdOf(device.requests[0]), invokeIdOf(device.requests[1]));
+    } finally {
+      slow.dispose();
+    }
+  });
+
+  test('firstAttemptTimeout keeps the usual retries afterwards', () async {
+    final device = await fake();
+    final r = await service.readProperty(
+      host: device.host,
+      port: device.port,
+      objectType: BacnetObjectTypeCode.device,
+      objectInstance: 1,
+      propertyId: BacnetPropertyId.objectName,
+      firstAttemptTimeout: const Duration(milliseconds: 100),
+    );
+    expect(r.type, BacnetResponseType.timeout);
+    expect(device.requests, hasLength(3)); // quick resend + 1 retry
+  });
+
   test('no answer gives a timeout response after the retries (A11)', () async {
     final device = await fake();
     final r = await readName(service, device);

@@ -333,6 +333,8 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
         host: host,
         port: port,
         deviceId: deviceId,
+        // Premier contact : la 1re requête est souvent perdue (ARP), relance rapide
+        firstAttemptTimeout: const Duration(seconds: 1),
       );
 
       if (result.success && mounted) {

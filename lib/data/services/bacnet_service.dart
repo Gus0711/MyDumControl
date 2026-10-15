@@ -536,7 +536,17 @@ class BacnetService {
   /// times). At most [maxConcurrentRequestsPerDevice] requests are in flight
   /// per device. Never throws: failures are returned as a [BacnetResponse]
   /// (type timeout when the device does not answer).
-  Future<BacnetResponse> _sendConfirmed(String host, int port, Uint8List Function(int invokeId) buildPacket) async {
+  ///
+  /// With [firstAttemptTimeout], the first attempt is resent after that
+  /// shorter delay, then the usual [_retries] follow. A device that has not
+  /// talked to us yet often drops the first request while it resolves our
+  /// address (ARP); the resend then succeeds without waiting [_timeout].
+  Future<BacnetResponse> _sendConfirmed(
+    String host,
+    int port,
+    Uint8List Function(int invokeId) buildPacket, {
+    Duration? firstAttemptTimeout,
+  }) async {
     try {
       await init();
       _ensureInitialized();
@@ -564,6 +574,7 @@ class BacnetService {
         packet: buildPacket(invokeId),
         address: address,
         port: port,
+        firstAttemptTimeout: firstAttemptTimeout,
       );
       _pendingRequests[request.key] = request;
       _transmit(request);
@@ -597,14 +608,17 @@ class BacnetService {
 
   void _armTimer(_PendingRequest request) {
     request.timer?.cancel();
-    request.timer = Timer(_timeout, () => _onTimeout(request));
+    final first = request.firstAttemptTimeout;
+    final delay = first != null && request.attempts == 1 ? first : _timeout;
+    request.timer = Timer(delay, () => _onTimeout(request));
   }
 
   void _onTimeout(_PendingRequest request) {
     if (request.completer.isCompleted) return;
     // Retry only if no segment has been received (otherwise the device's
     // transaction state machine is mid-way and a resend would be ambiguous)
-    if (request.segments == null && request.attempts <= _retries) {
+    final maxRetries = _retries + (request.firstAttemptTimeout != null ? 1 : 0);
+    if (request.segments == null && request.attempts <= maxRetries) {
       logger.w('BACnet timeout for invokeId ${request.invokeId} to ${request.address.address}, retrying');
       _transmit(request);
       return;
@@ -634,7 +648,15 @@ class BacnetService {
   /// Test de connexion BACnet
   /// Essaie de lire les propriétés du device object
   /// Optimisé: utilise ReadPropertyMultiple pour une seule requête au lieu de 3
-  Future<BacnetConnectionResult> testConnection({required String host, required int port, int? deviceId}) async {
+  ///
+  /// [firstAttemptTimeout]: see [_sendConfirmed] (used by the discovery,
+  /// which reads devices that have just answered a broadcast).
+  Future<BacnetConnectionResult> testConnection({
+    required String host,
+    required int port,
+    int? deviceId,
+    Duration? firstAttemptTimeout,
+  }) async {
     await init();
 
     try {
@@ -675,6 +697,7 @@ class BacnetService {
         objectType: BacnetObjectTypeCode.device,
         objectInstance: targetDeviceId,
         propertyIds: [BacnetPropertyId.objectName, BacnetPropertyId.vendorName, BacnetPropertyId.modelName],
+        firstAttemptTimeout: firstAttemptTimeout,
       );
 
       if (props == null || props.isEmpty) {
@@ -975,6 +998,7 @@ class BacnetService {
     required int objectInstance,
     required int propertyId,
     int? arrayIndex,
+    Duration? firstAttemptTimeout,
   }) async {
     await init();
 
@@ -988,6 +1012,7 @@ class BacnetService {
         propertyId: propertyId,
         arrayIndex: arrayIndex,
       ),
+      firstAttemptTimeout: firstAttemptTimeout,
     );
   }
 
@@ -1024,10 +1049,16 @@ class BacnetService {
     required String host,
     required int port,
     required List<ReadPropertyMultipleItem> items,
+    Duration? firstAttemptTimeout,
   }) async {
     await init();
 
-    return _sendConfirmed(host, port, (invokeId) => BacnetEncoder.encodeReadPropertyMultipleRequest(invokeId: invokeId, items: items));
+    return _sendConfirmed(
+      host,
+      port,
+      (invokeId) => BacnetEncoder.encodeReadPropertyMultipleRequest(invokeId: invokeId, items: items),
+      firstAttemptTimeout: firstAttemptTimeout,
+    );
   }
 
   /// Découvre les objets d'un device BACnet
@@ -1161,6 +1192,7 @@ class BacnetService {
     required int objectType,
     required int objectInstance,
     required List<int> propertyIds,
+    Duration? firstAttemptTimeout,
   }) async {
     final hostKey = '$host:$port';
     if (!_rpmUnsupportedHosts.contains(hostKey)) {
@@ -1168,6 +1200,7 @@ class BacnetService {
         host: host,
         port: port,
         items: [ReadPropertyMultipleItem(objectType: objectType, objectInstance: objectInstance, propertyIds: propertyIds)],
+        firstAttemptTimeout: firstAttemptTimeout,
       );
 
       final results = rpm.multipleResults;
@@ -1189,7 +1222,14 @@ class BacnetService {
     // Fallback: lire les propriétés une par une
     final properties = <int, dynamic>{};
     for (final propId in propertyIds) {
-      final result = await readProperty(host: host, port: port, objectType: objectType, objectInstance: objectInstance, propertyId: propId);
+      final result = await readProperty(
+        host: host,
+        port: port,
+        objectType: objectType,
+        objectInstance: objectInstance,
+        propertyId: propId,
+        firstAttemptTimeout: firstAttemptTimeout,
+      );
 
       if (result.isSuccess) {
         properties[propId] = result.value;
@@ -2525,6 +2565,7 @@ class _PendingRequest {
   final Uint8List packet;
   final InternetAddress address;
   final int port;
+  final Duration? firstAttemptTimeout;
   final Completer<BacnetResponse> completer = Completer<BacnetResponse>();
   Timer? timer;
   int attempts = 0;
@@ -2534,7 +2575,14 @@ class _PendingRequest {
   int? segmentServiceChoice;
   int expectedSequence = 0;
 
-  _PendingRequest({required this.key, required this.invokeId, required this.packet, required this.address, required this.port});
+  _PendingRequest({
+    required this.key,
+    required this.invokeId,
+    required this.packet,
+    required this.address,
+    required this.port,
+    this.firstAttemptTimeout,
+  });
 }
 
 /// Minimal async semaphore (FIFO)
