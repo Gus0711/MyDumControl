@@ -4,6 +4,7 @@ import '../../../../application/providers/schedule_provider.dart';
 import '../../../../domain/models/schedule.dart';
 import 'schedule_dialogs.dart';
 import 'schedule_colors.dart';
+import '../../../widgets/ui/ui.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../shared/utils/schedule_l10n.dart';
 
@@ -74,7 +75,7 @@ class DayTransitionsEditor extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
-        Icon(Icons.calendar_today, size: 18, color: colorScheme.primary),
+        Icon(Icons.calendar_today_rounded, size: 18, color: context.dc.accent),
         const SizedBox(width: 8),
         Text(
           weekDayName(l10n, day),
@@ -183,13 +184,13 @@ class DayTransitionsEditor extends ConsumerWidget {
             Icon(
               Icons.event_busy,
               size: 48,
-              color: colorScheme.outline,
+              color: context.dc.textMuted,
             ),
             const SizedBox(height: 8),
             Text(
               l10n.scheduleNoTransition,
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: colorScheme.outline,
+                color: context.dc.textMuted,
               ),
             ),
             if (isEditing) ...[
@@ -197,7 +198,7 @@ class DayTransitionsEditor extends ConsumerWidget {
               Text(
                 l10n.scheduleTapPlusToAdd,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.outline,
+                  color: context.dc.textMuted,
                 ),
               ),
             ],
@@ -361,7 +362,7 @@ class _TimeSlotTile extends ConsumerWidget {
                   '${slot.formattedStart} - ${slot.formattedEnd}',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w500,
-                    fontFamily: 'monospace',
+                    fontFamily: AppTextStyles.monoFamily,
                   ),
                 ),
         ),
@@ -393,7 +394,7 @@ class _TimeSlotTile extends ConsumerWidget {
                 child: Text(
                   slot.formattedDuration,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.outline,
+                    color: context.dc.textMuted,
                   ),
                 ),
               ),

@@ -7,6 +7,7 @@ import '../../data/database/app_database.dart';
 import '../../domain/models/bacnet_object.dart';
 import '../../domain/models/display_preferences.dart';
 import '../../l10n/app_localizations.dart';
+import 'ui/ui.dart';
 
 /// Libellé court d'une durée de forçage ("15 min", "2 h", "Permanent").
 String overrideDurationLabel(AppLocalizations l10n, Duration? duration) {
@@ -46,23 +47,35 @@ class AppOverrideInfo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
     final override = watchAppOverride(ref, point);
-    final textStyle = Theme.of(context).textTheme.bodySmall;
+    final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(color: dc.textSecondary);
     if (override == null) {
       return Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Text(l10n.overrideOriginUnknown, style: textStyle?.copyWith(fontStyle: FontStyle.italic)),
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(
+          children: [
+            Icon(Icons.help_outline_rounded, size: 15, color: dc.textMuted),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                l10n.overrideOriginUnknown,
+                style: textStyle?.copyWith(fontStyle: FontStyle.italic, color: dc.textMuted),
+              ),
+            ),
+          ],
+        ),
       );
     }
     final expiresAt = override.expiresAt?.toLocal();
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.only(top: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.schedule, size: 16),
+              Icon(Icons.schedule_rounded, size: 15, color: dc.textMuted),
               const SizedBox(width: 6),
               Text(l10n.forcedAtTime(_hm(override.forcedAt.toLocal())), style: textStyle),
             ],
@@ -71,22 +84,24 @@ class AppOverrideInfo extends ConsumerWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.timer_outlined, size: 16),
+                Icon(Icons.timer_outlined, size: 15, color: dc.overrideTone.fg),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     l10n.autoReleaseAtTime(_hm(expiresAt)),
-                    style: textStyle?.copyWith(fontWeight: FontWeight.bold),
+                    style: textStyle?.copyWith(fontWeight: FontWeight.w600, color: dc.overrideTone.fg),
                   ),
                 ),
               ],
             ),
           ],
           if (override.lastError != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              l10n.autoReleaseFailed(override.lastError!),
-              style: textStyle?.copyWith(color: Colors.red.shade700),
+            const SizedBox(height: 8),
+            DcBanner(
+              tone: dc.danger,
+              icon: Icons.error_outline_rounded,
+              message: l10n.autoReleaseFailed(override.lastError!),
+              dense: true,
             ),
           ],
         ],
@@ -108,14 +123,18 @@ class OverrideDurationSelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(l10n.overrideDuration, style: Theme.of(context).textTheme.labelLarge),
-        const SizedBox(height: 6),
+        Text(
+          l10n.overrideDuration,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: context.dc.textSecondary),
+        ),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 6,
           runSpacing: 6,
           children: [
             for (final duration in timedOverrideDurations)
               ChoiceChip(
+                avatar: duration == null ? const Icon(Icons.all_inclusive_rounded, size: 16) : null,
                 label: Text(overrideDurationLabel(l10n, duration)),
                 selected: value == duration,
                 onSelected: (_) => onChanged(duration),
@@ -126,7 +145,10 @@ class OverrideDurationSelector extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             l10n.timedOverrideHint,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontStyle: FontStyle.italic,
+                  color: context.dc.textMuted,
+                ),
           ),
         ],
       ],

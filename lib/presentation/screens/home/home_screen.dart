@@ -733,70 +733,66 @@ class _DeviceHeader extends StatelessWidget {
 
     return DcCard(
       padding: const EdgeInsets.all(18),
-      child: Stack(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DcIconBox(
-                icon: isBacnet ? Icons.lan_outlined : Icons.memory_rounded,
-                tone: isBacnet ? dc.violet : dc.accentTone,
-                size: 56,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          DcIconBox(
+            icon: isBacnet ? Icons.lan_outlined : Icons.memory_rounded,
+            tone: isBacnet ? dc.violet : dc.accentTone,
+            size: 56,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.text.headlineSmall,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        DcStatusDot(color: dc.success.fg),
-                        const SizedBox(width: 6),
-                        Text(l10n.connected, style: context.text.labelMedium?.copyWith(color: dc.success.fg)),
-                      ],
-                    ),
-                    if (description != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        description,
+                    Flexible(
+                      child: Text(
+                        name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: context.text.bodyMedium?.copyWith(color: dc.textSecondary),
+                        style: context.text.headlineSmall,
                       ),
-                    ],
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        if (connection != null)
-                          DcTag('${connection.host}:${connection.port}', icon: Icons.lan_rounded, mono: true),
-                        if (model != null) DcTag(model, icon: Icons.memory_rounded),
-                        if (firmware != null) DcTag('FW $firmware', mono: true),
-                        if (isBacnet)
-                          DcTag(
-                            state.bacnetDeviceId != null ? 'BACnet · ${state.bacnetDeviceId}' : 'BACnet/IP',
-                            tone: dc.violet,
-                          )
-                        else if (apiVersion != null)
-                          DcTag('API $apiVersion', tone: dc.accentTone),
-                        if (state.deviceInfoFromCache || state.summaryFromCache)
-                          DcTag(l10n.homeFromCache, icon: Icons.history_rounded, tone: dc.warning),
-                      ],
                     ),
+                    const SizedBox(width: 12),
+                    DcStatusDot(color: dc.success.fg),
+                    const SizedBox(width: 6),
+                    Text(l10n.connected, style: context.text.labelMedium?.copyWith(color: dc.success.fg)),
                   ],
                 ),
-              ),
-            ],
+                if (description != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodyMedium?.copyWith(color: dc.textSecondary),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (connection != null)
+                      DcTag('${connection.host}:${connection.port}', icon: Icons.lan_rounded, mono: true),
+                    if (model != null) DcTag(model, icon: Icons.memory_rounded),
+                    if (firmware != null) DcTag('FW $firmware', mono: true),
+                    if (isBacnet)
+                      DcTag(
+                        state.bacnetDeviceId != null ? 'BACnet · ${state.bacnetDeviceId}' : 'BACnet/IP',
+                        tone: dc.violet,
+                      )
+                    else if (apiVersion != null)
+                      DcTag('API $apiVersion', tone: dc.accentTone),
+                    if (state.deviceInfoFromCache || state.summaryFromCache)
+                      DcTag(l10n.homeFromCache, icon: Icons.history_rounded, tone: dc.warning),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),

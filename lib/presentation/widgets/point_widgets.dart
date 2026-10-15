@@ -59,17 +59,21 @@ class PointValueChip extends StatelessWidget {
   final double minWidth;
   final bool large;
 
+  /// Ton imposé (sinon déduit de l'état du point).
+  final DcTone? tone;
+
   const PointValueChip({
     super.key,
     required this.point,
     this.text,
-    this.minWidth = 64,
+    this.tone,
+    this.minWidth = 92,
     this.large = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final tone = BacnetTypeUtils.valueTone(context, point);
+    final tone = this.tone ?? BacnetTypeUtils.valueTone(context, point);
     final isBinary = point.type.isBinary && point.presentValue != null;
     final active = isBinary && BacnetTypeUtils.isBinaryActive(point.presentValue);
 

@@ -8,6 +8,8 @@ import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/app_override_info.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/point_widgets.dart';
+import '../../widgets/ui/ui.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Écran listant les points forcés (overrides)
@@ -47,51 +49,46 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
       appBar: GradientAppBar(
         titleWidget: Row(
           children: [
-            Text(l10n.overrides),
+            Flexible(child: Text(l10n.overrides, overflow: TextOverflow.ellipsis)),
             if (overriddenPoints.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${overriddenPoints.length}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+              const SizedBox(width: 10),
+              DcTag('${overriddenPoints.length}', tone: context.dc.overrideTone, solid: true),
             ],
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: state.isLoading
-                ? null
-                : () => ref.read(pointsProvider.notifier).refresh(),
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: l10n.refresh,
+            onPressed: state.isLoading ? null : () => ref.read(pointsProvider.notifier).refresh(),
           ),
         ],
       ),
-      body: _buildBody(context, l10n, state, overriddenPoints),
+      body: Column(
+        children: [
+          if (state.isLoading && state.points.isNotEmpty) const LinearProgressIndicator(),
+          Expanded(child: _buildBody(context, l10n, state, overriddenPoints)),
+        ],
+      ),
       bottomNavigationBar: overriddenPoints.isEmpty ? null : _buildReleaseBar(context, l10n, overriddenPoints),
     );
   }
 
   /// Barre de relâchement groupé : tout sélectionner, relâcher la sélection
   Widget _buildReleaseBar(BuildContext context, AppLocalizations l10n, List<BacnetObject> points) {
+    final dc = context.dc;
     final keys = points.map(_key).toSet();
     _selected.retainAll(keys); // points relâchés entre-temps
     final allSelected = _selected.length == keys.length;
-    return SafeArea(
-      child: Material(
-        elevation: 8,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    return Container(
+      decoration: BoxDecoration(
+        color: dc.surface,
+        border: Border(top: BorderSide(color: dc.border)),
+        boxShadow: dc.raisedShadow,
+      ),
+      child: SafeArea(
+        child: DcContent(
+          padding: const EdgeInsets.fromLTRB(8, 10, 16, 10),
           child: Row(
             children: [
               Checkbox(
@@ -100,21 +97,26 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
                 onChanged: _releasing
                     ? null
                     : (_) => setState(() {
-                          if (allSelected) {
-                            _selected.clear();
-                          } else {
-                            _selected.addAll(keys);
-                          }
-                        }),
+                        if (allSelected) {
+                          _selected.clear();
+                        } else {
+                          _selected.addAll(keys);
+                        }
+                      }),
               ),
-              Expanded(child: Text(l10n.overridesSelected(_selected.length))),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  l10n.overridesSelected(_selected.length),
+                  style: context.text.bodyMedium?.copyWith(color: dc.textSecondary),
+                ),
+              ),
               FilledButton.icon(
-                onPressed: _selected.isEmpty || _releasing
-                    ? null
-                    : () => _releaseSelected(context, l10n, points),
+                style: FilledButton.styleFrom(backgroundColor: dc.overrideTone.fg, foregroundColor: dc.onSolid),
+                onPressed: _selected.isEmpty || _releasing ? null : () => _releaseSelected(context, l10n, points),
                 icon: _releasing
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.lock_open),
+                    : const Icon(Icons.lock_open_rounded),
                 label: Text(l10n.releaseSelection),
               ),
             ],
@@ -143,86 +145,50 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
         ..clear()
         ..addAll(failed.map(_key)); // garder les échecs sélectionnés
     });
-    final messenger = ScaffoldMessenger.of(this.context);
     if (failed.isEmpty) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(l10n.releaseSelectionDone(selection.length)),
-        backgroundColor: Colors.green,
-      ));
+      this.context.showSuccess(l10n.releaseSelectionDone(selection.length));
     } else {
       final detail = ref.read(pointsProvider.notifier).lastActionError;
-      messenger.showSnackBar(SnackBar(
-        content: Text([
-          l10n.releaseSelectionFailed(failed.length, selection.length),
-          if (detail != null) detail,
-        ].join('\n')),
-        backgroundColor: Colors.red,
-      ));
+      this.context.showError(
+        [l10n.releaseSelectionFailed(failed.length, selection.length), if (detail != null) detail].join('\n'),
+      );
     }
   }
 
-  Widget _buildBody(BuildContext context, AppLocalizations l10n, PointsState state, List<BacnetObject> overriddenPoints) {
+  Widget _buildBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    PointsState state,
+    List<BacnetObject> overriddenPoints,
+  ) {
+    final dc = context.dc;
+
     if (state.isLoading && state.points.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(l10n.loadingPoints),
-          ],
-        ),
-      );
+      return DcLoading(message: l10n.loadingPoints);
     }
 
     if (state.error != null && state.points.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Text(state.error!),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
-              icon: const Icon(Icons.refresh),
-              label: Text(l10n.retry),
-            ),
-          ],
+      return DcEmptyState.error(
+        context,
+        title: l10n.error,
+        message: state.error!,
+        action: FilledButton.icon(
+          onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(l10n.retry),
         ),
       );
     }
 
     if (overriddenPoints.isEmpty) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle_outline, size: 64, color: Colors.green.shade400),
-            const SizedBox(height: 16),
-            Text(
-              l10n.noOverride,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.green.shade700,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.allPointsNormal,
-              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-            ),
-            if (state.isLoading) ...[
-              const SizedBox(height: 16),
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ],
-          ],
-        ),
+      return DcEmptyState(
+        icon: Icons.verified_rounded,
+        tone: dc.success,
+        title: l10n.noOverride,
+        message: l10n.allPointsNormal,
+        action: state.isLoading
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            : null,
       );
     }
 
@@ -235,160 +201,122 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
 
     return RefreshIndicator(
       onRefresh: () => ref.read(pointsProvider.notifier).refresh(),
-      child: ListView.builder(
-        padding: const EdgeInsets.only(bottom: 16),
-        itemCount: byType.length,
-        itemBuilder: (context, index) {
-          final type = byType.keys.elementAt(index);
-          final points = byType[type]!;
-          return _buildTypeSection(context, type, points, state.isLoading);
-        },
+      child: ListView(
+        padding: const EdgeInsets.only(top: 4, bottom: 24),
+        children: [
+          for (final entry in byType.entries)
+            DcContent(child: _buildTypeSection(context, l10n, entry.key, entry.value)),
+        ],
       ),
     );
   }
 
   Widget _buildTypeSection(
     BuildContext context,
+    AppLocalizations l10n,
     BacnetObjectType type,
     List<BacnetObject> points,
-    bool isLoading,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // En-tête du type
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Row(
-            children: [
-              Icon(BacnetTypeUtils.getTypeIcon(type), color: BacnetTypeUtils.getTypeColor(type), size: 20),
-              const SizedBox(width: 8),
-              Text(
-                BacnetTypeUtils.getTypeDisplayName(AppLocalizations.of(context)!, type),
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${points.length}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red.shade700,
-                  ),
-                ),
-              ),
-              if (isLoading) ...[
-                const SizedBox(width: 8),
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ],
-            ],
-          ),
+        DcSectionHeader(
+          BacnetTypeUtils.getTypeDisplayName(l10n, type),
+          icon: BacnetTypeUtils.getTypeIcon(type),
+          count: points.length,
         ),
-        // Liste des points forcés
-        ...points.map((point) => _buildOverrideTile(context, AppLocalizations.of(context)!, point)),
+        for (final point in points)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: _buildOverrideTile(context, l10n, point),
+          ),
       ],
     );
   }
 
   Widget _buildOverrideTile(BuildContext context, AppLocalizations l10n, BacnetObject point) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dc = context.dc;
     // Déterminer si c'est une entrée forcée (out-of-service) ou un forçage classique (priority-array)
     final isInputForced = point.type.isInput && point.outOfService == true;
-    final tileColor = isInputForced ? Colors.orange : Colors.red;
+    final tone = dc.overrideTone;
 
     final key = _key(point);
+    final selected = _selected.contains(key);
     final appSummary = appOverrideSummary(l10n, watchAppOverride(ref, point));
-    return ListTile(
+
+    return DcCard(
+      accentColor: tone.fg,
+      borderColor: selected ? tone.border : null,
+      color: selected ? Color.alphaBlend(tone.bg, dc.surface) : null,
+      padding: const EdgeInsets.fromLTRB(4, 10, 10, 10),
       onTap: () => context.push(Routes.pointDetailPath('${point.type.name}:${point.instance}')),
-      onLongPress: () => setState(() => _selected.contains(key) ? _selected.remove(key) : _selected.add(key)),
-      leading: Row(
-        mainAxisSize: MainAxisSize.min,
+      onLongPress: () => setState(() => selected ? _selected.remove(key) : _selected.add(key)),
+      child: Row(
         children: [
           Checkbox(
-            value: _selected.contains(key),
+            value: selected,
             onChanged: _releasing
                 ? null
                 : (checked) => setState(() => checked == true ? _selected.add(key) : _selected.remove(key)),
           ),
-          Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: tileColor.shade100,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: tileColor.shade300),
-        ),
-        child: Icon(
-          isInputForced ? Icons.power_settings_new : Icons.lock,
-          color: tileColor.shade700,
-          size: 20,
-        ),
-          ),
-        ],
-      ),
-      title: Text(
-        point.displayName,
-        style: const TextStyle(fontWeight: FontWeight.w500),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        [
-          isInputForced
-              ? '${l10n.outOfServiceLabel} • ${point.type.shortName}:${point.instance}'
-              : '${l10n.priorityLabel(point.overridePriority ?? 0)} • ${point.type.shortName}:${point.instance}',
-          ?appSummary,
-        ].join('\n'),
-        style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Valeur forcée
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: tileColor.shade50,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: tileColor.shade200),
+          PointTypeBadge(type: point.type),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(point.displayName, style: context.text.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    DcTag(
+                      isInputForced ? l10n.outOfServiceLabel : l10n.priorityLabel(point.overridePriority ?? 0),
+                      icon: isInputForced ? Icons.power_settings_new_rounded : Icons.back_hand_rounded,
+                      tone: tone,
+                      dense: true,
+                    ),
+                    Text(
+                      point.objectId,
+                      style: AppTextStyles.monospacedValue.copyWith(fontSize: 11.5, color: dc.textMuted),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  BacnetTypeUtils.formatOverrideValue(point),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: tileColor.shade700,
+                if (appSummary != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.timer_outlined, size: 14, color: dc.textMuted),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(appSummary, style: context.text.bodySmall?.copyWith(color: dc.textSecondary)),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                isInputForced ? l10n.outOfServiceLabel : l10n.forcedLabel,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: tileColor.shade400,
-                ),
-              ),
-            ],
+                ],
+              ],
+            ),
           ),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right, color: isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+          const SizedBox(width: 8),
+          // Valeur forcée (la nature du forçage est déjà dans la pastille)
+          Container(
+            constraints: const BoxConstraints(minWidth: 92),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: tone.bg,
+              borderRadius: BorderRadius.circular(DcRadius.md - 2),
+              border: Border.all(color: tone.border),
+            ),
+            child: Text(
+              BacnetTypeUtils.formatOverrideValue(point),
+              textAlign: TextAlign.right,
+              style: AppTextStyles.monospacedValue.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: tone.fg),
+            ),
+          ),
+          const SizedBox(width: 2),
+          Icon(Icons.chevron_right_rounded, color: dc.textMuted),
         ],
       ),
     );

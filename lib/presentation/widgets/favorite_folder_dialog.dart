@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../data/database/app_database.dart';
 import '../../l10n/app_localizations.dart';
+import 'ui/ui.dart';
+import '../../core/theme/app_colors.dart';
 
 /// Liste des couleurs disponibles pour les dossiers
 const folderColors = [
@@ -100,7 +102,7 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
       final hexCode = hex.replaceFirst('#', '');
       return Color(int.parse('FF$hexCode', radix: 16));
     } catch (e) {
-      return Colors.blue;
+      return AppColors.brandSky;
     }
   }
 
@@ -109,13 +111,14 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
           (e) => e?.$1 == iconName,
           orElse: () => null,
         );
-    return entry?.$2 ?? Icons.folder;
+    return entry?.$2 ?? Icons.folder_rounded;
   }
 
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.folder != null;
-    final selectedColorParsed = _parseColor(_selectedColor);
+    final dc = context.dc;
+    final selectedTone = dc.toneOf(_parseColor(_selectedColor));
     final l10n = AppLocalizations.of(context)!;
 
     return AlertDialog(
@@ -132,11 +135,11 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
                 labelText: l10n.widgetFolderName,
                 prefixIcon: Icon(
                   _getIconData(_selectedIcon),
-                  color: selectedColorParsed,
+                  color: selectedTone.fg,
                 ),
-                border: const OutlineInputBorder(),
               ),
               autofocus: true,
+              onChanged: (_) => setState(() {}),
               textCapitalization: TextCapitalization.sentences,
             ),
             const SizedBox(height: 24),
@@ -144,11 +147,9 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
             // Sélection de couleur
             Text(
               l10n.widgetColor,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: AppTextStyles.overline.copyWith(color: dc.textMuted),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -158,13 +159,13 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
                 return GestureDetector(
                   onTap: () => setState(() => _selectedColor = color),
                   child: Container(
-                    width: 40,
-                    height: 40,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       color: parsedColor,
                       shape: BoxShape.circle,
                       border: isSelected
-                          ? Border.all(color: Colors.white, width: 3)
+                          ? Border.all(color: dc.surfaceRaised, width: 3)
                           : null,
                       boxShadow: isSelected
                           ? [
@@ -177,7 +178,7 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
                           : null,
                     ),
                     child: isSelected
-                        ? const Icon(Icons.check, color: Colors.white, size: 20)
+                        ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
                         : null,
                   ),
                 );
@@ -188,11 +189,9 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
             // Sélection d'icône
             Text(
               l10n.widgetIcon,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: AppTextStyles.overline.copyWith(color: dc.textMuted),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -205,18 +204,16 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? selectedColorParsed.withAlpha(50)
-                          : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
+                      color: isSelected ? selectedTone.bg : dc.surfaceSunken,
+                      borderRadius: BorderRadius.circular(DcRadius.md),
                       border: isSelected
-                          ? Border.all(color: selectedColorParsed, width: 2)
-                          : Border.all(color: Colors.grey.shade300),
+                          ? Border.all(color: selectedTone.fg, width: 1.5)
+                          : Border.all(color: dc.border),
                     ),
                     child: Icon(
                       iconData,
-                      color: isSelected ? selectedColorParsed : Colors.grey.shade600,
-                      size: 24,
+                      color: isSelected ? selectedTone.fg : dc.textSecondary,
+                      size: 22,
                     ),
                   ),
                 );
@@ -230,7 +227,7 @@ class _FavoriteFolderDialogState extends State<FavoriteFolderDialog> {
           onPressed: () => Navigator.pop(context),
           child: Text(l10n.cancel),
         ),
-        ElevatedButton(
+        FilledButton(
           onPressed: _nameController.text.trim().isEmpty
               ? null
               : () {

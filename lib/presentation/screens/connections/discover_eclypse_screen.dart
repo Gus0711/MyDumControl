@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../data/services/eclypse_probe.dart';
 import '../../../data/services/mdns_discovery_service.dart';
+import '../../widgets/discovery_widgets.dart';
+import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Ecran de decouverte des ECLYPSE via mDNS
 class DiscoverEclypseScreen extends ConsumerStatefulWidget {
@@ -122,209 +125,95 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
+    final dc = context.dc;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.discoverEclypse),
+      appBar: GradientAppBar(
+        title: l10n.discoverEclypse,
         actions: [
           if (!_isDiscovering)
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
               onPressed: _startDiscovery,
               tooltip: l10n.refresh,
             ),
         ],
       ),
-      body: Column(
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 32),
         children: [
-          // En-tete explicatif
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: theme.colorScheme.primaryContainer,
-            child: Row(
+          DcContent(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(
-                  Icons.wifi_find,
-                  color: theme.colorScheme.onPrimaryContainer,
+                // En-tete explicatif + progression
+                DiscoveryHeader(
+                  icon: Icons.wifi_find_rounded,
+                  tone: dc.accentTone,
+                  title: _isDiscovering ? l10n.discovering : l10n.discoverEclypse,
+                  subtitle: _isDiscovering ? l10n.discoverSearchingEclypse : l10n.discoverEclypseSubtitle,
+                  scanning: _isDiscovering,
+                  countLabel: _discoveredDevices.isNotEmpty ? l10n.eclypseFound(_discoveredDevices.length) : null,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    l10n.discoverEclypseSubtitle,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
+                const SizedBox(height: 16),
+
+                // Contenu principal
+                _buildContent(l10n),
               ],
             ),
-          ),
-
-          // Indicateur de progression
-          if (_isDiscovering)
-            const LinearProgressIndicator(),
-
-          // Contenu principal
-          Expanded(
-            child: _buildContent(l10n, theme),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildContent(AppLocalizations l10n, ThemeData theme) {
+  Widget _buildContent(AppLocalizations l10n) {
     // Erreur
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: theme.colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                l10n.discoverMdnsError,
-                style: theme.textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _startDiscovery,
-                icon: const Icon(Icons.refresh),
-                label: Text(l10n.retry),
-              ),
-            ],
-          ),
+      return DcEmptyState.error(
+        context,
+        title: l10n.discoverMdnsError,
+        message: _errorMessage,
+        action: FilledButton.icon(
+          onPressed: _startDiscovery,
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(l10n.retry),
         ),
       );
     }
 
     // En cours de recherche sans resultat
     if (_isDiscovering && _discoveredDevices.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(
-              width: 64,
-              height: 64,
-              child: CircularProgressIndicator(strokeWidth: 3),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              l10n.discovering,
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.discoverSearchingEclypse,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+      return Padding(
+        padding: const EdgeInsets.only(top: 48),
+        child: DcLoading(message: l10n.discoverSearchingEclypse),
       );
     }
 
     // Aucun appareil trouve
     if (!_isDiscovering && _discoveredDevices.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.search_off,
-                size: 64,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                l10n.noDeviceFound,
-                style: theme.textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                l10n.discoverNoEclypseFoundMessage,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _startDiscovery,
-                icon: const Icon(Icons.refresh),
-                label: Text(l10n.retry),
-              ),
-            ],
-          ),
+      return DcEmptyState(
+        icon: Icons.search_off_rounded,
+        title: l10n.noDeviceFound,
+        message: l10n.discoverNoEclypseFoundMessage,
+        action: FilledButton.icon(
+          onPressed: _startDiscovery,
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(l10n.retry),
         ),
       );
     }
 
-    // Liste des appareils trouves
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // Grille des appareils trouves
+    return DiscoveryGrid(
       children: [
-        // Compteur
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                l10n.eclypseFound(_discoveredDevices.length),
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (_isDiscovering)
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-            ],
+        for (final device in _discoveredDevices)
+          _DeviceCard(
+            device: device,
+            probeResult: _probeResults[device.name],
+            onTap: () => _selectDevice(device),
           ),
-        ),
-
-        // Liste
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _discoveredDevices.length,
-            itemBuilder: (context, index) {
-              final device = _discoveredDevices[index];
-              return _DeviceCard(
-                device: device,
-                probeResult: _probeResults[device.name],
-                onTap: () => _selectDevice(device),
-              );
-            },
-          ),
-        ),
       ],
     );
   }
@@ -343,173 +232,151 @@ class _DeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final dc = context.dc;
     final l10n = AppLocalizations.of(context)!;
     final model = device.model;
     final firmware = device.firmwareVersion;
     final mac = device.macAddress;
-    final secondaryStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-    );
+    final unreachable = probeResult != null && !probeResult!.reachable;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+    return DcCard(
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icone
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.memory,
-                  color: Colors.blue.shade700,
-                  size: 28,
-                ),
+              DcIconBox(
+                icon: Icons.memory_rounded,
+                tone: unreachable ? dc.neutral : dc.accentTone,
+                size: 44,
               ),
-              const SizedBox(width: 16),
-
-              // Infos
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       device.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.text.titleMedium,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       '${device.address}:${device.connectionPort}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    if (model != null)
-                      Text(l10n.discoverModel(model), style: secondaryStyle),
-                    Text(
-                      firmware != null
-                          ? l10n.discoverFirmware(firmware)
-                          : l10n.discoverFirmwareAfterLogin,
-                      style: secondaryStyle,
-                    ),
-                    if (mac != null) Text('MAC $mac', style: secondaryStyle),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        _Tag(
-                          icon: device.prefersHttps ? Icons.lock : Icons.lock_open,
-                          label: device.prefersHttps ? 'HTTPS' : 'HTTP',
-                          color: device.prefersHttps
-                              ? Colors.green.shade700
-                              : Colors.orange.shade800,
-                        ),
-                        _buildApiTag(l10n, theme),
-                      ],
+                      style: AppTextStyles.monospacedValue.copyWith(fontSize: 12, color: dc.textSecondary),
                     ),
                   ],
                 ),
               ),
-
-              // Creer la connexion (champs pre-remplis)
-              Tooltip(
-                message: l10n.discoverCreateConnection,
-                child: Icon(
-                  Icons.add_link,
-                  color: theme.colorScheme.primary,
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Modele, firmware, MAC
+          if (model != null) _line(context, Icons.developer_board_outlined, model),
+          _line(
+            context,
+            Icons.system_update_alt_rounded,
+            firmware != null ? l10n.discoverFirmware(firmware) : l10n.discoverFirmwareAfterLogin,
+            muted: firmware == null,
+          ),
+          if (mac != null) _line(context, Icons.fingerprint_rounded, 'MAC $mac', mono: true),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    DcTag(
+                      device.prefersHttps ? 'HTTPS' : 'HTTP',
+                      icon: device.prefersHttps ? Icons.lock_rounded : Icons.lock_open_rounded,
+                      tone: device.prefersHttps ? dc.success : dc.warning,
+                      dense: true,
+                    ),
+                    _buildApiTag(context, l10n),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              // Creer la connexion (champs pre-remplis)
+              FilledButton.tonalIcon(
+                onPressed: onTap,
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: dc.accentTone.bg,
+                  foregroundColor: dc.accentTone.fg,
+                  minimumSize: const Size(0, 34),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+                icon: const Icon(Icons.add_link_rounded, size: 18),
+                label: Text(l10n.discoverCreateConnection),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildApiTag(AppLocalizations l10n, ThemeData theme) {
+  Widget _line(BuildContext context, IconData icon, String text, {bool mono = false, bool muted = false}) {
+    final dc = context.dc;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: dc.textMuted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: (mono
+                      ? AppTextStyles.monospacedValue.copyWith(fontSize: 11.5)
+                      : context.text.bodySmall)
+                  ?.copyWith(color: muted ? dc.textMuted : dc.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApiTag(BuildContext context, AppLocalizations l10n) {
+    final dc = context.dc;
     final probe = probeResult;
     if (probe == null) {
-      return _Tag(
-        label: l10n.discoverProbing,
-        color: theme.colorScheme.onSurfaceVariant,
-        loading: true,
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 10,
+            height: 10,
+            child: CircularProgressIndicator(strokeWidth: 1.5, color: dc.textMuted),
+          ),
+          const SizedBox(width: 6),
+          Text(l10n.discoverProbing, style: context.text.bodySmall?.copyWith(color: dc.textMuted)),
+        ],
       );
     }
     if (probe.apiVersion != null) {
-      return _Tag(
-        icon: Icons.api,
-        label: 'API ${probe.apiVersion}',
-        color: theme.colorScheme.primary,
-      );
+      return DcTag('API ${probe.apiVersion}', icon: Icons.api_rounded, tone: dc.accentTone, dense: true);
     }
     if (!probe.reachable) {
-      return _Tag(
-        icon: Icons.cloud_off,
-        label: l10n.discoverUnreachable,
-        color: theme.colorScheme.error,
-      );
+      return DcTag(l10n.discoverUnreachable, icon: Icons.cloud_off_rounded, tone: dc.danger, dense: true);
     }
     // Joignable mais version indeterminable sans identifiants
     final advertised = device.advertisedApiVersion;
-    return _Tag(
-      icon: Icons.help_outline,
-      label: advertised != null
-          ? l10n.discoverApiAdvertised(advertised)
-          : l10n.discoverApiUnknown,
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-  }
-}
-
-class _Tag extends StatelessWidget {
-  final IconData? icon;
-  final String label;
-  final Color color;
-  final bool loading;
-
-  const _Tag({
-    this.icon,
-    required this.label,
-    required this.color,
-    this.loading = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (loading)
-            SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
-            )
-          else if (icon != null)
-            Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(label, style: theme.textTheme.bodySmall?.copyWith(color: color)),
-        ],
-      ),
+    return DcTag(
+      advertised != null ? l10n.discoverApiAdvertised(advertised) : l10n.discoverApiUnknown,
+      icon: Icons.help_outline_rounded,
+      dense: true,
     );
   }
 }

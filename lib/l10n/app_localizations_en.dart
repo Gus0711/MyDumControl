@@ -825,7 +825,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addFavoritesHint =>
-      'Add points to favorites by clicking\\nthe star in the points list';
+      'Add points to favorites by clicking\nthe star in the points list';
 
   @override
   String get viewPoints => 'View points';
@@ -885,7 +885,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String deleteFolderMessage(Object name) {
-    return 'The folder \"$name\" will be deleted.\\n\\nFavorites in it won\'t be deleted, they will be moved to \"No folder\".';
+    return 'The folder \"$name\" will be deleted.\n\nFavorites in it won\'t be deleted, they will be moved to \"No folder\".';
   }
 
   @override
@@ -2446,4 +2446,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeFromCache => 'Cached data';
+
+  @override
+  String get frmSectionAddress => 'Controller address';
+
+  @override
+  String get frmSectionAuth => 'Authentication';
+
+  @override
+  String get frmSectionBacnet => 'BACnet identification';
 }

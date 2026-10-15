@@ -31,7 +31,7 @@ class DcTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final dc = context.dc;
     final t = tone ?? dc.neutral;
-    final fg = solid ? (dc.isDark ? const Color(0xFF0A111D) : Colors.white) : t.fg;
+    final fg = solid ? dc.onSolid : t.fg;
     final fontSize = dense ? 10.5 : 11.5;
 
     return Container(

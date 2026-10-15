@@ -12,6 +12,7 @@ import '../../../data/database/app_database.dart';
 import '../../../data/services/certificate_pinning.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Ecran d'affichage du synoptique Envysion via WebView
 class EnvysionViewerScreen extends ConsumerStatefulWidget {
@@ -147,37 +148,31 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
+    final dc = context.dc;
 
     // Attendre le chargement des donnees de connexion
     if (_connection == null && _errorMessage == null) {
       return Scaffold(
         appBar: GradientAppBar(title: l10n.synopticEnvysion),
-        body: const Center(child: CircularProgressIndicator()),
+        body: DcLoading(message: l10n.loadingEnvysion),
       );
     }
+
+    final openButton = FilledButton.icon(
+      onPressed: _openInExternalBrowser,
+      icon: const Icon(Icons.open_in_new_rounded),
+      label: Text(l10n.openInBrowser),
+    );
 
     // Erreur de chargement
     if (_errorMessage != null) {
       return Scaffold(
         appBar: GradientAppBar(title: l10n.synopticEnvysion),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
-              const SizedBox(height: 16),
-              Text(l10n.envysionLoadError, style: theme.textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(_errorMessage!, style: theme.textTheme.bodyMedium),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _openInExternalBrowser,
-                icon: const Icon(Icons.open_in_browser),
-                label: Text(l10n.openInBrowser),
-              ),
-            ],
-          ),
+        body: DcEmptyState.error(
+          context,
+          title: l10n.envysionLoadError,
+          message: _errorMessage,
+          action: openButton,
         ),
       );
     }
@@ -185,30 +180,18 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
     // Plateforme non supportee
     if (!_isWebViewSupported()) {
       return Scaffold(
-        appBar: GradientAppBar(title: l10n.synopticEnvysion),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.web_asset_off, size: 64, color: Colors.orange),
-              const SizedBox(height: 16),
-              Text(l10n.webViewNotSupported, style: theme.textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(
-                l10n.webViewNotSupportedMessage(//
-                  kIsWeb ? 'Web' : Platform.operatingSystem,
-                ),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _openInExternalBrowser,
-                icon: const Icon(Icons.open_in_browser),
-                label: Text(l10n.openInBrowser),
-              ),
-            ],
+        appBar: GradientAppBar(
+          title: l10n.synopticEnvysion,
+          subtitle: _connection?.name,
+        ),
+        body: DcEmptyState(
+          icon: Icons.web_asset_off_rounded,
+          tone: dc.warning,
+          title: l10n.webViewNotSupported,
+          message: l10n.webViewNotSupportedMessage(
+            kIsWeb ? 'Web' : Platform.operatingSystem,
           ),
+          action: openButton,
         ),
       );
     }
@@ -223,13 +206,13 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
         actions: [
           // Bouton refresh
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: () => _webViewController?.reload(),
             tooltip: l10n.refresh,
           ),
           // Bouton ouvrir dans navigateur
           IconButton(
-            icon: const Icon(Icons.open_in_browser),
+            icon: const Icon(Icons.open_in_new_rounded),
             onPressed: _openInExternalBrowser,
             tooltip: l10n.openInBrowser,
           ),
@@ -350,77 +333,41 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               child: LinearProgressIndicator(
                 value: _progress > 0 ? _progress : null,
                 backgroundColor: Colors.transparent,
+                minHeight: 2,
               ),
             ),
           // Message de chargement
           if (_isLoading && _progress == 0)
             Center(
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 16),
-                      Text(l10n.loadingEnvysion),
-                    ],
-                  ),
-                ),
+              child: DcCard(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                child: DcLoading(message: l10n.loadingEnvysion),
               ),
             ),
           // Message d'erreur overlay
           if (_errorMessage != null && !_isLoading)
             Center(
-              child: Card(
-                color: theme.colorScheme.errorContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.error_outline,
-                        size: 48,
-                        color: theme.colorScheme.onErrorContainer,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        l10n.envysionLoadError,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.onErrorContainer,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _errorMessage!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onErrorContainer,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _errorMessage = null;
-                                _isLoading = true;
-                              });
-                              _webViewController?.reload();
-                            },
-                            icon: const Icon(Icons.refresh),
-                            label: Text(l10n.retry),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: _openInExternalBrowser,
-                            icon: const Icon(Icons.open_in_browser),
-                            label: Text(l10n.openInBrowser),
-                          ),
-                        ],
-                      ),
-                    ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: DcCard(
+                  margin: const EdgeInsets.all(24),
+                  padding: EdgeInsets.zero,
+                  child: DcEmptyState.error(
+                    context,
+                    title: l10n.envysionLoadError,
+                    message: _errorMessage,
+                    action: OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _errorMessage = null;
+                          _isLoading = true;
+                        });
+                        _webViewController?.reload();
+                      },
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: Text(l10n.retry),
+                    ),
+                    secondaryAction: openButton,
                   ),
                 ),
               ),

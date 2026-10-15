@@ -31,6 +31,8 @@ Palette tirée du logo : bleu ciel / orange sur bleu nuit.
 | `accent`, `accentTone` | couleur d'action (bleu), ton info |
 | `success`, `warning`, `danger`, `neutral`, `overrideTone`, `violet` | tons d'état (`DcTone`) |
 | `toneOf(color)` | ton dérivé d'une couleur libre (couleur de dossier, type de point) |
+| `onSolid` | texte posé sur un fond plein d'un ton (bouton rouge, pastille pleine) |
+| `link` | liens et actions textuelles |
 | `cardShadow`, `raisedShadow` | ombres |
 
 `DcRadius` (sm 6, md 10, lg 14, xl 20) et `DcSpace` (4/8/12/16/24/32, `contentMaxWidth`).
@@ -56,6 +58,10 @@ Points BACnet (`lib/presentation/widgets/point_widgets.dart`) :
 `PointTypeBadge` (AI/BO/MSV…), `PointValueChip` (valeur colorée selon l'état),
 `PointStatusTags` (alarme, forçage Pn, OOS), `pointValueText(point)`.
 `BacnetTypeUtils.typeTone(context, type)` et `valueTone(context, point)` donnent les tons.
+
+Graphiques (`lib/presentation/widgets/chart_chrome.dart`) : `ChartPalette.of(context)` (grille, axes,
+infobulles), `chartSeriesColor`, `ChartSegmented` (choix de période), `ChartStatsRow`, `ChartMessage`.
+Découverte (`lib/presentation/widgets/discovery_widgets.dart`) : `DiscoveryHeader`, `DiscoveryGrid`.
 
 ## Boutons
 

@@ -10,10 +10,11 @@ import '../../../application/providers/bacnet_provider.dart';
 import '../../../application/providers/settings_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
-import '../../../domain/models/display_preferences.dart';
-import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/favorite_button.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/point_widgets.dart';
+import '../../widgets/ui/ui.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Helper pour obtenir le nom localisé d'une catégorie
@@ -171,8 +172,8 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
 
     return PopupMenuButton<int>(
       icon: Icon(
-        isActive ? Icons.sync : Icons.sync_disabled,
-        color: isActive ? Colors.green : null,
+        isActive ? Icons.sync_rounded : Icons.sync_disabled_rounded,
+        color: isActive ? AppColors.success : null,
       ),
       tooltip: isActive
           ? l10n.autoRefreshLabel(getAutoRefreshLabel(currentInterval, l10n))
@@ -183,23 +184,24 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
       },
       itemBuilder: (context) => autoRefreshOptions.map((option) {
         final isSelected = currentInterval == option.value;
+        final dc = context.dc;
         return PopupMenuItem(
           value: option.value,
+          height: 42,
           child: Row(
             children: [
               if (isSelected)
-                const Icon(Icons.check, size: 18, color: Colors.green)
+                Icon(Icons.check_rounded, size: 18, color: dc.accent)
               else
                 const SizedBox(width: 18),
-              const SizedBox(width: 8),
-              Text(getAutoRefreshLabel(option.value, l10n)),
+              const SizedBox(width: 10),
+              Text(
+                getAutoRefreshLabel(option.value, l10n),
+                style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400),
+              ),
               if (option.value > 0) ...[
                 const Spacer(),
-                Icon(
-                  Icons.timer,
-                  size: 14,
-                  color: Colors.grey.shade500,
-                ),
+                Icon(Icons.timer_outlined, size: 14, color: dc.textMuted),
               ],
             ],
           ),
@@ -228,6 +230,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
     final l10n = AppLocalizations.of(context)!;
     final pointsState = ref.watch(pointsProvider);
     final counts = pointsState.pointCountByCategory;
+    final isBacnet = ref.watch(activeConnectionProvider.select((s) => s.isBacnetConnection));
 
     // Écouter les changements de favoris pour mettre à jour le tri
     ref.listen(favoritesProvider, (_, _) => _updateFavoriteIds());
@@ -240,13 +243,18 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
       _setupAutoRefresh();
     });
 
+    final total = pointsState.points.length;
+
     return Scaffold(
       appBar: GradientAppBar(
-        titleWidget: _showSearch ? _buildSearchField(l10n) : Text(l10n.points),
+        title: _showSearch ? null : l10n.points,
+        subtitle: _showSearch || total == 0 ? null : '$total ${l10n.points.toLowerCase()}',
+        titleWidget: _showSearch ? _buildSearchField(l10n) : null,
         actions: [
           // Bouton recherche
           IconButton(
-            icon: Icon(_showSearch ? Icons.close : Icons.search),
+            icon: Icon(_showSearch ? Icons.close_rounded : Icons.search_rounded),
+            tooltip: _showSearch ? l10n.close : l10n.search,
             onPressed: () {
               setState(() {
                 _showSearch = !_showSearch;
@@ -259,7 +267,7 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
           ),
           // Menu tri
           PopupMenuButton<PointSortOption>(
-            icon: const Icon(Icons.sort),
+            icon: const Icon(Icons.sort_rounded),
             tooltip: l10n.sort,
             onSelected: (option) {
               ref.read(pointsProvider.notifier).setSortOption(option);
@@ -268,31 +276,35 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
               final isSelected = pointsState.sortOption == option;
               return PopupMenuItem(
                 value: option,
+                height: 42,
                 child: Row(
                   children: [
                     if (isSelected)
-                      const Icon(Icons.check, size: 18)
+                      Icon(Icons.check_rounded, size: 18, color: context.dc.accent)
                     else
                       const SizedBox(width: 18),
-                    const SizedBox(width: 8),
-                    Text(getSortOptionDisplayName(option, l10n)),
+                    const SizedBox(width: 10),
+                    Text(
+                      getSortOptionDisplayName(option, l10n),
+                      style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400),
+                    ),
                   ],
                 ),
               );
             }).toList(),
           ),
           // Auto-refresh (seulement pour BACnet)
-          if (ref.watch(activeConnectionProvider).isBacnetConnection)
-            _buildAutoRefreshButton(l10n),
+          if (isBacnet) _buildAutoRefreshButton(l10n),
           // Rafraîchir (optimisé pour BACnet)
           IconButton(
+            tooltip: l10n.refresh,
             icon: _isRefreshing
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
+                    width: 18,
+                    height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : const Icon(Icons.refresh),
+                : const Icon(Icons.refresh_rounded),
             onPressed: pointsState.isLoading || _isRefreshing ? null : _manualRefresh,
           ),
         ],
@@ -300,53 +312,23 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
           controller: _tabController,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
+          indicatorWeight: 2.5,
           tabs: _categories.map((cat) {
             final count = counts[cat] ?? 0;
             return Tab(
+              height: 44,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (cat == PointCategory.all)
-                    const Icon(Icons.search, size: 16)
-                  else
-                    Text(getCategoryDisplayName(cat, l10n)),
-                  if (cat == PointCategory.all)
-                    const SizedBox(width: 4),
-                  if (cat == PointCategory.all)
+                  if (cat == PointCategory.all) ...[
+                    const Icon(Icons.search_rounded, size: 16),
+                    const SizedBox(width: 6),
                     Text(l10n.allPoints),
-                  if (count > 0 && cat != PointCategory.all) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        count.toString(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (cat == PointCategory.all && count > 0) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      '($count)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                  ] else
+                    Text(getCategoryDisplayName(cat, l10n)),
+                  if (count > 0) ...[
+                    const SizedBox(width: 8),
+                    _TabCount(count: count),
                   ],
                 ],
               ),
@@ -357,33 +339,10 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
       body: Column(
         children: [
           // Warning port BACnet non standard
-          if (ref.watch(activeConnectionProvider).isBacnetConnection)
-            _BacnetPortWarningBanner(),
+          if (isBacnet) _BacnetPortWarningBanner(),
 
           // Indicateur de cache
-          if (pointsState.fromCache && pointsState.isLoading)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.blue.shade50,
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.blue.shade700,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    l10n.loadingValuesProgress,
-                    style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
-                  ),
-                ],
-              ),
-            ),
+          if (pointsState.fromCache && pointsState.isLoading) _CacheLoadingStrip(label: l10n.loadingValuesProgress),
 
           // Contenu par onglet
           Expanded(
@@ -403,13 +362,80 @@ class _PointsScreenState extends ConsumerState<PointsScreen>
     return TextField(
       controller: _searchController,
       autofocus: true,
+      cursorColor: AppColors.brandSky,
+      style: context.text.bodyLarge?.copyWith(color: Colors.white),
       decoration: InputDecoration(
         hintText: l10n.searchPoint,
+        hintStyle: context.text.bodyLarge?.copyWith(color: const Color(0xFF8DA2BF)),
+        filled: false,
         border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+        isDense: true,
       ),
       onChanged: (value) {
         ref.read(pointsProvider.notifier).setSearchQuery(value);
       },
+    );
+  }
+}
+
+/// Compteur d'un onglet (sur la barre bleu nuit).
+class _TabCount extends StatelessWidget {
+  final int count;
+
+  const _TabCount({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(DcRadius.sm),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Text(
+        '$count',
+        style: AppTextStyles.monospacedValue.copyWith(fontSize: 11, color: const Color(0xFFD5E2F3)),
+      ),
+    );
+  }
+}
+
+/// Bandeau fin « chargement des valeurs » (données affichées depuis le cache).
+class _CacheLoadingStrip extends StatelessWidget {
+  final String label;
+
+  const _CacheLoadingStrip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: dc.accentTone.bg,
+        border: Border(bottom: BorderSide(color: dc.accentTone.border)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+            child: Row(
+              children: [
+                Icon(Icons.history_rounded, size: 15, color: dc.accentTone.fg),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(label, style: context.text.bodySmall?.copyWith(color: dc.accentTone.fg)),
+                ),
+              ],
+            ),
+          ),
+          LinearProgressIndicator(minHeight: 2, backgroundColor: dc.accentTone.bg),
+        ],
+      ),
     );
   }
 }
@@ -430,41 +456,21 @@ class _PointsCategoryTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final pointsState = ref.watch(pointsProvider);
+    final dc = context.dc;
 
     if (pointsState.isLoading && pointsState.points.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(l10n.loadingPoints),
-          ],
-        ),
-      );
+      return DcLoading(message: l10n.loadingPoints);
     }
 
     if (pointsState.error != null && pointsState.points.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                pointsState.error!,
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
-              icon: const Icon(Icons.refresh),
-              label: Text(l10n.retry),
-            ),
-          ],
+      return DcEmptyState.error(
+        context,
+        title: l10n.error,
+        message: pointsState.error!,
+        action: FilledButton.icon(
+          onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(l10n.retry),
         ),
       );
     }
@@ -479,42 +485,52 @@ class _PointsCategoryTab extends ConsumerWidget {
       if (availableFilters.length > 2) {
         final counts = pointsState.getSubTypeCountsForCategory(category);
         filterBar = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(100),
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor.withAlpha(50),
-              ),
-            ),
+            color: dc.surface,
+            border: Border(bottom: BorderSide(color: dc.border)),
           ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: availableFilters.map((filter) {
-                final isSelected = pointsState.subTypeFilter == filter;
-                final count = counts[filter] ?? 0;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(
-                      filter == SubTypeFilter.all
-                          ? '${l10n.allPoints} ($count)'
-                          : '${getSubTypeFilterLabel(filter, l10n)} ($count)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          child: DcContent(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: availableFilters.map((filter) {
+                  final isSelected = pointsState.subTypeFilter == filter;
+                  final count = counts[filter] ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            filter == SubTypeFilter.all ? l10n.allPoints : getSubTypeFilterLabel(filter, l10n),
+                            style: TextStyle(
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              color: isSelected ? dc.accentTone.fg : dc.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '$count',
+                            style: AppTextStyles.monospacedValue.copyWith(
+                              fontSize: 11,
+                              color: isSelected ? dc.accentTone.fg : dc.textMuted,
+                            ),
+                          ),
+                        ],
                       ),
+                      selected: isSelected,
+                      side: BorderSide(color: isSelected ? dc.accentTone.border : dc.border),
+                      onSelected: (_) {
+                        ref.read(pointsProvider.notifier).setSubTypeFilter(filter);
+                      },
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
                     ),
-                    selected: isSelected,
-                    onSelected: (_) {
-                      ref.read(pointsProvider.notifier).setSubTypeFilter(filter);
-                    },
-                    showCheckmark: false,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                );
-              }).toList(),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         );
@@ -524,24 +540,15 @@ class _PointsCategoryTab extends ConsumerWidget {
     if (filteredPoints.isEmpty) {
       return Column(
         children: [
-          if (filterBar != null) filterBar,
+          ?filterBar,
           Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text(
-                    pointsState.searchQuery.isNotEmpty
-                        ? l10n.noResultsFor(pointsState.searchQuery)
-                        : pointsState.subTypeFilter != SubTypeFilter.all
-                            ? l10n.noPointSubType(getSubTypeFilterLabel(pointsState.subTypeFilter, l10n))
-                            : l10n.noPointInCategory,
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
+            child: DcEmptyState(
+              icon: pointsState.searchQuery.isNotEmpty ? Icons.search_off_rounded : Icons.inbox_outlined,
+              title: pointsState.searchQuery.isNotEmpty
+                  ? l10n.noResultsFor(pointsState.searchQuery)
+                  : pointsState.subTypeFilter != SubTypeFilter.all
+                      ? l10n.noPointSubType(getSubTypeFilterLabel(pointsState.subTypeFilter, l10n))
+                      : l10n.noPointInCategory,
             ),
           ),
         ],
@@ -550,15 +557,19 @@ class _PointsCategoryTab extends ConsumerWidget {
 
     return Column(
       children: [
-        if (filterBar != null) filterBar,
+        ?filterBar,
         Expanded(
           child: RefreshIndicator(
             onRefresh: () => ref.read(pointsProvider.notifier).refresh(),
             child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
               itemCount: filteredPoints.length,
               itemBuilder: (context, index) {
                 final point = filteredPoints[index];
-                return _PointTile(key: ValueKey(point.objectId), point: point);
+                return DcContent(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                  child: _PointTile(key: ValueKey(point.objectId), point: point),
+                );
               },
             ),
           ),
@@ -568,7 +579,7 @@ class _PointsCategoryTab extends ConsumerWidget {
   }
 }
 
-/// Tile pour afficher un point
+/// Ligne d'un point : type, nom, identifiant, états, favori, valeur.
 class _PointTile extends ConsumerWidget {
   final BacnetObject point;
 
@@ -576,177 +587,79 @@ class _PointTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final typeColor = BacnetTypeUtils.getTypeColor(point.type);
-    final valueColor = BacnetTypeUtils.getValueColor(point);
+    final dc = context.dc;
+    final hasDescription = point.description != null && point.description!.isNotEmpty;
+    final flagged = point.inAlarm
+        ? dc.danger.fg
+        : (point.isOverridden || (point.type.isInput && point.outOfService == true))
+            ? dc.overrideTone.fg
+            : null;
 
-    return ListTile(
+    return DcCard(
       onTap: () {
         context.push(Routes.pointDetailPath('${point.type.name}:${point.instance}'));
       },
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: typeColor.withAlpha(30),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Text(
-            point.type.shortName,
-            style: TextStyle(
-              color: typeColor,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
+      radius: DcRadius.md,
+      accentColor: flagged,
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      child: Row(
+        children: [
+          PointTypeBadge(type: point.type, size: 38),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Tooltip(
+                  message: point.displayName,
+                  waitDuration: const Duration(milliseconds: 500),
+                  child: Text(
+                    point.displayName,
+                    style: context.text.bodyLarge?.copyWith(fontWeight: FontWeight.w500, height: 1.3),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      point.objectId,
+                      style: AppTextStyles.monospacedValue.copyWith(fontSize: 11.5, color: dc.textMuted),
+                    ),
+                    // Si description existe, afficher le nom technique pour référence
+                    if (hasDescription)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 260),
+                        child: Text(
+                          point.objectName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.text.bodySmall?.copyWith(color: dc.textMuted),
+                        ),
+                      ),
+                    if (PointStatusTags.hasAny(point)) PointStatusTags(point: point),
+                  ],
+                ),
+              ],
             ),
           ),
-        ),
-      ),
-      title: Tooltip(
-        message: point.displayName,
-        waitDuration: const Duration(milliseconds: 500),
-        child: Text(
-          point.displayName,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      subtitle: Row(
-        children: [
-          Text(
-            point.objectId,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-              fontFamily: 'monospace',
-            ),
-          ),
-          // Si description existe, afficher le nom technique pour référence
-          if (point.description != null && point.description!.isNotEmpty) ...[
-            Text(' - ', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
-            Expanded(
-              child: Text(
-                point.objectName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-              ),
-            ),
-          ],
-        ],
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+          const SizedBox(width: 8),
+          // Indicateur de trend log
+          _TrendLogIndicator(pointKey: '${point.type.apiName}:${point.instance}'),
           // Bouton favori
           FavoriteButton(point: point),
-          const SizedBox(width: 4),
-          // Indicateur de trend log
-          _TrendLogIndicator(
-            pointKey: '${point.type.apiName}:${point.instance}',
-          ),
-          // Indicateur d'alarme
-          if (point.inAlarm)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              margin: const EdgeInsets.only(left: 4),
-              decoration: BoxDecoration(
-                color: Colors.red.shade100,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.warning_amber, size: 12, color: Colors.red.shade700),
-                  const SizedBox(width: 2),
-                  Text(
-                    AppLocalizations.of(context)!.alarm,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red.shade700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          // Indicateur de forçage (priority-array)
-          if (point.isOverridden)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              margin: const EdgeInsets.only(left: 4),
-              decoration: BoxDecoration(
-                color: Colors.red.shade100,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.lock, size: 10, color: Colors.red.shade700),
-                  if (point.overridePriority != null) ...[
-                    const SizedBox(width: 2),
-                    Text(
-                      'P${point.overridePriority}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red.shade700,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          // Indicateur d'entrée forcée (out-of-service)
-          if (point.type.isInput && point.outOfService == true && !point.isOverridden)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              margin: const EdgeInsets.only(left: 4),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade100,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.power_settings_new, size: 10, color: Colors.orange.shade700),
-                  const SizedBox(width: 2),
-                  Text(
-                    'OOS',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange.shade700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           const SizedBox(width: 8),
           // Valeur
-          Container(
-            constraints: const BoxConstraints(minWidth: 60),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: valueColor.withAlpha(30),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              point.presentValue == null
-                  ? '-'
-                  : point.presentValue is num && !point.type.isBinary && !point.type.isMultiState
-                      // Analog: decimal places / °F from the display settings
-                      ? DisplayPreferences.formatAnalog(point.presentValue as num, point.units)
-                      : BacnetTypeUtils.formatValue(point),
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: valueColor,
-              ),
-              textAlign: TextAlign.right,
-            ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 200),
+            child: PointValueChip(point: point, minWidth: 72),
           ),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 20),
+          const SizedBox(width: 2),
+          Icon(Icons.chevron_right_rounded, color: dc.textMuted, size: 20),
         ],
       ),
     );
@@ -766,7 +679,7 @@ class _TrendLogIndicator extends ConsumerWidget {
 
     if (!hasTrendLog) return const SizedBox.shrink();
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tone = context.dc.violet;
 
     return Tooltip(
       message: l10n.trendLogAvailable,
@@ -774,14 +687,11 @@ class _TrendLogIndicator extends ConsumerWidget {
         padding: const EdgeInsets.all(4),
         margin: const EdgeInsets.only(right: 2),
         decoration: BoxDecoration(
-          color: isDark ? Colors.blue.shade800.withAlpha(80) : Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(4),
+          color: tone.bg,
+          borderRadius: BorderRadius.circular(DcRadius.sm),
+          border: Border.all(color: tone.border),
         ),
-        child: Icon(
-          Icons.show_chart,
-          size: 20,
-          color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
-        ),
+        child: Icon(Icons.show_chart_rounded, size: 16, color: tone.fg),
       ),
     );
   }
@@ -799,27 +709,21 @@ class _BacnetPortWarningBanner extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: Colors.orange.shade50,
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade700),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              l10n.bacnetPortWarning(portInfo.actualPort!, portInfo.standardPort),
-              style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.info_outline, size: 18, color: Colors.orange.shade700),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            onPressed: () => _showPortInfoDialog(context, l10n, portInfo),
-          ),
-        ],
+    final dc = context.dc;
+    return DcContent(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: DcBanner(
+        tone: dc.warning,
+        icon: Icons.warning_amber_rounded,
+        message: l10n.bacnetPortWarning(portInfo.actualPort!, portInfo.standardPort),
+        dense: true,
+        action: IconButton(
+          icon: Icon(Icons.info_outline_rounded, size: 18, color: dc.warning.fg),
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          onPressed: () => _showPortInfoDialog(context, l10n, portInfo),
+        ),
       ),
     );
   }
@@ -827,36 +731,38 @@ class _BacnetPortWarningBanner extends ConsumerWidget {
   void _showPortInfoDialog(BuildContext context, AppLocalizations l10n, BacnetPortInfo portInfo) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
-            const SizedBox(width: 8),
-            Text(l10n.bacnetPortConflict),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.bacnetPortConflictDetail(portInfo.standardPort, portInfo.actualPort!)),
-            const SizedBox(height: 16),
-            Text(
-              l10n.bacnetPortConflictSolution,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+      builder: (context) {
+        final dc = context.dc;
+        return AlertDialog(
+          icon: Icon(Icons.warning_amber_rounded, color: dc.warning.fg),
+          title: Text(l10n.bacnetPortConflict),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.bacnetPortConflictDetail(portInfo.standardPort, portInfo.actualPort!)),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.bacnetPortConflictSolution,
+                  style: context.text.titleSmall?.copyWith(color: dc.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                Text('•  ${l10n.bacnetPortSolution1}'),
+                const SizedBox(height: 4),
+                Text('•  ${l10n.bacnetPortSolution2}'),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text('• ${l10n.bacnetPortSolution1}'),
-            Text('• ${l10n.bacnetPortSolution2}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(l10n.understood),
           ),
-        ],
-      ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.understood),
+            ),
+          ],
+        );
+      },
     );
   }
 }

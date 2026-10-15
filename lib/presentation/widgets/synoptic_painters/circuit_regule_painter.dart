@@ -1,5 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/dc_tokens.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Données temps réel pour le circuit régulé
@@ -80,7 +83,8 @@ class _CircuitReguleWidgetState extends State<CircuitReguleWidget>
               painter: _CircuitRegulePainter(
                 data: widget.data,
                 pumpRotation: _animController.value * 2 * math.pi,
-                isDark: Theme.of(context).brightness == Brightness.dark,
+                isDark: context.dc.isDark,
+                palette: _SynopticPalette.of(context.dc),
                 pumpLabel: AppLocalizations.of(context)!.widgetPumpLabel,
               ),
               child: _buildInteractiveOverlay(constraints),
@@ -140,12 +144,14 @@ class _CircuitRegulePainter extends CustomPainter {
   final CircuitReguleData data;
   final double pumpRotation;
   final bool isDark;
+  final _SynopticPalette palette;
   final String pumpLabel;
 
   _CircuitRegulePainter({
     required this.data,
     required this.pumpRotation,
     required this.isDark,
+    required this.palette,
     required this.pumpLabel,
   });
 
@@ -155,18 +161,32 @@ class _CircuitRegulePainter extends CustomPainter {
     final h = size.height;
 
     // Couleurs adaptées au thème
-    final bgColor = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF5F5F5);
-    final pipeColor = isDark ? const Color(0xFF4A90D9) : const Color(0xFF2196F3);
-    final pipeReturnColor = isDark ? const Color(0xFFD97A4A) : const Color(0xFFFF7043);
-    final metalColor = isDark ? const Color(0xFF808080) : const Color(0xFF9E9E9E);
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final activeColor = const Color(0xFF4CAF50);
-    final inactiveColor = isDark ? const Color(0xFF666666) : const Color(0xFFBDBDBD);
+    final pipeColor = palette.supply;
+    final pipeReturnColor = palette.ret;
+    final metalColor = palette.metal;
+    final textColor = palette.text;
+    final activeColor = palette.active;
+    final inactiveColor = palette.inactive;
 
-    // Fond
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, w, h),
-      Paint()..color = bgColor,
+    // Fond : panneau arrondi, bordure et trame de points discrète
+    final panel = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(DcRadius.lg));
+    canvas.drawRRect(panel, Paint()..color = palette.background);
+    canvas.save();
+    canvas.clipRRect(panel);
+    final gridPaint = Paint()..color = palette.grid;
+    final step = w / 17;
+    for (double x = step / 2; x < w; x += step) {
+      for (double y = step / 2; y < h; y += step) {
+        canvas.drawCircle(Offset(x, y), 1, gridPaint);
+      }
+    }
+    canvas.restore();
+    canvas.drawRRect(
+      panel.deflate(0.5),
+      Paint()
+        ..color = palette.border
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
     );
 
     // === TUYAUX ===
@@ -276,7 +296,7 @@ class _CircuitRegulePainter extends CustomPainter {
 
   void _drawTemperatureSensor(Canvas canvas, Offset center, double size, Color textColor) {
     final paint = Paint()
-      ..color = const Color(0xFF795548)
+      ..color = palette.metal
       ..style = PaintingStyle.fill;
 
     // Corps de la sonde (rectangle arrondi)
@@ -290,7 +310,7 @@ class _CircuitRegulePainter extends CustomPainter {
     canvas.drawCircle(
       Offset(center.dx, center.dy + size * 0.35),
       size * 0.25,
-      Paint()..color = const Color(0xFFE53935),
+      Paint()..color = AppColors.alarmCritical,
     );
   }
 
@@ -372,7 +392,7 @@ class _CircuitRegulePainter extends CustomPainter {
   }
 
   void _drawLed(Canvas canvas, Offset center, double radius, bool isOn) {
-    final color = isOn ? const Color(0xFF4CAF50) : const Color(0xFFE53935);
+    final color = isOn ? palette.active : palette.ledOff;
 
     // Glow effect si allumé
     if (isOn) {
@@ -403,10 +423,11 @@ class _CircuitRegulePainter extends CustomPainter {
       text: TextSpan(
         text: value,
         style: TextStyle(
-          color: Colors.greenAccent,
+          color: const Color(0xFF8FD3FF),
           fontSize: fontSize,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
+          fontWeight: FontWeight.w600,
+          fontFamily: AppTextStyles.monoFamily,
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -417,12 +438,19 @@ class _CircuitRegulePainter extends CustomPainter {
     final bgRect = RRect.fromRectAndRadius(
       Rect.fromCenter(
         center: center,
-        width: textPainter.width + 16,
-        height: textPainter.height + 8,
+        width: textPainter.width + 18,
+        height: textPainter.height + 10,
       ),
-      const Radius.circular(4),
+      const Radius.circular(DcRadius.sm),
     );
-    canvas.drawRRect(bgRect, Paint()..color = Colors.black87);
+    canvas.drawRRect(bgRect, Paint()..color = AppColors.brandNavy.withValues(alpha: 0.94));
+    canvas.drawRRect(
+      bgRect,
+      Paint()
+        ..color = AppColors.brandSky.withValues(alpha: 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
 
     // Texte
     textPainter.paint(
@@ -441,9 +469,11 @@ class _CircuitRegulePainter extends CustomPainter {
       text: TextSpan(
         text: label,
         style: TextStyle(
-          color: textColor.withValues(alpha: 0.7),
+          color: palette.textSecondary,
           fontSize: fontSize,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
+          fontFamily: AppTextStyles.fontFamily,
+          letterSpacing: 0.4,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -469,4 +499,47 @@ class _CircuitRegulePainter extends CustomPainter {
         oldDelegate.isDark != isDark ||
         oldDelegate.pumpLabel != pumpLabel;
   }
+}
+
+/// Couleurs du synoptique, lisibles en thème clair comme sombre.
+class _SynopticPalette {
+  final Color background;
+  final Color grid;
+  final Color border;
+  final Color supply;
+  final Color ret;
+  final Color metal;
+  final Color text;
+  final Color textSecondary;
+  final Color active;
+  final Color inactive;
+  final Color ledOff;
+
+  const _SynopticPalette({
+    required this.background,
+    required this.grid,
+    required this.border,
+    required this.supply,
+    required this.ret,
+    required this.metal,
+    required this.text,
+    required this.textSecondary,
+    required this.active,
+    required this.inactive,
+    required this.ledOff,
+  });
+
+  factory _SynopticPalette.of(DcTokens dc) => _SynopticPalette(
+        background: dc.surface,
+        grid: dc.border,
+        border: dc.border,
+        supply: dc.isDark ? AppColors.brandSky : AppColors.brandBlue,
+        ret: dc.isDark ? AppColors.brandOrange : const Color(0xFFE07418),
+        metal: dc.isDark ? const Color(0xFF6E7F9A) : const Color(0xFF9AA8BC),
+        text: dc.textPrimary,
+        textSecondary: dc.textSecondary,
+        active: AppColors.success,
+        inactive: dc.isDark ? const Color(0xFF34445E) : const Color(0xFFCBD5E1),
+        ledOff: AppColors.alarmCritical,
+      );
 }

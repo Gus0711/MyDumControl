@@ -1607,7 +1607,7 @@ abstract class AppLocalizations {
   /// No description provided for @addFavoritesHint.
   ///
   /// In fr, this message translates to:
-  /// **'Ajoutez des points aux favoris en cliquant\\nsur l\'étoile dans la liste des points'**
+  /// **'Ajoutez des points aux favoris en cliquant\nsur l\'étoile dans la liste des points'**
   String get addFavoritesHint;
 
   /// No description provided for @viewPoints.
@@ -1709,7 +1709,7 @@ abstract class AppLocalizations {
   /// No description provided for @deleteFolderMessage.
   ///
   /// In fr, this message translates to:
-  /// **'Le dossier \"{name}\" sera supprimé.\\n\\nLes favoris qu\'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".'**
+  /// **'Le dossier \"{name}\" sera supprimé.\n\nLes favoris qu\'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".'**
   String deleteFolderMessage(Object name);
 
   /// No description provided for @favoriteAddedToFolder.
@@ -1805,19 +1805,19 @@ abstract class AppLocalizations {
   /// No description provided for @subTypeAnalog.
   ///
   /// In fr, this message translates to:
-  /// **'Analog'**
+  /// **'Analogiques'**
   String get subTypeAnalog;
 
   /// No description provided for @subTypeBinary.
   ///
   /// In fr, this message translates to:
-  /// **'Binary'**
+  /// **'Binaires'**
   String get subTypeBinary;
 
   /// No description provided for @subTypeMulti.
   ///
   /// In fr, this message translates to:
-  /// **'Multi'**
+  /// **'Multi-états'**
   String get subTypeMulti;
 
   /// No description provided for @autoRefreshOff.
@@ -2075,43 +2075,43 @@ abstract class AppLocalizations {
   /// No description provided for @noDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Aucun dashboard'**
+  /// **'Aucun tableau de bord'**
   String get noDashboard;
 
   /// No description provided for @createDashboardHint.
   ///
   /// In fr, this message translates to:
-  /// **'Créez des dashboards pour visualiser\nvos graphiques et courbes d\'historique'**
+  /// **'Créez des tableaux de bord pour visualiser\nvos graphiques et courbes d\'historique'**
   String get createDashboardHint;
 
   /// No description provided for @createDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Créer un dashboard'**
+  /// **'Créer un tableau de bord'**
   String get createDashboard;
 
   /// No description provided for @newDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Nouveau dashboard'**
+  /// **'Nouveau tableau de bord'**
   String get newDashboard;
 
   /// No description provided for @editDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Modifier le dashboard'**
+  /// **'Modifier le tableau de bord'**
   String get editDashboard;
 
   /// No description provided for @deleteDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Supprimer le dashboard'**
+  /// **'Supprimer le tableau de bord'**
   String get deleteDashboard;
 
   /// No description provided for @dashboardName.
   ///
   /// In fr, this message translates to:
-  /// **'Nom du dashboard'**
+  /// **'Nom du tableau de bord'**
   String get dashboardName;
 
   /// No description provided for @dashboardNameRequired.
@@ -2123,19 +2123,19 @@ abstract class AppLocalizations {
   /// No description provided for @deleteDashboardConfirm.
   ///
   /// In fr, this message translates to:
-  /// **'Supprimer ce dashboard ?'**
+  /// **'Supprimer ce tableau de bord ?'**
   String get deleteDashboardConfirm;
 
   /// No description provided for @deleteDashboardMessage.
   ///
   /// In fr, this message translates to:
-  /// **'Le dashboard \"{name}\" et tous ses widgets seront supprimés.'**
+  /// **'Le tableau de bord \"{name}\" et tous ses widgets seront supprimés.'**
   String deleteDashboardMessage(Object name);
 
   /// No description provided for @dashboardDeleted.
   ///
   /// In fr, this message translates to:
-  /// **'Dashboard supprimé'**
+  /// **'Tableau de bord supprimé'**
   String get dashboardDeleted;
 
   /// No description provided for @widgets.
@@ -3419,7 +3419,7 @@ abstract class AppLocalizations {
   /// No description provided for @dashboardNotFound.
   ///
   /// In fr, this message translates to:
-  /// **'Dashboard introuvable'**
+  /// **'Tableau de bord introuvable'**
   String get dashboardNotFound;
 
   /// No description provided for @dashboardDeleteWidgetConfirm.
@@ -3455,7 +3455,7 @@ abstract class AppLocalizations {
   /// No description provided for @dashboardSettingsTitle.
   ///
   /// In fr, this message translates to:
-  /// **'Paramètres du dashboard'**
+  /// **'Paramètres du tableau de bord'**
   String get dashboardSettingsTitle;
 
   /// No description provided for @dashboardColumnsWithColon.
@@ -4399,6 +4399,24 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Données en cache'**
   String get homeFromCache;
+
+  /// No description provided for @frmSectionAddress.
+  ///
+  /// In fr, this message translates to:
+  /// **'Adresse de l\'automate'**
+  String get frmSectionAddress;
+
+  /// No description provided for @frmSectionAuth.
+  ///
+  /// In fr, this message translates to:
+  /// **'Authentification'**
+  String get frmSectionAuth;
+
+  /// No description provided for @frmSectionBacnet.
+  ///
+  /// In fr, this message translates to:
+  /// **'Identification BACnet'**
+  String get frmSectionBacnet;
 }
 
 class _AppLocalizationsDelegate

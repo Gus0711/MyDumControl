@@ -20,6 +20,9 @@ class DcContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.topCenter,
+      // Hauteur du contenu (sinon l'Align occupe toute la hauteur offerte,
+      // par ex. en barre du bas).
+      heightFactor: 1,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: Padding(padding: padding, child: child),

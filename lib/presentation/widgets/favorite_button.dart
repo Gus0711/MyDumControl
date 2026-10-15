@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/providers/active_connection_provider.dart';
 import '../../application/providers/database_provider.dart';
 import '../../application/providers/favorites_provider.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/dc_tokens.dart';
 import '../../domain/models/bacnet_object.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -33,10 +35,14 @@ class FavoriteButton extends ConsumerWidget {
   final BacnetObject point;
   final double size;
 
+  /// Couleur de l'étoile vide (ex. sur la barre d'application bleu nuit).
+  final Color? color;
+
   const FavoriteButton({
     super.key,
     required this.point,
     this.size = 20,
+    this.color,
   });
 
   @override
@@ -49,7 +55,7 @@ class FavoriteButton extends ConsumerWidget {
   }
 
   Widget _buildButton(BuildContext context, WidgetRef ref, FavoriteState state) {
-    final (icon, color, tooltip) = _getIconData(AppLocalizations.of(context)!, state);
+    final (icon, color, tooltip) = _getIconData(context, AppLocalizations.of(context)!, state);
 
     return IconButton(
       icon: Icon(icon, color: color, size: size),
@@ -67,24 +73,24 @@ class FavoriteButton extends ConsumerWidget {
   }
 
   /// Retourne l'icône, la couleur et le tooltip selon l'état
-  (IconData, Color, String) _getIconData(AppLocalizations l10n, FavoriteState state) {
+  (IconData, Color, String) _getIconData(BuildContext context, AppLocalizations l10n, FavoriteState state) {
     switch (state) {
       case FavoriteState.none:
         return (
-          Icons.star_border,
-          Colors.grey,
+          Icons.star_border_rounded,
+          color ?? context.dc.textMuted,
           l10n.addToFavorites,
         );
       case FavoriteState.favorite:
         return (
-          Icons.star,
-          Colors.amber,
+          Icons.star_rounded,
+          AppColors.multiStateOutput,
           l10n.widgetPromoteSuperFavorite,
         );
       case FavoriteState.superFavorite:
         return (
-          Icons.auto_awesome,
-          Colors.amber.shade600,
+          Icons.auto_awesome_rounded,
+          AppColors.brandOrange,
           l10n.widgetDemoteToFavorite,
         );
     }

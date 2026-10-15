@@ -4,7 +4,13 @@ import '../../application/providers/multi_curve_provider.dart';
 import '../../application/providers/points_provider.dart';
 import '../../domain/models/multi_curve_chart.dart';
 import '../../l10n/app_localizations.dart';
+import '../../core/theme/app_text_styles.dart';
+import '../../core/theme/dc_tokens.dart';
+import 'chart_chrome.dart';
 import 'trend_log_viewer.dart';
+import 'ui/dc_banner.dart';
+import 'ui/dc_layout.dart';
+import 'ui/dc_tag.dart';
 
 /// Dialogue pour sélectionner les trend logs à afficher dans un graphique multi-courbes
 class CurveSelectionDialog extends ConsumerStatefulWidget {
@@ -45,15 +51,18 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
     final availableTrendLogs = ref.watch(availableTrendLogsProvider);
     final pointsState = ref.watch(pointsProvider);
     final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
+    final enough = _selectedInstances.length >= widget.minCurves;
+    final selectedList = _selectedInstances.toList();
 
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(
-          maxWidth: 500,
-          maxHeight: 600,
+          maxWidth: 520,
+          maxHeight: 640,
         ),
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -61,134 +70,71 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
               // Header
               Row(
                 children: [
-                  Icon(
-                    Icons.multiline_chart,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  DcIconBox(icon: Icons.stacked_line_chart_rounded, tone: dc.violet, size: 38),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       l10n.chartSelectCurves,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style: context.text.titleLarge,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: l10n.cancel,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
 
               // Info
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withAlpha(20),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, size: 18, color: Colors.blue),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        l10n.chartSelectCurvesHint(widget.minCurves, widget.maxCurves),
-                        style: const TextStyle(fontSize: 13, color: Colors.blue),
+              DcBanner(
+                tone: dc.info,
+                icon: Icons.info_outline_rounded,
+                message: l10n.chartSelectCurvesHint(widget.minCurves, widget.maxCurves),
+                dense: true,
+              ),
+
+              const SizedBox(height: 12),
+
+              // Recherche + compteur de sélection
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: l10n.searchPoint,
+                        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        isDense: true,
                       ),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value.toLowerCase();
+                        });
+                      },
                     ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Compteur de sélection
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _selectedInstances.length >= widget.minCurves
-                      ? Colors.green.withAlpha(20)
-                      : Colors.orange.withAlpha(20),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: _selectedInstances.length >= widget.minCurves
-                        ? Colors.green.withAlpha(50)
-                        : Colors.orange.withAlpha(50),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      l10n.chartCurvesCount(_selectedInstances.length, widget.maxCurves),
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: _selectedInstances.length >= widget.minCurves
-                            ? Colors.green.shade700
-                            : Colors.orange.shade700,
-                      ),
-                    ),
-                    if (_selectedInstances.isNotEmpty)
-                      TextButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _selectedInstances.clear();
-                          });
-                        },
-                        icon: const Icon(Icons.clear_all, size: 18),
-                        label: Text(l10n.deselectAll),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.grey.shade600,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Recherche
-              TextField(
-                decoration: InputDecoration(
-                  hintText: l10n.searchPoint,
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  const SizedBox(width: 10),
+                  DcTag(
+                    l10n.chartCurvesCount(_selectedInstances.length, widget.maxCurves),
+                    icon: enough ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                    tone: enough ? dc.success : dc.warning,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  isDense: true,
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value.toLowerCase();
-                  });
-                },
+                ],
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               // Liste des trend logs
               Expanded(
                 child: availableTrendLogs.when(
                   data: (trendLogs) {
                     if (trendLogs.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.show_chart, size: 48, color: Colors.grey),
-                            const SizedBox(height: 16),
-                            Text(
-                              l10n.chartNoTrendLogAvailable,
-                              style: const TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
+                      return ChartMessage(
+                        icon: Icons.show_chart_rounded,
+                        message: l10n.chartNoTrendLogAvailable,
                       );
                     }
 
@@ -210,108 +156,95 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                             _selectedInstances.contains(trendLog.instance);
                         final colorTheme = isSelected
                             ? ChartColorTheme.fromName(getColorThemeByIndex(
-                                _selectedInstances.toList().indexOf(trendLog.instance)))
+                                selectedList.indexOf(trendLog.instance)))
                             : null;
+                        final seriesColor =
+                            colorTheme != null ? chartSeriesColor(context, colorTheme.primaryColor) : null;
+                        final tone = colorTheme != null ? dc.toneOf(colorTheme.primaryColor) : null;
 
                         final pointName = _getPointName(trendLog.pointKey, pointsState);
 
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          elevation: isSelected ? 2 : 0,
-                          color: isSelected
-                              ? colorTheme!.primaryColor.withAlpha(15)
-                              : null,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? colorTheme!.primaryColor.withAlpha(50)
-                                  : Colors.grey.withAlpha(30),
-                            ),
-                          ),
-                          child: InkWell(
-                            onTap: () => _toggleSelection(
-                              trendLog.instance,
-                              name: pointName ?? trendLog.pointName ?? trendLog.pointKey,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  // Checkbox avec couleur
-                                  AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? colorTheme!.primaryColor
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: isSelected
-                                            ? colorTheme!.primaryColor
-                                            : Colors.grey.shade400,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: isSelected
-                                        ? const Icon(
-                                            Icons.check,
-                                            size: 16,
-                                            color: Colors.white,
-                                          )
-                                        : null,
-                                  ),
-
-                                  const SizedBox(width: 12),
-
-                                  // Info du point
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          pointName ?? trendLog.pointKey,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: isSelected
-                                                ? colorTheme!.primaryColor
-                                                : null,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Trend Log: ${trendLog.instance} • Point: ${trendLog.pointKey}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  // Badge couleur si sélectionné
-                                  if (isSelected)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Material(
+                            color: isSelected ? tone!.bg : dc.surface,
+                            borderRadius: BorderRadius.circular(DcRadius.md),
+                            child: InkWell(
+                              onTap: () => _toggleSelection(
+                                trendLog.instance,
+                                name: pointName ?? trendLog.pointName ?? trendLog.pointKey,
+                              ),
+                              borderRadius: BorderRadius.circular(DcRadius.md),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 160),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(DcRadius.md),
+                                  border: Border.all(color: isSelected ? tone!.border : dc.border),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Case à cocher à la couleur de la courbe
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 160),
+                                      width: 22,
+                                      height: 22,
                                       decoration: BoxDecoration(
-                                        color: colorTheme!.primaryColor,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '#${_selectedInstances.toList().indexOf(trendLog.instance) + 1}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
+                                        color: isSelected ? seriesColor : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: isSelected ? seriesColor! : dc.borderStrong,
+                                          width: 1.6,
                                         ),
                                       ),
+                                      child: isSelected
+                                          ? Icon(
+                                              Icons.check_rounded,
+                                              size: 16,
+                                              color: dc.isDark ? dc.canvas : Colors.white,
+                                            )
+                                          : null,
                                     ),
-                                ],
+
+                                    const SizedBox(width: 12),
+
+                                    // Info du point
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            pointName ?? trendLog.pointKey,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: context.text.titleSmall?.copyWith(
+                                              color: isSelected ? tone!.fg : dc.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'TL ${trendLog.instance} · ${trendLog.pointKey}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTextStyles.monospacedValue.copyWith(
+                                              fontSize: 11,
+                                              color: dc.textMuted,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Numéro d'ordre si sélectionné
+                                    if (isSelected)
+                                      DcTag(
+                                        '#${selectedList.indexOf(trendLog.instance) + 1}',
+                                        tone: tone,
+                                        mono: true,
+                                        dense: true,
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -319,62 +252,74 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                       },
                     );
                   },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (error, _) => Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.error_outline,
-                            size: 48, color: Colors.red.shade300),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n.errorWithMessage(error.toString()),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.red.shade600),
-                        ),
-                      ],
-                    ),
+                  loading: () => const ChartMessage.loading(),
+                  error: (error, _) => ChartMessage(
+                    icon: Icons.error_outline_rounded,
+                    tone: dc.danger,
+                    message: l10n.errorWithMessage(error.toString()),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               // Aperçu des sélections
               if (_selectedInstances.isNotEmpty) ...[
-                Text(
-                  l10n.chartSelectedCurves,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        l10n.chartSelectedCurves.toUpperCase(),
+                        style: AppTextStyles.overline.copyWith(color: dc.textMuted),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _selectedInstances.clear();
+                        });
+                      },
+                      icon: const Icon(Icons.clear_all_rounded, size: 18),
+                      label: Text(l10n.deselectAll),
+                      style: TextButton.styleFrom(
+                        foregroundColor: dc.textSecondary,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _selectedInstances.toList().asMap().entries.map((entry) {
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: selectedList.asMap().entries.map((entry) {
                     final index = entry.key;
                     final instance = entry.value;
                     final colorTheme =
                         ChartColorTheme.fromName(getColorThemeByIndex(index));
+                    final tone = dc.toneOf(colorTheme.primaryColor);
 
-                    return Chip(
+                    return InputChip(
                       label: Text('TL $instance'),
-                      backgroundColor: colorTheme.primaryColor.withAlpha(30),
-                      side: BorderSide(color: colorTheme.primaryColor.withAlpha(50)),
-                      labelStyle: TextStyle(
-                        color: colorTheme.primaryColor,
+                      backgroundColor: tone.bg,
+                      side: BorderSide(color: tone.border),
+                      labelStyle: AppTextStyles.monospacedValue.copyWith(
+                        color: tone.fg,
                         fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
-                      deleteIcon: Icon(
-                        Icons.close,
-                        size: 16,
-                        color: colorTheme.primaryColor,
+                      avatar: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: chartSeriesColor(context, colorTheme.primaryColor),
+                          shape: BoxShape.circle,
+                        ),
                       ),
+                      deleteIcon: Icon(Icons.close_rounded, size: 16, color: tone.fg),
                       onDeleted: () => _toggleSelection(instance, name: null),
+                      visualDensity: VisualDensity.compact,
                     );
                   }).toList(),
                 ),
@@ -389,15 +334,15 @@ class _CurveSelectionDialogState extends ConsumerState<CurveSelectionDialog> {
                     onPressed: () => Navigator.of(context).pop(),
                     child: Text(l10n.cancel),
                   ),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: _selectedInstances.length >= widget.minCurves
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: enough
                         ? () => Navigator.of(context).pop(CurveSelectionResult(
                             instances: _selectedInstances.toList(),
                             names: Map.from(_selectedNames),
                           ))
                         : null,
-                    icon: const Icon(Icons.check),
+                    icon: const Icon(Icons.check_rounded, size: 18),
                     label: Text(l10n.chartValidateCount(_selectedInstances.length)),
                   ),
                 ],

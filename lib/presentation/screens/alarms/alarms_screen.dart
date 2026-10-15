@@ -9,6 +9,8 @@ import '../../../domain/models/display_preferences.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/point_widgets.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Écran de liste des alarmes actives
 class AlarmsScreen extends ConsumerStatefulWidget {
@@ -38,11 +40,14 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
 
     return Scaffold(
       appBar: GradientAppBar(
-        titleWidget: _showSearch ? _buildSearchField(l10n) : Text(l10n.alarms),
+        titleWidget: _showSearch ? _buildSearchField(l10n) : null,
+        title: _showSearch ? null : l10n.alarms,
+        subtitle: _showSearch || pointsState.points.isEmpty ? null : l10n.alarmsCount(totalAlarms),
         actions: [
           // Bouton recherche
           IconButton(
-            icon: Icon(_showSearch ? Icons.close : Icons.search),
+            icon: Icon(_showSearch ? Icons.close_rounded : Icons.search_rounded),
+            tooltip: l10n.search,
             onPressed: () {
               setState(() {
                 _showSearch = !_showSearch;
@@ -55,31 +60,25 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
           ),
           // Menu tri
           PopupMenuButton<AlarmSortOption>(
-            icon: const Icon(Icons.sort),
+            icon: const Icon(Icons.sort_rounded),
             tooltip: l10n.sort,
             onSelected: (option) {
               ref.read(alarmsStateProvider.notifier).setSortOption(option);
             },
             itemBuilder: (context) => AlarmSortOption.values.map((option) {
               final isSelected = alarmsState.sortOption == option;
-              return PopupMenuItem(
-                value: option,
-                child: Row(
-                  children: [
-                    if (isSelected)
-                      const Icon(Icons.check, size: 18)
-                    else
-                      const SizedBox(width: 18),
-                    const SizedBox(width: 8),
-                    Text(_sortOptionLabel(l10n, option)),
-                  ],
-                ),
+              return dcMenuItem(
+                context,
+                option,
+                isSelected ? Icons.check_rounded : Icons.sort_rounded,
+                _sortOptionLabel(l10n, option),
               );
             }).toList(),
           ),
           // Rafraîchir
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: l10n.refresh,
             onPressed: pointsState.isLoading
                 ? null
                 : () => ref.read(pointsProvider.notifier).loadPoints(forceRefresh: true),
@@ -89,33 +88,11 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
       body: Column(
         children: [
           // Indicateur de chargement
-          if (pointsState.isLoading)
-            const LinearProgressIndicator(),
-
-          // Bannière avec le nombre total d'alarmes
-          if (totalAlarms > 0)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: Colors.red.shade50,
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber, color: Colors.red.shade700, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    l10n.alarmsCount(totalAlarms),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red.shade700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          if (pointsState.isLoading) const LinearProgressIndicator(),
 
           // Liste des alarmes
           Expanded(
-            child: _buildAlarmsList(l10n, filteredAlarms, pointsState, alarmsState),
+            child: _buildAlarmsList(l10n, filteredAlarms, pointsState, alarmsState, totalAlarms),
           ),
         ],
       ),
@@ -126,9 +103,15 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
     return TextField(
       controller: _searchController,
       autofocus: true,
+      style: const TextStyle(color: Colors.white),
+      cursorColor: Colors.white,
       decoration: InputDecoration(
         hintText: l10n.searchAlarm,
+        hintStyle: const TextStyle(color: Color(0xFF9FB2CC)),
         border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        filled: false,
       ),
       onChanged: (value) {
         ref.read(alarmsStateProvider.notifier).setSearchQuery(value);
@@ -141,99 +124,70 @@ class _AlarmsScreenState extends ConsumerState<AlarmsScreen> {
     List<BacnetObject> alarms,
     PointsState pointsState,
     AlarmsState alarmsState,
+    int totalAlarms,
   ) {
+    final dc = context.dc;
+
     if (pointsState.isLoading && pointsState.points.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(l10n.loadingPoints),
-          ],
-        ),
-      );
+      return DcLoading(message: l10n.loadingPoints);
     }
 
     if (pointsState.error != null && pointsState.points.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                pointsState.error!,
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
-              icon: const Icon(Icons.refresh),
-              label: Text(l10n.retry),
-            ),
-          ],
+      return DcEmptyState.error(
+        context,
+        title: l10n.error,
+        message: pointsState.error!,
+        action: FilledButton.icon(
+          onPressed: () => ref.read(pointsProvider.notifier).loadPoints(),
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(l10n.retry),
         ),
       );
     }
 
     if (alarms.isEmpty) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              alarmsState.searchQuery.isNotEmpty
-                  ? Icons.search_off
-                  : Icons.check_circle_outline,
-              size: 64,
-              color: alarmsState.searchQuery.isNotEmpty
-                  ? (isDark ? Colors.grey.shade500 : Colors.grey.shade400)
-                  : Colors.green.shade400,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              alarmsState.searchQuery.isNotEmpty
-                  ? l10n.noResultsFor(alarmsState.searchQuery)
-                  : l10n.noAlarms,
-              style: TextStyle(
-                fontSize: 16,
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-              ),
-            ),
-            if (alarmsState.searchQuery.isEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                l10n.allEquipmentNormal,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
-                ),
-              ),
-            ],
-          ],
-        ),
+      if (alarmsState.searchQuery.isNotEmpty) {
+        return DcEmptyState(
+          icon: Icons.search_off_rounded,
+          title: l10n.noResultsFor(alarmsState.searchQuery),
+        );
+      }
+      return DcEmptyState(
+        icon: Icons.verified_rounded,
+        tone: dc.success,
+        title: l10n.noAlarms,
+        message: l10n.allEquipmentNormal,
       );
     }
 
     return RefreshIndicator(
       onRefresh: () => ref.read(pointsProvider.notifier).loadPoints(forceRefresh: true),
       child: ListView.builder(
-        itemCount: alarms.length,
+        padding: const EdgeInsets.only(bottom: 24),
+        itemCount: alarms.length + 1,
         itemBuilder: (context, index) {
-          final alarm = alarms[index];
-          return _AlarmTile(alarm: alarm);
+          if (index == 0) {
+            // Bandeau récapitulatif
+            return DcContent(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: DcBanner(
+                tone: dc.danger,
+                icon: Icons.notifications_active_rounded,
+                title: l10n.alarmsCount(totalAlarms),
+              ),
+            );
+          }
+          final alarm = alarms[index - 1];
+          return DcContent(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+            child: _AlarmTile(alarm: alarm),
+          );
         },
       ),
     );
   }
 }
 
-/// Tile pour afficher une alarme
 String _sortOptionLabel(AppLocalizations l10n, AlarmSortOption option) {
   switch (option) {
     case AlarmSortOption.nameAsc:
@@ -249,6 +203,7 @@ String _sortOptionLabel(AppLocalizations l10n, AlarmSortOption option) {
   }
 }
 
+/// Carte d'une alarme : liseré rouge, type, nom, valeur, horodatage.
 class _AlarmTile extends StatelessWidget {
   final BacnetObject alarm;
 
@@ -256,140 +211,85 @@ class _AlarmTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final typeColor = BacnetTypeUtils.getTypeColor(alarm.type);
+    final dc = context.dc;
+    final l10n = AppLocalizations.of(context)!;
+    final hasDescription = alarm.description != null && alarm.description!.isNotEmpty;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      elevation: 2,
-      child: InkWell(
-        onTap: () {
-          context.push(Routes.pointDetailPath('${alarm.type.name}:${alarm.instance}'));
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return DcCard(
+      accentColor: dc.danger.fg,
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      onTap: () {
+        context.push(Routes.pointDetailPath('${alarm.type.name}:${alarm.instance}'));
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              // En-tête avec icône et nom
-              Row(
-                children: [
-                  // Icône d'alarme
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.warning_amber,
-                      color: Colors.red.shade700,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Nom et type
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          alarm.displayName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: typeColor.withAlpha(30),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                alarm.type.shortName,
-                                style: TextStyle(
-                                  color: typeColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              alarm.objectId,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Valeur actuelle
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      alarm.activeText ?? BacnetTypeUtils.formatValue(alarm),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red.shade800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.chevron_right, color: isDark ? Colors.grey.shade500 : Colors.grey.shade400, size: 20),
-                ],
-              ),
-
-              // Description si présente
-              if (alarm.description != null && alarm.description!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  alarm.description!,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-
-              // Timestamp de l'alarme si disponible
-              if (alarm.alarmTimestamp != null) ...[
-                const SizedBox(height: 8),
-                Row(
+              PointTypeBadge(type: alarm.type),
+              const SizedBox(width: 12),
+              // Nom et identifiant
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.access_time, size: 16, color: isDark ? Colors.grey.shade400 : Colors.grey.shade500),
-                    const SizedBox(width: 4),
                     Text(
-                      _formatTimestamp(AppLocalizations.of(context)!, alarm.alarmTimestamp!),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
+                      alarm.displayName,
+                      style: context.text.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasDescription ? '${alarm.objectId} · ${alarm.objectName}' : alarm.objectId,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.monospacedValue.copyWith(
+                        fontSize: 11.5,
+                        color: dc.textMuted,
                       ),
                     ),
                   ],
                 ),
-              ],
+              ),
+              const SizedBox(width: 8),
+              // Valeur actuelle
+              PointValueChip(
+                point: alarm,
+                text: alarm.activeText ?? BacnetTypeUtils.formatValue(alarm),
+                // Point en alarme : la valeur est un défaut, quel que soit son état binaire
+                tone: context.dc.danger,
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right_rounded, color: dc.textMuted, size: 20),
             ],
           ),
-        ),
+
+          // Message / horodatage de l'alarme
+          if ((alarm.alarmMessage?.isNotEmpty ?? false) || alarm.alarmTimestamp != null) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                DcTag(l10n.alarm, icon: Icons.notifications_active_rounded, tone: dc.danger, dense: true),
+                if (alarm.alarmTimestamp != null)
+                  DcTag(
+                    _formatTimestamp(l10n, alarm.alarmTimestamp!),
+                    icon: Icons.schedule_rounded,
+                    mono: true,
+                    dense: true,
+                  ),
+                if (alarm.alarmMessage?.isNotEmpty ?? false)
+                  Text(
+                    alarm.alarmMessage!,
+                    style: context.text.bodySmall?.copyWith(color: dc.textSecondary),
+                  ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

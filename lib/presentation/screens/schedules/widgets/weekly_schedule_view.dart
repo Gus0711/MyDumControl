@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../domain/models/schedule.dart';
 import 'schedule_colors.dart';
+import '../../../widgets/ui/ui.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../shared/utils/schedule_l10n.dart';
 
@@ -96,7 +97,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               child: Text(
                 '${hour.toString().padLeft(2, '0')}h',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.outline,
+                  color: context.dc.textMuted,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -144,7 +145,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
                 weekDayShortName(AppLocalizations.of(context)!, day),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  color: isWeekend ? colorScheme.outline : null,
+                  color: isWeekend ? context.dc.textMuted : null,
                 ),
               ),
             ),
@@ -193,7 +194,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
         children: [
           Row(
             children: [
-              Icon(Icons.calendar_today, size: 18, color: colorScheme.primary),
+              Icon(Icons.calendar_today_rounded, size: 18, color: context.dc.accent),
               const SizedBox(width: 8),
               Text(
                 weekDayName(l10n, day),
@@ -217,7 +218,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               child: Text(
                 l10n.scheduleNoScheduledTransition,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.outline,
+                  color: context.dc.textMuted,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -266,7 +267,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               transition.formattedTime,
               style: theme.textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w500,
-                fontFamily: 'monospace',
+                fontFamily: AppTextStyles.monoFamily,
               ),
             ),
           ),
@@ -275,7 +276,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
           Icon(
             Icons.arrow_forward,
             size: 16,
-            color: colorScheme.outline,
+            color: context.dc.textMuted,
           ),
           const SizedBox(width: 8),
 

@@ -8,6 +8,7 @@ import '../../../data/database/app_database.dart';
 import '../../widgets/gradient_app_bar.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/confirm_dialog.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Écran listant tous les dashboards de la connexion active
 class DashboardListScreen extends ConsumerStatefulWidget {
@@ -47,7 +48,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
         title: l10n.dashboards,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: const Icon(Icons.add_rounded),
             tooltip: l10n.createDashboard,
             onPressed: () => _showCreateDialog(context),
           ),
@@ -60,14 +61,14 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
           }
           return _buildDashboardList(context, dashboards);
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const DcLoading(),
         error: (error, _) => _buildErrorState(context, error),
       ),
       floatingActionButton: dashboardsAsync.maybeWhen(
         data: (dashboards) => dashboards.isNotEmpty
             ? FloatingActionButton.extended(
                 onPressed: () => _showCreateDialog(context),
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add_rounded),
                 label: Text(l10n.dashboardNewShort),
               )
             : null,
@@ -78,64 +79,68 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
 
   Widget _buildEmptyState(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.dashboard_customize_outlined,
-              size: 80,
-              color: Theme.of(context).colorScheme.primary.withAlpha(100),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              l10n.noDashboard,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.dashboardEmptyHint,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: () => _showCreateDialog(context),
-              icon: const Icon(Icons.add),
-              label: Text(l10n.createDashboard),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              ),
-            ),
-          ],
-        ),
+    return DcEmptyState(
+      icon: Icons.insights_rounded,
+      tone: context.dc.violet,
+      title: l10n.noDashboard,
+      message: l10n.dashboardEmptyHint,
+      action: FilledButton.icon(
+        onPressed: () => _showCreateDialog(context),
+        icon: const Icon(Icons.add_rounded),
+        label: Text(l10n.createDashboard),
       ),
     );
   }
 
   Widget _buildDashboardList(BuildContext context, List<Dashboard> dashboards) {
+    final l10n = AppLocalizations.of(context)!;
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(dashboardsProvider);
       },
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: dashboards.length,
-        itemBuilder: (context, index) {
-          final dashboard = dashboards[index];
-          return _DashboardCard(
-            key: ValueKey(dashboard.id),
-            dashboard: dashboard,
-            index: index,
-            animationController: _animationController,
-            onTap: () => context.push(Routes.dashboardViewPath(dashboard.id)),
-            onEdit: () => _showEditDialog(context, dashboard),
-            onDelete: () => _showDeleteConfirmation(context, dashboard),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth.clamp(0.0, DcSpace.contentMaxWidth) - 32;
+          final columns = width >= 1060 ? 3 : (width >= 660 ? 2 : 1);
+          const spacing = 12.0;
+          final itemWidth = (width - spacing * (columns - 1)) / columns;
+
+          return ListView(
+            padding: const EdgeInsets.only(bottom: 96),
+            children: [
+              DcContent(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DcSectionHeader(
+                      l10n.dashboards,
+                      count: dashboards.length,
+                      padding: const EdgeInsets.fromLTRB(4, 20, 0, 10),
+                    ),
+                    Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: [
+                        for (var index = 0; index < dashboards.length; index++)
+                          SizedBox(
+                            width: itemWidth,
+                            child: _DashboardCard(
+                              key: ValueKey(dashboards[index].id),
+                              dashboard: dashboards[index],
+                              index: index,
+                              animationController: _animationController,
+                              onTap: () => context.push(Routes.dashboardViewPath(dashboards[index].id)),
+                              onEdit: () => _showEditDialog(context, dashboards[index]),
+                              onDelete: () => _showDeleteConfirmation(context, dashboards[index]),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -144,33 +149,14 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
 
   Widget _buildErrorState(BuildContext context, Object error) {
     final l10n = AppLocalizations.of(context)!;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Text(
-              l10n.loadingError,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              error.toString(),
-              textAlign: TextAlign.center,
-              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () => ref.invalidate(dashboardsProvider),
-              icon: const Icon(Icons.refresh),
-              label: Text(l10n.retry),
-            ),
-          ],
-        ),
+    return DcEmptyState.error(
+      context,
+      title: l10n.loadingError,
+      message: error.toString(),
+      action: FilledButton.icon(
+        onPressed: () => ref.invalidate(dashboardsProvider),
+        icon: const Icon(Icons.refresh_rounded),
+        label: Text(l10n.retry),
       ),
     );
   }
@@ -236,7 +222,7 @@ class _DashboardListScreenState extends ConsumerState<DashboardListScreen>
 // Carte de dashboard
 // =============================================================================
 
-class _DashboardCard extends StatelessWidget {
+class _DashboardCard extends ConsumerWidget {
   final Dashboard dashboard;
   final int index;
   final AnimationController animationController;
@@ -255,8 +241,10 @@ class _DashboardCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
+    final widgetCount = ref.watch(dashboardWidgetsProvider(dashboard.id)).valueOrNull?.length;
     final animation = CurvedAnimation(
       parent: animationController,
       curve: Interval(
@@ -270,134 +258,123 @@ class _DashboardCard extends StatelessWidget {
       animation: animation,
       builder: (context, child) {
         return Transform.translate(
-          offset: Offset(0, 30 * (1 - animation.value)),
+          offset: Offset(0, 24 * (1 - animation.value)),
           child: Opacity(
             opacity: animation.value,
             child: child,
           ),
         );
       },
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                // Icône avec grille
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withAlpha(20),
-                    borderRadius: BorderRadius.circular(12),
+      child: DcCard(
+        onTap: onTap,
+        padding: const EdgeInsets.fromLTRB(14, 14, 6, 14),
+        child: Row(
+          children: [
+            // Aperçu de la grille
+            DashboardGridPreview(columns: dashboard.columns, rows: dashboard.rows, size: 56),
+            const SizedBox(width: 14),
+            // Infos
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    dashboard.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.titleMedium,
                   ),
-                  child: _buildGridPreview(context),
-                ),
-                const SizedBox(width: 16),
-                // Infos
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.dashboard,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              dashboard.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ],
+                      DcTag(
+                        l10n.dashboardGridSize(dashboard.columns, dashboard.rows),
+                        icon: Icons.grid_view_rounded,
+                        dense: true,
                       ),
-                      const SizedBox(height: 4),
-                      Builder(
-                        builder: (context) {
-                          final isDark = Theme.of(context).brightness == Brightness.dark;
-                          return Text(
-                            l10n.dashboardGridSize(dashboard.columns, dashboard.rows),
-                            style: TextStyle(
-                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                              fontSize: 13,
-                            ),
-                          );
-                        },
-                      ),
+                      if (widgetCount != null)
+                        DcTag(
+                          l10n.widgets(widgetCount),
+                          tone: widgetCount > 0 ? dc.violet : dc.neutral,
+                          dense: true,
+                        ),
                     ],
                   ),
-                ),
-                // Actions
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert),
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'edit':
-                        onEdit();
-                        break;
-                      case 'delete':
-                        onDelete();
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: ListTile(
-                        leading: const Icon(Icons.edit),
-                        title: Text(l10n.edit),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: ListTile(
-                        leading: const Icon(Icons.delete, color: Colors.red),
-                        title: Text(l10n.delete, style: const TextStyle(color: Colors.red)),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ],
-                ),
+                ],
+              ),
+            ),
+            // Actions
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert_rounded, color: dc.textSecondary, size: 20),
+              onSelected: (value) {
+                switch (value) {
+                  case 'edit':
+                    onEdit();
+                    break;
+                  case 'delete':
+                    onDelete();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                dcMenuItem(context, 'edit', Icons.edit_outlined, l10n.edit),
+                const PopupMenuDivider(),
+                dcMenuItem(context, 'delete', Icons.delete_outline_rounded, l10n.delete, danger: true),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildGridPreview(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+/// Miniature de la grille d'un tableau de bord (colonnes x lignes).
+class DashboardGridPreview extends StatelessWidget {
+  final int columns;
+  final int rows;
+  final double size;
 
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: dashboard.columns,
-          mainAxisSpacing: 2,
-          crossAxisSpacing: 2,
-        ),
-        itemCount: dashboard.columns * dashboard.rows,
-        itemBuilder: (context, index) {
-          return Container(
-            decoration: BoxDecoration(
-              color: color.withAlpha(60 + (index * 20) % 100),
-              borderRadius: BorderRadius.circular(2),
+  const DashboardGridPreview({super.key, required this.columns, required this.rows, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = context.dc.violet;
+    const gap = 3.0;
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.14),
+      decoration: BoxDecoration(
+        color: tone.bg,
+        borderRadius: BorderRadius.circular(size * 0.26),
+        border: Border.all(color: tone.border),
+      ),
+      child: Column(
+        children: [
+          for (var r = 0; r < rows; r++) ...[
+            if (r > 0) const SizedBox(height: gap),
+            Expanded(
+              child: Row(
+                children: [
+                  for (var c = 0; c < columns; c++) ...[
+                    if (c > 0) const SizedBox(width: gap),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: tone.fg.withValues(alpha: 0.30 + 0.15 * ((r + c) % 3)),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          );
-        },
+          ],
+        ],
       ),
     );
   }
@@ -448,112 +425,81 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       title: Text(_isEditing ? l10n.editDashboard : l10n.newDashboard),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Nom
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: l10n.name,
-                hintText: l10n.dashboardNameHint,
-                border: const OutlineInputBorder(),
+      content: SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Nom
+              TextField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  labelText: l10n.name,
+                  hintText: l10n.dashboardNameHint,
+                  prefixIcon: const Icon(Icons.insights_rounded, size: 20),
+                ),
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}), // Met à jour l'état du bouton Créer
               ),
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              onChanged: (_) => setState(() {}), // Met à jour l'état du bouton Créer
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-            // Grille
-            Text(
-              l10n.dashboardGridLayout,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+              // Grille
+              DcSectionHeader(
+                l10n.dashboardGridLayout,
+                padding: const EdgeInsets.only(bottom: 8),
+              ),
+
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        // Colonnes
+                        Row(
+                          children: [
+                            Expanded(child: Text(l10n.dashboardColumns)),
+                            _buildCounter(
+                              value: _columns,
+                              onDecrement: _columns > 1 ? () => setState(() => _columns--) : null,
+                              onIncrement: _columns < 4 ? () => setState(() => _columns++) : null,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        // Lignes
+                        Row(
+                          children: [
+                            Expanded(child: Text(l10n.dashboardRows)),
+                            _buildCounter(
+                              value: _rows,
+                              onDecrement: _rows > 1 ? () => setState(() => _rows--) : null,
+                              onIncrement: _rows < 4 ? () => setState(() => _rows++) : null,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-            ),
-            const SizedBox(height: 12),
-
-            // Colonnes
-            Row(
-              children: [
-                Expanded(child: Text(l10n.dashboardColumns)),
-                _buildCounter(
-                  value: _columns,
-                  onDecrement: _columns > 1 ? () => setState(() => _columns--) : null,
-                  onIncrement: _columns < 4 ? () => setState(() => _columns++) : null,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Lignes
-            Row(
-              children: [
-                Expanded(child: Text(l10n.dashboardRows)),
-                _buildCounter(
-                  value: _rows,
-                  onDecrement: _rows > 1 ? () => setState(() => _rows--) : null,
-                  onIncrement: _rows < 4 ? () => setState(() => _rows++) : null,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            // Aperçu
-            Center(
-              child: Builder(
-                builder: (context) {
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
-                  return Container(
-                    width: 120,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: isDark ? Colors.grey.shade600 : Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.all(8),
-                    child: GridView.builder(
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: _columns,
-                        mainAxisSpacing: 4,
-                        crossAxisSpacing: 4,
+                  const SizedBox(width: 20),
+                  // Aperçu
+                  Column(
+                    children: [
+                      DashboardGridPreview(columns: _columns, rows: _rows, size: 80),
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.widgets(_columns * _rows),
+                        style: context.text.bodySmall?.copyWith(color: context.dc.textMuted),
                       ),
-                      itemCount: _columns * _rows,
-                      itemBuilder: (context, index) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary.withAlpha(60),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
+                    ],
+                  ),
+                ],
               ),
-            ),
-
-            const SizedBox(height: 8),
-            Center(
-              child: Builder(
-                builder: (context) {
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
-                  return Text(
-                    l10n.widgets(_columns * _rows),
-                    style: TextStyle(
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                      fontSize: 12,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [
@@ -561,7 +507,7 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.cancel),
         ),
-        ElevatedButton(
+        FilledButton(
           onPressed: _nameController.text.trim().isNotEmpty
               ? () {
                   HapticFeedback.lightImpact();
@@ -583,31 +529,40 @@ class _DashboardFormDialogState extends State<_DashboardFormDialog> {
     VoidCallback? onDecrement,
     VoidCallback? onIncrement,
   }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.remove_circle_outline),
-          onPressed: onDecrement,
-          visualDensity: VisualDensity.compact,
-        ),
-        Container(
-          width: 40,
-          alignment: Alignment.center,
-          child: Text(
-            '$value',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
+    final dc = context.dc;
+    return Container(
+      decoration: BoxDecoration(
+        color: dc.surfaceSunken,
+        borderRadius: BorderRadius.circular(DcRadius.md),
+        border: Border.all(color: dc.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.remove_rounded, size: 18),
+            onPressed: onDecrement,
+            visualDensity: VisualDensity.compact,
+          ),
+          SizedBox(
+            width: 28,
+            child: Text(
+              '$value',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.monospacedValue.copyWith(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: dc.textPrimary,
+              ),
             ),
           ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.add_circle_outline),
-          onPressed: onIncrement,
-          visualDensity: VisualDensity.compact,
-        ),
-      ],
+          IconButton(
+            icon: const Icon(Icons.add_rounded, size: 18),
+            onPressed: onIncrement,
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
     );
   }
 }

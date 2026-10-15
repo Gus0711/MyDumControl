@@ -6,6 +6,9 @@ import '../../../l10n/app_localizations.dart';
 import '../../../application/providers/bacnet_provider.dart';
 import '../../../application/providers/settings_provider.dart';
 import '../../../data/services/bacnet_service.dart';
+import '../../widgets/discovery_widgets.dart';
+import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Lecture du nom / fabricant / modèle d'un device découvert
 enum DeviceDetailsStatus { loading, done, failed }
@@ -222,24 +225,12 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
   void _showConflictSnackbar(DeviceIdConflict conflict) {
     final l10n = AppLocalizations.of(context)!;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: Colors.orange[700],
-        content: Row(
-          children: [
-            const Icon(Icons.warning, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                l10n.discoverDeviceIdConflictWithId(conflict.deviceId.toString()),
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-        duration: const Duration(seconds: 4),
+      dcSnackBar(
+        l10n.discoverDeviceIdConflictWithId(conflict.deviceId.toString()),
+        color: AppSnackColors.warning,
+        icon: Icons.warning_amber_rounded,
         action: SnackBarAction(
           label: l10n.details,
-          textColor: Colors.white,
           onPressed: _showConflictsDialog,
         ),
       ),
@@ -251,74 +242,74 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.warning, color: Colors.orange[700]),
-            const SizedBox(width: 12),
-            Text(l10n.deviceIdConflict),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.deviceIdConflictMessage,
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 16),
-                ..._conflicts.map((conflict) => Card(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Device ID : ${conflict.deviceId}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(l10n.conflictingAddresses),
-                        ...conflict.allAddresses.map((addr) => Padding(
-                          padding: const EdgeInsets.only(left: 16, top: 4),
-                          child: Row(
+      builder: (context) {
+        final dc = context.dc;
+        return AlertDialog(
+          icon: Icon(Icons.warning_amber_rounded, color: dc.warning.fg),
+          title: Text(l10n.deviceIdConflict),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.deviceIdConflictMessage,
+                    style: context.text.bodyMedium?.copyWith(color: dc.textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+                  ..._conflicts.map((conflict) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: DcBanner(
+                          tone: dc.warning,
+                          icon: Icons.tag_rounded,
+                          title: 'Device ID : ${conflict.deviceId}',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.circle, size: 10, color: Colors.orange),
-                              const SizedBox(width: 8),
-                              Text(addr.address),
+                              const SizedBox(height: 4),
+                              Text(
+                                l10n.conflictingAddresses,
+                                style: context.text.bodySmall?.copyWith(color: dc.textSecondary),
+                              ),
+                              ...conflict.allAddresses.map((addr) => Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Row(
+                                      children: [
+                                        DcStatusDot(color: dc.warning.fg, size: 7, glow: false),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          addr.address,
+                                          style: AppTextStyles.monospacedValue.copyWith(color: dc.textPrimary),
+                                        ),
+                                      ],
+                                    ),
+                                  )),
                             ],
                           ),
-                        )),
-                      ],
+                        ),
+                      )),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.conflictRecommendation,
+                    style: context.text.bodySmall?.copyWith(
+                      fontStyle: FontStyle.italic,
+                      color: dc.textMuted,
                     ),
                   ),
-                )),
-                const SizedBox(height: 8),
-                Text(
-                  l10n.conflictRecommendation,
-                  style: TextStyle(
-                    fontStyle: FontStyle.italic,
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(l10n.understood),
-          ),
-        ],
-      ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(l10n.understood),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -405,78 +396,82 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
+    final dc = context.dc;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('BACnet/IP'),
+      appBar: GradientAppBar(
+        title: l10n.discoverDevices,
+        subtitle: 'BACnet/IP · Who-Is',
         actions: [
           if (!_isDiscovering)
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
               onPressed: _startBroadcastDiscovery,
               tooltip: l10n.refresh,
             ),
         ],
       ),
-      body: Column(
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 32),
         children: [
-          // Sélecteur d'interface réseau
-          _buildInterfaceSelector(theme, l10n),
-
-          // Alerte reseau local
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: theme.colorScheme.tertiaryContainer,
-            child: Row(
+          DcContent(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(
-                  Icons.wifi,
-                  color: theme.colorScheme.onTertiaryContainer,
+                // En-tete : recherche, interface reseau, compteur
+                DiscoveryHeader(
+                  icon: Icons.radar_rounded,
+                  tone: dc.violet,
+                  title: _isDiscovering ? l10n.discovering : l10n.discoverDevices,
+                  subtitle: _isDiscovering ? l10n.searchingBacnetDevices : l10n.broadcastDiscoverySubtitle,
+                  scanning: _isDiscovering,
+                  countLabel: _discoveredDevices.isNotEmpty ? l10n.devicesFound(_discoveredDevices.length) : null,
+                  child: _buildInterfaceSelector(l10n),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.bacnetLocalNetworkOnly,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: theme.colorScheme.onTertiaryContainer,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        l10n.bacnetLocalNetworkInfo,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onTertiaryContainer,
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 12),
+
+                // Alerte reseau local
+                DcBanner(
+                  tone: dc.info,
+                  icon: Icons.wifi_rounded,
+                  title: l10n.bacnetLocalNetworkOnly,
+                  message: l10n.bacnetLocalNetworkInfo,
+                  dense: true,
+                ),
+
+                // Conflits de Device ID
+                if (_conflicts.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  DcBanner(
+                    tone: dc.warning,
+                    icon: Icons.warning_amber_rounded,
+                    title: l10n.deviceIdConflict,
+                    message: '${_conflicts.length} ${l10n.conflicts}',
+                    dense: true,
+                    action: TextButton(
+                      onPressed: _showConflictsDialog,
+                      style: TextButton.styleFrom(foregroundColor: dc.warning.fg),
+                      child: Text(l10n.details),
+                    ),
                   ),
-                ),
+                ],
+                const SizedBox(height: 16),
+
+                // Contenu principal
+                _buildContent(l10n),
               ],
             ),
-          ),
-
-          // Indicateur de progression
-          if (_isDiscovering)
-            const LinearProgressIndicator(),
-
-          // Contenu principal
-          Expanded(
-            child: _buildContent(l10n, theme),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildInterfaceSelector(ThemeData theme, AppLocalizations l10n) {
+  Widget _buildInterfaceSelector(AppLocalizations l10n) {
     final interfacesAsync = ref.watch(availableNetworkInterfacesProvider);
     final selectedInterface = ref.watch(selectedBacnetInterfaceProvider);
+    final dc = context.dc;
 
     return interfacesAsync.when(
       data: (interfaces) {
@@ -485,60 +480,46 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
           return const SizedBox.shrink();
         }
 
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            border: Border(
-              bottom: BorderSide(
-                color: theme.colorScheme.outlineVariant,
-                width: 1,
-              ),
+        return Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: DropdownButtonFormField<NetworkInterfaceChoice?>(
+            key: ValueKey(selectedInterface),
+            initialValue: selectedInterface,
+            decoration: InputDecoration(
+              labelText: l10n.networkInterface,
+              prefixIcon: const Icon(Icons.lan_outlined, size: 20),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.lan, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<NetworkInterfaceChoice?>(
-                  value: selectedInterface,
-                  decoration: InputDecoration(
-                    labelText: l10n.networkInterface,
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                  isExpanded: true,
-                  items: [
-                    DropdownMenuItem(
-                      value: null,
-                      child: Text(l10n.allInterfaces),
-                    ),
-                    ...interfaces.map((iface) => DropdownMenuItem(
-                      value: iface,
-                      child: Row(
-                        children: [
-                          Icon(
-                            iface.isWireless ? Icons.wifi : Icons.cable,
-                            size: 16,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${iface.name} (${iface.address})',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )),
-                  ],
-                  onChanged: _isDiscovering ? null : _onInterfaceChanged,
-                ),
+            isExpanded: true,
+            items: [
+              DropdownMenuItem(
+                value: null,
+                child: Text(l10n.allInterfaces),
               ),
+              ...interfaces.map((iface) => DropdownMenuItem(
+                    value: iface,
+                    child: Row(
+                      children: [
+                        Icon(
+                          iface.isWireless ? Icons.wifi_rounded : Icons.cable_rounded,
+                          size: 16,
+                          color: dc.textMuted,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(iface.name, overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          iface.address,
+                          style: AppTextStyles.monospacedValue.copyWith(fontSize: 12, color: dc.textSecondary),
+                        ),
+                      ],
+                    ),
+                  )),
             ],
+            onChanged: _isDiscovering ? null : _onInterfaceChanged,
           ),
         );
       },
@@ -547,170 +528,52 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
     );
   }
 
-  Widget _buildContent(AppLocalizations l10n, ThemeData theme) {
+  Widget _buildContent(AppLocalizations l10n) {
     // Erreur
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: theme.colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                l10n.error,
-                style: theme.textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _startBroadcastDiscovery,
-                icon: const Icon(Icons.refresh),
-                label: Text(l10n.retry),
-              ),
-            ],
-          ),
+      return DcEmptyState.error(
+        context,
+        title: l10n.error,
+        message: _errorMessage,
+        action: FilledButton.icon(
+          onPressed: _startBroadcastDiscovery,
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(l10n.retry),
         ),
       );
     }
 
     // En cours de recherche sans resultat
     if (_isDiscovering && _discoveredDevices.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(
-              width: 64,
-              height: 64,
-              child: CircularProgressIndicator(strokeWidth: 3),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              l10n.discovering,
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.searchingBacnetDevices,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+      return Padding(
+        padding: const EdgeInsets.only(top: 48),
+        child: DcLoading(message: l10n.searchingBacnetDevices),
       );
     }
 
     // Aucun appareil trouve
     if (!_isDiscovering && _discoveredDevices.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.search_off,
-                size: 64,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                l10n.noDeviceFound,
-                style: theme.textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                l10n.noDeviceFoundMessage,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _startBroadcastDiscovery,
-                icon: const Icon(Icons.refresh),
-                label: Text(l10n.retry),
-              ),
-            ],
-          ),
+      return DcEmptyState(
+        icon: Icons.search_off_rounded,
+        title: l10n.noDeviceFound,
+        message: l10n.noDeviceFoundMessage,
+        action: FilledButton.icon(
+          onPressed: _startBroadcastDiscovery,
+          icon: const Icon(Icons.refresh_rounded),
+          label: Text(l10n.retry),
         ),
       );
     }
 
-    // Liste des appareils trouves
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // Grille des appareils trouves
+    return DiscoveryGrid(
       children: [
-        // Compteur et alerte conflits
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                l10n.devicesFound(_discoveredDevices.length),
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Row(
-                children: [
-                  if (_conflicts.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ActionChip(
-                        avatar: const Icon(Icons.warning, size: 16, color: Colors.orange),
-                        label: Text('${_conflicts.length} ${l10n.conflicts}'),
-                        onPressed: _showConflictsDialog,
-                        backgroundColor: Colors.orange.withValues(alpha: 0.1),
-                      ),
-                    ),
-                  if (_isDiscovering)
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                ],
-              ),
-            ],
+        for (final device in _discoveredDevices)
+          _BacnetDeviceCard(
+            device: device,
+            onTap: () => _selectDevice(device),
+            onRetryDetails: () => _retryDetails(device),
           ),
-        ),
-
-        // Liste
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _discoveredDevices.length,
-            itemBuilder: (context, index) {
-              final device = _discoveredDevices[index];
-              return _BacnetDeviceCard(
-                device: device,
-                onTap: () => _selectDevice(device),
-                onRetryDetails: () => _retryDetails(device),
-              );
-            },
-          ),
-        ),
       ],
     );
   }
@@ -729,183 +592,168 @@ class _BacnetDeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final dc = context.dc;
     final l10n = AppLocalizations.of(context)!;
 
     // Couleur selon le fabricant
-    Color avatarColor;
-    if (device.vendorName?.toLowerCase().contains('distech') == true) {
-      avatarColor = Colors.blue;
-    } else if (device.vendorName?.toLowerCase().contains('trend') == true) {
-      avatarColor = Colors.green;
+    final vendor = device.vendorName?.toLowerCase() ?? '';
+    final DcTone tone;
+    if (vendor.contains('distech')) {
+      tone = dc.accentTone;
+    } else if (vendor.contains('trend')) {
+      tone = dc.success;
     } else {
-      avatarColor = theme.colorScheme.primaryContainer;
+      tone = dc.violet;
     }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: device.hasConflict
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: Colors.orange, width: 2),
-            )
-          : null,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+    return DcCard(
+      onTap: onTap,
+      borderColor: device.hasConflict ? dc.warning.border : null,
+      accentColor: device.hasConflict ? dc.warning.fg : null,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Icone
               Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: avatarColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.device_hub,
-                      color: avatarColor,
-                      size: 28,
-                    ),
-                  ),
+                  DcIconBox(icon: Icons.lan_outlined, tone: tone, size: 44),
                   if (device.hasConflict)
                     Positioned(
-                      right: -2,
-                      top: -2,
+                      right: -4,
+                      top: -4,
                       child: Container(
                         padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.orange,
+                        decoration: BoxDecoration(
+                          color: dc.warning.fg,
                           shape: BoxShape.circle,
+                          border: Border.all(color: dc.surface, width: 2),
                         ),
-                        child: const Icon(
-                          Icons.warning,
-                          size: 14,
-                          color: Colors.white,
-                        ),
+                        child: Icon(Icons.priority_high_rounded, size: 11, color: dc.surface),
                       ),
                     ),
                 ],
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
 
-              // Infos
+              // Nom + adresse
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            device.deviceName ?? 'Device ${device.deviceId}',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        if (device.hasConflict)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.orange,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              l10n.idConflict,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (device.detailsStatus == DeviceDetailsStatus.loading)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5)),
-                            const SizedBox(width: 6),
-                            Text(l10n.bacnetReadingDeviceName, style: theme.textTheme.bodySmall),
-                          ],
-                        ),
-                      )
-                    else if (device.detailsStatus == DeviceDetailsStatus.failed)
-                      Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 14, color: theme.colorScheme.error),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              l10n.bacnetDeviceNameUnavailable,
-                              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: onRetryDetails,
-                            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                            child: Text(l10n.retry),
-                          ),
-                        ],
-                      ),
-                    const SizedBox(height: 4),
                     Text(
-                      '${l10n.host}: ${device.host}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                      device.deviceName ?? 'Device ${device.deviceId}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.text.titleMedium?.copyWith(
+                        color: device.deviceName == null ? dc.textSecondary : dc.textPrimary,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      '${l10n.deviceId}: ${device.deviceId}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                      '${device.host}:${device.port}',
+                      style: AppTextStyles.monospacedValue.copyWith(fontSize: 12, color: dc.textSecondary),
                     ),
-                    if (device.vendorName != null)
-                      Text(
-                        '${l10n.vendor}: ${device.vendorName}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    if (device.modelName != null)
-                      Text(
-                        '${l10n.model}: ${device.modelName}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    if (device.hasConflict && device.conflictingHosts.length > 1)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '${l10n.alsoAt}: ${device.conflictingHosts.where((h) => h != device.host).join(", ")}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.orange[700],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
-
-              // Fleche
-              Icon(
-                Icons.chevron_right,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              const SizedBox(width: 8),
+              DcTag('ID ${device.deviceId}', tone: tone, mono: true, dense: true),
             ],
           ),
-        ),
+
+          // Lecture du nom / echec avec relance
+          if (device.detailsStatus == DeviceDetailsStatus.loading)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: dc.textMuted),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.bacnetReadingDeviceName,
+                    style: context.text.bodySmall?.copyWith(color: dc.textMuted),
+                  ),
+                ],
+              ),
+            )
+          else if (device.detailsStatus == DeviceDetailsStatus.failed)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: DcBanner(
+                tone: dc.warning,
+                icon: Icons.info_outline_rounded,
+                message: l10n.bacnetDeviceNameUnavailable,
+                dense: true,
+                action: TextButton(
+                  onPressed: onRetryDetails,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: dc.warning.fg,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 28),
+                  ),
+                  child: Text(l10n.retry),
+                ),
+              ),
+            ),
+
+          // Fabricant, modele
+          if (device.vendorName != null || device.modelName != null) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (device.vendorName != null) DcTag(device.vendorName!, icon: Icons.factory_outlined, dense: true),
+                if (device.modelName != null) DcTag(device.modelName!, icon: Icons.memory_rounded, dense: true),
+              ],
+            ),
+          ],
+
+          // Conflit d'ID : autres adresses
+          if (device.hasConflict) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                DcTag(l10n.idConflict, icon: Icons.warning_amber_rounded, tone: dc.warning, dense: true),
+                if (device.conflictingHosts.length > 1)
+                  Text(
+                    '${l10n.alsoAt}: ${device.conflictingHosts.where((h) => h != device.host).join(", ")}',
+                    style: AppTextStyles.monospacedValue.copyWith(fontSize: 11.5, color: dc.warning.fg),
+                  ),
+              ],
+            ),
+          ],
+
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.tonalIcon(
+              onPressed: onTap,
+              style: FilledButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                backgroundColor: dc.accentTone.bg,
+                foregroundColor: dc.accentTone.fg,
+                minimumSize: const Size(0, 34),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              icon: const Icon(Icons.add_link_rounded, size: 18),
+              label: Text(l10n.discoverCreateConnection),
+            ),
+          ),
+        ],
       ),
     );
   }

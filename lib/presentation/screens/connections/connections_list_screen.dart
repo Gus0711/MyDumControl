@@ -16,6 +16,7 @@ import '../../../domain/models/display_preferences.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/gradient_app_bar.dart';
 import '../../widgets/confirm_dialog.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../widgets/ui/ui.dart';
 
 /// Écran de liste des connexions sauvegardées organisées par dossiers
@@ -304,7 +305,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
       final hex = colorHex.replaceFirst('#', '');
       return Color(int.parse('FF$hex', radix: 16));
     } catch (e) {
-      return Colors.blue;
+      return AppColors.brandBlue;
     }
   }
 

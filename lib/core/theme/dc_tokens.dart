@@ -105,6 +105,12 @@ class DcTokens extends ThemeExtension<DcTokens> {
   /// Info = accent.
   DcTone get info => accentTone;
 
+  /// Texte posé sur un fond plein d'un ton (bouton rouge, pastille pleine…).
+  Color get onSolid => isDark ? const Color(0xFF0A111D) : Colors.white;
+
+  /// Couleur des liens et actions textuelles.
+  Color get link => isDark ? accentTone.fg : accent;
+
   /// Ton dérivé d'une couleur arbitraire (couleur de dossier, type de point…).
   DcTone toneOf(Color color) => DcTone.fromColor(color, brightness);
 

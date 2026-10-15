@@ -10,7 +10,11 @@ import '../../core/utils/formatters.dart';
 import '../../application/providers/trend_log_provider.dart';
 import '../../domain/models/trend_log.dart';
 import '../../l10n/app_localizations.dart';
+import '../../core/theme/app_colors.dart';
+import 'chart_chrome.dart';
 import 'chart_downsample.dart';
+import 'gradient_app_bar.dart';
+import 'ui/ui.dart';
 
 // =============================================================================
 // Système de couleurs pour les graphiques
@@ -245,23 +249,23 @@ class _ColorThemeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
     if (compact) {
       return PopupMenuButton<ChartColorTheme>(
         initialValue: selectedTheme,
         onSelected: onThemeChanged,
         tooltip: l10n.trendChangeColor,
         icon: Container(
-          width: 24,
-          height: 24,
+          width: 20,
+          height: 20,
           decoration: BoxDecoration(
-            color: selectedTheme.primaryColor,
+            color: chartSeriesColor(context, selectedTheme.primaryColor),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 2),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(40),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
+                color: selectedTheme.primaryColor.withValues(alpha: 0.45),
+                blurRadius: 6,
               ),
             ],
           ),
@@ -269,22 +273,21 @@ class _ColorThemeSelector extends StatelessWidget {
         itemBuilder: (context) => ChartColorTheme.allThemes
             .map((theme) => PopupMenuItem<ChartColorTheme>(
                   value: theme,
+                  height: 40,
                   child: Row(
                     children: [
                       Container(
-                        width: 20,
-                        height: 20,
+                        width: 16,
+                        height: 16,
                         decoration: BoxDecoration(
-                          color: theme.primaryColor,
+                          color: chartSeriesColor(context, theme.primaryColor),
                           shape: BoxShape.circle,
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Text(chartColorThemeLabel(l10n, theme)),
-                      if (theme.name == selectedTheme.name) ...[
-                        const Spacer(),
-                        Icon(Icons.check, color: theme.primaryColor, size: 18),
-                      ],
+                      Expanded(child: Text(chartColorThemeLabel(l10n, theme))),
+                      if (theme.name == selectedTheme.name)
+                        Icon(Icons.check_rounded, color: dc.toneOf(theme.primaryColor).fg, size: 18),
                     ],
                   ),
                 ))
@@ -303,14 +306,14 @@ class _ColorThemeSelector extends StatelessWidget {
               onTap: () => onThemeChanged(theme),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                width: isSelected ? 36 : 28,
-                height: isSelected ? 36 : 28,
+                width: isSelected ? 32 : 26,
+                height: isSelected ? 32 : 26,
                 decoration: BoxDecoration(
-                  color: theme.primaryColor,
+                  color: chartSeriesColor(context, theme.primaryColor),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: isSelected ? Colors.white : Colors.transparent,
-                    width: 3,
+                    color: isSelected ? dc.textPrimary : Colors.transparent,
+                    width: 2,
                   ),
                   boxShadow: isSelected
                       ? [
@@ -522,11 +525,12 @@ class _AnnotationsMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final activeColor = context.dc.toneOf(colorTheme.primaryColor).fg;
     return PopupMenuButton<String>(
       tooltip: l10n.trendAnnotations,
       icon: Icon(
-        Icons.edit_note,
-        color: _hasAnyAnnotation ? colorTheme.primaryColor : null,
+        Icons.edit_note_rounded,
+        color: _hasAnyAnnotation ? AppColors.brandSky : null,
       ),
       onSelected: (value) {
         switch (value) {
@@ -557,40 +561,39 @@ class _AnnotationsMenu extends StatelessWidget {
       },
       itemBuilder: (context) => [
         _buildMenuItem(
+          context,
           'markers',
           l10n.trendMinMaxMarkers,
-          Icons.push_pin,
+          Icons.push_pin_outlined,
           annotations.showMinMaxMarkers,
+          activeColor,
         ),
         _buildMenuItem(
+          context,
           'average',
           l10n.trendAverageLine,
-          Icons.horizontal_rule,
+          Icons.horizontal_rule_rounded,
           annotations.showAverageLine,
+          activeColor,
         ),
         _buildMenuItem(
+          context,
           'minLine',
           l10n.trendMinLine,
-          Icons.arrow_downward,
+          Icons.south_rounded,
           annotations.showMinLine,
+          activeColor,
         ),
         _buildMenuItem(
+          context,
           'maxLine',
           l10n.trendMaxLine,
-          Icons.arrow_upward,
+          Icons.north_rounded,
           annotations.showMaxLine,
+          activeColor,
         ),
         const PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'reset',
-          child: Row(
-            children: [
-              const Icon(Icons.clear_all, size: 20),
-              const SizedBox(width: 12),
-              Text(l10n.trendHideAll),
-            ],
-          ),
-        ),
+        dcMenuItem(context, 'reset', Icons.clear_all_rounded, l10n.trendHideAll),
       ],
     );
   }
@@ -602,24 +605,26 @@ class _AnnotationsMenu extends StatelessWidget {
       annotations.showMaxLine;
 
   PopupMenuItem<String> _buildMenuItem(
+    BuildContext context,
     String value,
     String label,
     IconData icon,
     bool isSelected,
+    Color activeColor,
   ) {
     return PopupMenuItem(
       value: value,
+      height: 42,
       child: Row(
         children: [
           Icon(
             icon,
-            size: 20,
-            color: isSelected ? colorTheme.primaryColor : null,
+            size: 18,
+            color: isSelected ? activeColor : context.dc.textSecondary,
           ),
           const SizedBox(width: 12),
           Expanded(child: Text(label)),
-          if (isSelected)
-            Icon(Icons.check, size: 18, color: colorTheme.primaryColor),
+          if (isSelected) Icon(Icons.check_rounded, size: 18, color: activeColor),
         ],
       ),
     );
@@ -630,7 +635,7 @@ class _AnnotationsMenu extends StatelessWidget {
 // Widgets partagés
 // =============================================================================
 
-/// Sélecteur de période pour les trend logs
+//// Sélecteur de période pour les trend logs
 class _PeriodSelector extends ConsumerWidget {
   final int trendLogInstance;
   final TrendLogViewerState state;
@@ -642,29 +647,14 @@ class _PeriodSelector extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: TrendPeriod.values
-            .where((p) => p != TrendPeriod.custom)
-            .map((period) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(trendPeriodLabel(AppLocalizations.of(context)!, period)),
-                    selected: state.selectedPeriod == period,
-                    onSelected: state.isLoading
-                        ? null
-                        : (selected) {
-                            if (selected) {
-                              ref
-                                  .read(trendLogViewerProvider(trendLogInstance).notifier)
-                                  .setPeriod(period);
-                            }
-                          },
-                  ),
-                ))
-            .toList(),
-      ),
+    final l10n = AppLocalizations.of(context)!;
+    return ChartSegmented<TrendPeriod>(
+      values: TrendPeriod.values.where((p) => p != TrendPeriod.custom).toList(),
+      selected: state.selectedPeriod,
+      labelOf: (period) => trendPeriodLabel(l10n, period),
+      onSelected: state.isLoading
+          ? null
+          : (period) => ref.read(trendLogViewerProvider(trendLogInstance).notifier).setPeriod(period),
     );
   }
 }
@@ -673,115 +663,27 @@ class _PeriodSelector extends ConsumerWidget {
 class _StatisticsBar extends StatelessWidget {
   final TrendLogData data;
   final ChartColorTheme? colorTheme;
+  final String? units;
 
-  const _StatisticsBar({required this.data, this.colorTheme});
+  const _StatisticsBar({required this.data, this.colorTheme, this.units});
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final valueRecords = data.records.where((r) => r.isValueRecord).length;
     final theme = colorTheme ?? ChartColorTheme.blue;
+    final suffix = units != null && units!.isNotEmpty ? ' $units' : '';
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.primaryColor.withAlpha(20),
-            theme.primaryColor.withAlpha(8),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.primaryColor.withAlpha(30),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _StatItem(
-            label: l10n.statisticsPoints,
-            value: valueRecords.toString(),
-            color: theme.primaryColor,
-          ),
-          if (data.minValue != null)
-            _StatItem(
-              label: l10n.statisticsMin,
-              value: formatNumber(data.minValue!),
-              color: theme.primaryColor,
-              icon: Icons.arrow_downward,
-            ),
-          if (data.maxValue != null)
-            _StatItem(
-              label: l10n.statisticsMax,
-              value: formatNumber(data.maxValue!),
-              color: theme.primaryColor,
-              icon: Icons.arrow_upward,
-            ),
-          if (data.avgValue != null)
-            _StatItem(
-              label: l10n.statisticsAvg,
-              value: formatNumber(data.avgValue!),
-              color: theme.primaryColor,
-              icon: Icons.horizontal_rule,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Item de statistique individuel
-class _StatItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? color;
-  final IconData? icon;
-
-  const _StatItem({
-    required this.label,
-    required this.value,
-    this.color,
-    this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final displayColor = color ?? Theme.of(context).colorScheme.primary;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 16, color: displayColor.withAlpha(200)),
-              const SizedBox(width: 4),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: displayColor,
-          ),
-        ),
+    return ChartStatsRow(
+      color: theme.primaryColor,
+      stats: [
+        ChartStat(label: l10n.statisticsPoints, value: valueRecords.toString(), icon: Icons.scatter_plot_outlined),
+        if (data.minValue != null)
+          ChartStat(label: l10n.statisticsMin, value: '${formatNumber(data.minValue!)}$suffix', icon: Icons.south_rounded),
+        if (data.maxValue != null)
+          ChartStat(label: l10n.statisticsMax, value: '${formatNumber(data.maxValue!)}$suffix', icon: Icons.north_rounded),
+        if (data.avgValue != null)
+          ChartStat(label: l10n.statisticsAvg, value: '${formatNumber(data.avgValue!)}$suffix', icon: Icons.horizontal_rule_rounded),
       ],
     );
   }
@@ -794,28 +696,7 @@ class _LoadingState extends StatelessWidget {
   const _LoadingState({this.message});
 
   @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            if (message != null) ...[
-              const SizedBox(height: 16),
-              Text(
-                message!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ChartMessage.loading(message: message);
 }
 
 /// Widget d'état d'erreur
@@ -827,29 +708,14 @@ class _ErrorState extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.red.shade600),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () => ref
-                  .read(trendLogViewerProvider(trendLogInstance).notifier)
-                  .loadData(),
-              icon: const Icon(Icons.refresh),
-              label: Text(AppLocalizations.of(context)!.retry),
-            ),
-          ],
-        ),
+    return ChartMessage(
+      icon: Icons.error_outline_rounded,
+      tone: context.dc.danger,
+      message: error,
+      action: OutlinedButton.icon(
+        onPressed: () => ref.read(trendLogViewerProvider(trendLogInstance).notifier).loadData(),
+        icon: const Icon(Icons.refresh_rounded, size: 18),
+        label: Text(AppLocalizations.of(context)!.retry),
       ),
     );
   }
@@ -857,26 +723,15 @@ class _ErrorState extends ConsumerWidget {
 
 /// Widget d'état vide
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  final String? message;
+
+  const _EmptyState({this.message});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.show_chart, size: 48, color: isDark ? Colors.grey.shade500 : Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              AppLocalizations.of(context)!.trendNoDataForPeriod,
-              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-            ),
-          ],
-        ),
-      ),
+    return ChartMessage(
+      icon: Icons.show_chart_rounded,
+      message: message ?? AppLocalizations.of(context)!.trendNoDataForPeriod,
     );
   }
 }
@@ -896,6 +751,7 @@ class _DataTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
     var valueRecords = data.records.where((r) => r.isValueRecord).toList();
 
     // Trier par timestamp décroissant
@@ -907,51 +763,64 @@ class _DataTable extends StatelessWidget {
     }
 
     final table = DataTable(
-      columnSpacing: 16,
-      headingRowHeight: fixedHeight != null ? 40 : 48,
-      dataRowMinHeight: fixedHeight != null ? 36 : 40,
-      dataRowMaxHeight: fixedHeight != null ? 36 : 40,
+      columnSpacing: 24,
+      horizontalMargin: 14,
+      headingRowHeight: fixedHeight != null ? 38 : 44,
+      dataRowMinHeight: fixedHeight != null ? 34 : 40,
+      dataRowMaxHeight: fixedHeight != null ? 34 : 40,
+      headingRowColor: WidgetStatePropertyAll(dc.surfaceSunken),
+      dividerThickness: 1,
       columns: [
-        DataColumn(label: Text(l10n.trendDateTime)),
-        DataColumn(label: Text(l10n.value), numeric: true),
-        DataColumn(label: Text(l10n.status)),
+        DataColumn(label: Text(l10n.trendDateTime.toUpperCase(), style: AppTextStyles.overline.copyWith(color: dc.textMuted))),
+        DataColumn(label: Text(l10n.value.toUpperCase(), style: AppTextStyles.overline.copyWith(color: dc.textMuted)), numeric: true),
+        DataColumn(label: Text(l10n.status.toUpperCase(), style: AppTextStyles.overline.copyWith(color: dc.textMuted))),
       ],
-      rows: valueRecords.map((record) => _buildRow(record)).toList(),
+      rows: valueRecords.map((record) => _buildRow(context, record)).toList(),
+    );
+
+    final framed = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(DcRadius.md),
+        border: Border.all(color: dc.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        child: SizedBox(width: double.infinity, child: table),
+      ),
     );
 
     if (fixedHeight != null) {
-      return SizedBox(
-        height: fixedHeight,
-        child: SingleChildScrollView(child: table),
-      );
+      return SizedBox(height: fixedHeight, child: framed);
     }
 
-    return SingleChildScrollView(child: table);
+    return framed;
   }
 
-  DataRow _buildRow(TrendLogRecord record) {
-    final fontSize = fixedHeight != null ? 12.0 : 13.0;
+  DataRow _buildRow(BuildContext context, TrendLogRecord record) {
+    final dc = context.dc;
+    final fontSize = fixedHeight != null ? 12.0 : 12.5;
+    final isNormal = record.status == 'Normal' || record.status == null;
 
     return DataRow(
       cells: [
         DataCell(Text(
           DateFormat('dd/MM/yyyy HH:mm:ss').format(record.timestamp),
-          style: TextStyle(fontSize: fontSize),
+          style: AppTextStyles.monospacedValue.copyWith(fontSize: fontSize, color: dc.textSecondary),
         )),
         DataCell(Text(
           record.numericValue != null
               ? '${formatNumber(record.numericValue!)}${units != null ? ' $units' : ''}'
               : record.value?.toString() ?? '-',
-          style: TextStyle(fontWeight: FontWeight.w500, fontSize: fontSize),
-        )),
-        DataCell(Text(
-          record.status ?? 'OK',
-          style: TextStyle(
-            fontSize: fontSize - 1,
-            color: record.status == 'Normal' || record.status == null
-                ? Colors.green
-                : Colors.orange,
+          style: AppTextStyles.monospacedValue.copyWith(
+            fontSize: fontSize,
+            fontWeight: FontWeight.w600,
+            color: dc.textPrimary,
           ),
+        )),
+        DataCell(DcTag(
+          record.status ?? 'OK',
+          tone: isNormal ? dc.success : dc.warning,
+          dense: true,
         )),
       ],
     );
@@ -998,22 +867,27 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
   Widget build(BuildContext context) {
     final state = ref.watch(trendLogViewerProvider(widget.trendLogInstance));
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(context, state),
-            const SizedBox(height: 16),
-            _PeriodSelector(
+    return DcCard(
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(context, state),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _PeriodSelector(
               trendLogInstance: widget.trendLogInstance,
               state: state,
             ),
-            const SizedBox(height: 16),
-            _buildContent(state),
-          ],
-        ),
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _buildContent(state),
+          ),
+        ],
       ),
     );
   }
@@ -1024,14 +898,18 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
 
     return Row(
       children: [
-        Icon(Icons.show_chart, color: _colorTheme.primaryColor),
-        const SizedBox(width: 8),
+        DcIconBox(
+          icon: Icons.show_chart_rounded,
+          tone: context.dc.toneOf(_colorTheme.primaryColor),
+          size: 34,
+        ),
+        const SizedBox(width: 10),
         Expanded(
           child: Text(
             l10n.trendHistory,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.text.titleMedium,
           ),
         ),
         // Sélecteur de couleur compact
@@ -1042,23 +920,23 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
         ),
         if (hasData)
           IconButton(
-            icon: const Icon(Icons.fullscreen),
+            icon: const Icon(Icons.open_in_full_rounded, size: 20),
             tooltip: l10n.trendFullscreen,
             onPressed: () => _openFullscreen(context, state),
           ),
         IconButton(
-          icon: Icon(_showTable ? Icons.show_chart : Icons.table_chart),
+          icon: Icon(_showTable ? Icons.show_chart_rounded : Icons.table_rows_outlined, size: 20),
           tooltip: _showTable ? l10n.trendShowChart : l10n.trendShowTable,
           onPressed: () => setState(() => _showTable = !_showTable),
         ),
         if (hasData)
           IconButton(
-            icon: const Icon(Icons.download),
+            icon: const Icon(Icons.download_rounded, size: 20),
             tooltip: l10n.trendExportCsv,
             onPressed: () => _exportCsv(state.data!),
           ),
         IconButton(
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(Icons.refresh_rounded, size: 20),
           tooltip: l10n.refresh,
           onPressed: state.isLoading
               ? null
@@ -1088,8 +966,8 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
 
     return Column(
       children: [
-        _StatisticsBar(data: state.data!, colorTheme: _colorTheme),
-        const SizedBox(height: 16),
+        _StatisticsBar(data: state.data!, colorTheme: _colorTheme, units: widget.units),
+        const SizedBox(height: 14),
         if (_showTable)
           _DataTable(
             data: state.data!,
@@ -1107,7 +985,7 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
     if (chartData == null) return const _EmptyState();
 
     return SizedBox(
-      height: 200,
+      height: 220,
       child: _TrendChart(
         chartData: chartData,
         units: widget.units,
@@ -1166,12 +1044,7 @@ class _TrendLogViewerState extends ConsumerState<TrendLogViewer> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.exportError(e.toString())),
-            backgroundColor: Colors.red,
-          ),
-        );
+        context.showError(l10n.exportError(e.toString()));
       }
     }
   }
@@ -1246,8 +1119,9 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.pointName ?? l10n.trendHistory),
+      appBar: GradientAppBar(
+        title: widget.pointName ?? l10n.trendHistory,
+        subtitle: widget.pointName != null ? l10n.trendHistory : null,
         actions: [
           // Menu annotations (seulement si graphique visible)
           if (!_showTable)
@@ -1263,17 +1137,17 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
             compact: true,
           ),
           IconButton(
-            icon: Icon(_isLandscape ? Icons.screen_lock_portrait : Icons.screen_lock_landscape),
+            icon: Icon(_isLandscape ? Icons.stay_current_portrait_rounded : Icons.stay_current_landscape_rounded),
             tooltip: _isLandscape ? l10n.trendPortraitMode : l10n.trendLandscapeMode,
             onPressed: _toggleOrientation,
           ),
           IconButton(
-            icon: Icon(_showTable ? Icons.show_chart : Icons.table_chart),
+            icon: Icon(_showTable ? Icons.show_chart_rounded : Icons.table_rows_outlined),
             tooltip: _showTable ? l10n.trendShowChart : l10n.trendShowTable,
             onPressed: () => setState(() => _showTable = !_showTable),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             tooltip: l10n.refresh,
             onPressed: state.isLoading
                 ? null
@@ -1288,7 +1162,7 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
           children: [
             // Sélecteur de période + couleurs en mode non compact
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
               child: Row(
                 children: [
                   Expanded(
@@ -1313,7 +1187,7 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
             if (data != null && data.records.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _StatisticsBar(data: data, colorTheme: _colorTheme),
+                child: _StatisticsBar(data: data, colorTheme: _colorTheme, units: widget.units),
               ),
             Expanded(
               child: Padding(
@@ -1353,13 +1227,7 @@ class _TrendLogFullscreenViewState extends ConsumerState<TrendLogFullscreenView>
   Widget _buildFullscreenChart(TrendLogData data) {
     final chartData = _ChartData.fromRecords(data.records);
     if (chartData == null) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      return Center(
-        child: Text(
-          AppLocalizations.of(context)!.trendNoNumericData,
-          style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-        ),
-      );
+      return _EmptyState(message: AppLocalizations.of(context)!.trendNoNumericData);
     }
 
     return _TrendChart(
@@ -1550,13 +1418,7 @@ class _TrendChartState extends State<_TrendChart> {
   Widget build(BuildContext context) {
     // Protection: vérifier qu'on a des données valides
     if (widget.chartData.spots.isEmpty) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      return Center(
-        child: Text(
-          AppLocalizations.of(context)!.trendNoDataToDisplay,
-          style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-        ),
-      );
+      return _EmptyState(message: AppLocalizations.of(context)!.trendNoDataToDisplay);
     }
 
     final isZoomed = _zoomLevel > 1.0;
@@ -1647,16 +1509,20 @@ class _TrendChartState extends State<_TrendChart> {
     if (minX.isNaN || maxX.isNaN || minY.isNaN || maxY.isNaN ||
         minX.isInfinite || maxX.isInfinite || minY.isInfinite || maxY.isInfinite ||
         minX >= maxX || minY >= maxY) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      return Center(
-        child: Text(
-          AppLocalizations.of(context)!.trendInvalidData,
-          style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-        ),
+      return ChartMessage(
+        icon: Icons.warning_amber_rounded,
+        tone: context.dc.warning,
+        message: AppLocalizations.of(context)!.trendInvalidData,
+        compact: true,
       );
     }
 
     final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
+    final palette = ChartPalette.of(context);
+    final lineColor = chartSeriesColor(context, widget.colorTheme.primaryColor);
+    final minColor = dc.info.fg;
+    final maxColor = dc.danger.fg;
     final yRange = maxY - minY;
     final xRange = maxX - minX;
 
@@ -1673,17 +1539,16 @@ class _TrendChartState extends State<_TrendChart> {
     if (widget.annotations.showAverageLine) {
       extraHorizontalLines.add(HorizontalLine(
         y: widget.chartData.avgY,
-        color: Colors.orange.withAlpha(180),
+        color: dc.warning.fg.withValues(alpha: 0.8),
         strokeWidth: 1.5,
         dashArray: [8, 4],
         label: HorizontalLineLabel(
           show: true,
           alignment: Alignment.topRight,
           padding: const EdgeInsets.only(right: 4, bottom: 2),
-          style: TextStyle(
-            color: Colors.orange.shade700,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
+          style: palette.axisLabel.copyWith(
+            color: dc.warning.fg,
+            fontWeight: FontWeight.w600,
           ),
           labelResolver: (line) => l10n.trendAvgLineLabel(formatNumber(line.y)),
         ),
@@ -1693,17 +1558,16 @@ class _TrendChartState extends State<_TrendChart> {
     if (widget.annotations.showMinLine) {
       extraHorizontalLines.add(HorizontalLine(
         y: widget.chartData.minY,
-        color: Colors.blue.withAlpha(150),
+        color: minColor.withValues(alpha: 0.7),
         strokeWidth: 1,
         dashArray: [6, 4],
         label: HorizontalLineLabel(
           show: true,
           alignment: Alignment.topRight,
           padding: const EdgeInsets.only(right: 4, bottom: 2),
-          style: TextStyle(
-            color: Colors.blue.shade700,
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
+          style: palette.axisLabel.copyWith(
+            color: minColor,
+            fontWeight: FontWeight.w600,
           ),
           labelResolver: (line) => 'Min: ${formatNumber(line.y)}',
         ),
@@ -1713,17 +1577,16 @@ class _TrendChartState extends State<_TrendChart> {
     if (widget.annotations.showMaxLine) {
       extraHorizontalLines.add(HorizontalLine(
         y: widget.chartData.maxY,
-        color: Colors.red.withAlpha(150),
+        color: maxColor.withValues(alpha: 0.7),
         strokeWidth: 1,
         dashArray: [6, 4],
         label: HorizontalLineLabel(
           show: true,
           alignment: Alignment.bottomRight,
           padding: const EdgeInsets.only(right: 4, top: 2),
-          style: TextStyle(
-            color: Colors.red.shade700,
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
+          style: palette.axisLabel.copyWith(
+            color: maxColor,
+            fontWeight: FontWeight.w600,
           ),
           labelResolver: (line) => 'Max: ${formatNumber(line.y)}',
         ),
@@ -1742,10 +1605,9 @@ class _TrendChartState extends State<_TrendChart> {
                 show: true,
                 alignment: Alignment.topRight,
                 padding: const EdgeInsets.only(right: 4),
-                style: TextStyle(
-                  color: threshold.color,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+                style: palette.axisLabel.copyWith(
+                  color: dc.toneOf(threshold.color).fg,
+                  fontWeight: FontWeight.w600,
                 ),
                 labelResolver: (line) => threshold.label!,
               )
@@ -1765,12 +1627,14 @@ class _TrendChartState extends State<_TrendChart> {
           drawVerticalLine: widget.showVerticalGrid,
           horizontalInterval: yRange > 0 ? yRange / 4 : 1,
           getDrawingHorizontalLine: (value) => FlLine(
-            color: widget.colorTheme.gridColor.withAlpha(60),
-            strokeWidth: 0.5,
+            color: palette.grid,
+            strokeWidth: 1,
+            dashArray: [3, 4],
           ),
           getDrawingVerticalLine: (value) => FlLine(
-            color: widget.colorTheme.gridColor.withAlpha(40),
-            strokeWidth: 0.5,
+            color: palette.grid.withValues(alpha: 0.6),
+            strokeWidth: 1,
+            dashArray: [3, 4],
           ),
         ),
         titlesData: FlTitlesData(
@@ -1778,7 +1642,7 @@ class _TrendChartState extends State<_TrendChart> {
             axisNameWidget: widget.showAxisLabel && widget.units != null
                 ? Text(
                     widget.units!,
-                    style: TextStyle(color: widget.colorTheme.axisColor, fontSize: 12),
+                    style: palette.axisLabel.copyWith(fontSize: 11, color: dc.textSecondary),
                   )
                 : null,
             sideTitles: SideTitles(
@@ -1789,7 +1653,8 @@ class _TrendChartState extends State<_TrendChart> {
                   padding: const EdgeInsets.only(right: 8),
                   child: Text(
                     formatNumber(value),
-                    style: TextStyle(color: widget.colorTheme.axisColor, fontSize: 10),
+                    textAlign: TextAlign.right,
+                    style: palette.axisLabel,
                   ),
                 );
               },
@@ -1809,8 +1674,7 @@ class _TrendChartState extends State<_TrendChart> {
         borderData: FlBorderData(
           show: true,
           border: Border(
-            left: BorderSide(color: widget.colorTheme.axisColor),
-            bottom: BorderSide(color: widget.colorTheme.axisColor),
+            bottom: BorderSide(color: palette.axis),
           ),
         ),
         minX: minX,
@@ -1824,12 +1688,14 @@ class _TrendChartState extends State<_TrendChart> {
             curveSmoothness: 0.15, // Réduire pour moins d'overshoot
             preventCurveOverShooting: true, // Empêcher les dépassements
             preventCurveOvershootingThreshold: 0.0, // Strictement pas de dépassement
-            color: widget.colorTheme.primaryColor,
-            barWidth: 2.5,
+            color: lineColor,
+            barWidth: 2.2,
+            isStrokeCapRound: true,
+            isStrokeJoinRound: true,
             shadow: richRendering
                 ? Shadow(
-                    color: widget.colorTheme.primaryColor.withAlpha(60),
-                    blurRadius: 6,
+                    color: lineColor.withValues(alpha: 0.35),
+                    blurRadius: 8,
                     offset: const Offset(0, 3),
                   )
                 : const Shadow(color: Colors.transparent),
@@ -1845,10 +1711,10 @@ class _TrendChartState extends State<_TrendChart> {
                       currentSpot.x == widget.chartData.minSpot!.x &&
                       currentSpot.y == widget.chartData.minSpot!.y) {
                     return FlDotCirclePainter(
-                      radius: 6,
-                      color: Colors.blue,
+                      radius: 5.5,
+                      color: minColor,
                       strokeWidth: 2,
-                      strokeColor: Colors.white,
+                      strokeColor: palette.dotStroke,
                     );
                   }
 
@@ -1857,19 +1723,19 @@ class _TrendChartState extends State<_TrendChart> {
                       currentSpot.x == widget.chartData.maxSpot!.x &&
                       currentSpot.y == widget.chartData.maxSpot!.y) {
                     return FlDotCirclePainter(
-                      radius: 6,
-                      color: Colors.red,
+                      radius: 5.5,
+                      color: maxColor,
                       strokeWidth: 2,
-                      strokeColor: Colors.white,
+                      strokeColor: palette.dotStroke,
                     );
                   }
                 }
 
                 return FlDotCirclePainter(
-                  radius: 4,
-                  color: widget.colorTheme.dotColor,
-                  strokeWidth: 2,
-                  strokeColor: widget.colorTheme.dotBorderColor,
+                  radius: 3.5,
+                  color: lineColor,
+                  strokeWidth: 1.8,
+                  strokeColor: palette.dotStroke,
                 );
               },
             ),
@@ -1877,8 +1743,8 @@ class _TrendChartState extends State<_TrendChart> {
               show: true,
               gradient: LinearGradient(
                 colors: [
-                  widget.colorTheme.gradientStart,
-                  widget.colorTheme.gradientEnd,
+                  lineColor.withValues(alpha: dc.isDark ? 0.30 : 0.22),
+                  lineColor.withValues(alpha: 0.0),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -1890,10 +1756,10 @@ class _TrendChartState extends State<_TrendChart> {
           touchTooltipData: LineTouchTooltipData(
             fitInsideHorizontally: true,
             fitInsideVertically: true,
-            tooltipRoundedRadius: 12,
-            tooltipPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            tooltipRoundedRadius: DcRadius.md,
+            tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             tooltipMargin: 12,
-            getTooltipColor: (touchedSpot) => widget.colorTheme.tooltipBackground,
+            getTooltipColor: (touchedSpot) => palette.tooltipBackground,
             getTooltipItems: (touchedSpots) {
               return touchedSpots.map((spot) {
                 final timestamp = DateTime.fromMillisecondsSinceEpoch(
@@ -1944,23 +1810,13 @@ class _TrendChartState extends State<_TrendChart> {
 
                 return LineTooltipItem(
                   buffer.toString(),
-                  TextStyle(
-                    color: widget.colorTheme.tooltipText,
-                    fontWeight: FontWeight.bold,
+                  AppTextStyles.monospacedValue.copyWith(
+                    color: palette.tooltipText,
+                    fontWeight: FontWeight.w600,
                     fontSize: 12,
-                    height: 1.4,
+                    height: 1.45,
                   ),
                   textAlign: TextAlign.center,
-                  children: isMin || isMax
-                      ? [
-                          TextSpan(
-                            text: '',
-                            style: TextStyle(
-                              color: isMin ? Colors.lightBlue.shade200 : Colors.red.shade200,
-                            ),
-                          ),
-                        ]
-                      : null,
                 );
               }).toList();
             },
@@ -1979,21 +1835,21 @@ class _TrendChartState extends State<_TrendChart> {
                   spot.y == widget.chartData.maxSpot!.y;
 
               final indicatorColor = isMin
-                  ? Colors.blue
+                  ? minColor
                   : isMax
-                      ? Colors.red
-                      : widget.colorTheme.primaryColor;
+                      ? maxColor
+                      : lineColor;
 
               return TouchedSpotIndicatorData(
                 FlLine(
-                  color: indicatorColor.withAlpha(100),
-                  strokeWidth: 2,
-                  dashArray: [5, 5],
+                  color: indicatorColor.withValues(alpha: 0.5),
+                  strokeWidth: 1.2,
+                  dashArray: [4, 4],
                 ),
                 FlDotData(
                   getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
-                    radius: 7,
-                    color: widget.colorTheme.dotBorderColor,
+                    radius: 6,
+                    color: palette.dotStroke,
                     strokeWidth: 3,
                     strokeColor: indicatorColor,
                   ),
@@ -2015,7 +1871,7 @@ class _TrendChartState extends State<_TrendChart> {
 
     final label = Text(
       DateFormat(widget.dateFormat).format(timestamp),
-      style: TextStyle(color: widget.colorTheme.axisColor, fontSize: 10),
+      style: ChartPalette.of(context).axisLabel,
       textAlign: TextAlign.center,
     );
 
@@ -2046,33 +1902,29 @@ class _ZoomControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dc = context.dc;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(230),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(20),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: dc.surfaceRaised,
+        borderRadius: BorderRadius.circular(DcRadius.md),
+        border: Border.all(color: dc.border),
+        boxShadow: dc.cardShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           _ZoomButton(
-            icon: Icons.add,
+            icon: Icons.add_rounded,
             onTap: zoomLevel < 10.0 ? onZoomIn : null,
             colorTheme: colorTheme,
           ),
           Container(
             height: 1,
             width: 28,
-            color: Colors.grey.withAlpha(50),
+            color: dc.border,
           ),
           _ZoomButton(
-            icon: Icons.remove,
+            icon: Icons.remove_rounded,
             onTap: zoomLevel > 1.0 ? onZoomOut : null,
             colorTheme: colorTheme,
           ),
@@ -2080,10 +1932,10 @@ class _ZoomControls extends StatelessWidget {
             Container(
               height: 1,
               width: 28,
-              color: Colors.grey.withAlpha(50),
+              color: dc.border,
             ),
             _ZoomButton(
-              icon: Icons.fit_screen,
+              icon: Icons.fit_screen_rounded,
               onTap: onReset,
               colorTheme: colorTheme,
               tooltip: AppLocalizations.of(context)!.reset,
@@ -2113,23 +1965,20 @@ class _ZoomButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isEnabled = onTap != null;
 
-    return Tooltip(
-      message: tooltip ?? '',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(
-            icon,
-            size: 18,
-            color: isEnabled
-                ? colorTheme.primaryColor
-                : Colors.grey.withAlpha(100),
-          ),
+    final dc = context.dc;
+    final button = InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(DcRadius.sm),
+      child: Padding(
+        padding: const EdgeInsets.all(7),
+        child: Icon(
+          icon,
+          size: 18,
+          color: isEnabled ? dc.textPrimary : dc.textMuted.withValues(alpha: 0.5),
         ),
       ),
     );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 
@@ -2145,20 +1994,11 @@ class _ZoomIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorTheme.primaryColor.withAlpha(200),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        '${zoomLevel.toStringAsFixed(1)}x',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+    return DcTag(
+      '${zoomLevel.toStringAsFixed(1)}×',
+      icon: Icons.zoom_in_rounded,
+      tone: context.dc.accentTone,
+      mono: true,
     );
   }
 }
@@ -2189,53 +2029,27 @@ class EmbeddedTrendChart extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(trendLogViewerProvider(trendLogInstance));
 
+    final l10n = AppLocalizations.of(context)!;
     if (state.isLoading && state.data == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const ChartMessage.loading(compact: true);
     }
 
     if (state.error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, color: Colors.red.shade300, size: 32),
-            const SizedBox(height: 8),
-            Text(
-              AppLocalizations.of(context)!.loadingError,
-              style: TextStyle(color: Colors.red.shade600, fontSize: 12),
-            ),
-          ],
-        ),
+      return ChartMessage(
+        icon: Icons.error_outline_rounded,
+        tone: context.dc.danger,
+        message: l10n.loadingError,
+        compact: true,
       );
     }
 
     if (state.data == null || state.data!.records.isEmpty) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.show_chart,
-              size: 32,
-              color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              AppLocalizations.of(context)!.noData,
-              style: TextStyle(
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      );
+      return ChartMessage(icon: Icons.show_chart_rounded, message: l10n.noData, compact: true);
     }
 
     final chartData = _ChartData.fromRecords(state.data!.records);
     if (chartData == null) {
-      return Center(child: Text(AppLocalizations.of(context)!.trendNoNumericData));
+      return ChartMessage(icon: Icons.show_chart_rounded, message: l10n.trendNoNumericData, compact: true);
     }
 
     // Widget qui s'adapte à l'espace disponible
@@ -2283,9 +2097,9 @@ class TrendLogIndicator extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.all(4),
             child: Icon(
-              Icons.show_chart,
+              Icons.show_chart_rounded,
               size: 20,
-              color: Theme.of(context).colorScheme.primary,
+              color: context.dc.accent,
             ),
           ),
         );

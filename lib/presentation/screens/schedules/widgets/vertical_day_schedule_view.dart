@@ -6,6 +6,7 @@ import 'schedule_colors.dart';
 import 'schedule_dialogs.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../shared/utils/schedule_l10n.dart';
+import '../../../widgets/ui/ui.dart';
 
 /// Vue semaine compacte avec tous les jours en colonnes verticales
 /// Style Google Agenda - affiche les 7 jours côte à côte
@@ -43,78 +44,75 @@ class VerticalDayScheduleView extends ConsumerWidget {
   }
 
   void _showDayActionsMenu(BuildContext context, WidgetRef ref, WeekDay day, WeekDay? clipboardSource) {
-    final colorScheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                weekDayName(l10n, day),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+      builder: (ctx) {
+        final dc = ctx.dc;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                  child: _SheetHeader(icon: Icons.today_rounded, title: weekDayName(l10n, day)),
                 ),
-              ),
+                ListTile(
+                  leading: const Icon(Icons.content_copy_rounded),
+                  title: Text(l10n.scheduleCopyDay),
+                  onTap: () {
+                    ref.read(scheduleEditProvider.notifier).copyDay(day);
+                    Navigator.pop(ctx);
+                    context.showInfo(l10n.scheduleDayCopied(weekDayName(l10n, day)));
+                  },
+                ),
+                if (clipboardSource != null) ...[
+                  ListTile(
+                    leading: const Icon(Icons.content_paste_rounded),
+                    title: Text(l10n.schedulePasteFrom(weekDayShortName(l10n, clipboardSource))),
+                    onTap: () {
+                      ref.read(scheduleEditProvider.notifier).pasteDay(day);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.work_outline_rounded),
+                    title: Text(l10n.schedulePasteToWorkDays),
+                    onTap: () {
+                      ref.read(scheduleEditProvider.notifier).pasteDayToWorkDays();
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.calendar_view_week_rounded),
+                    title: Text(l10n.schedulePasteToAllDays),
+                    onTap: () {
+                      ref.read(scheduleEditProvider.notifier).pasteDayToAllDays();
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                ],
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                  child: Divider(),
+                ),
+                ListTile(
+                  leading: Icon(Icons.delete_outline_rounded, color: dc.danger.fg),
+                  title: Text(l10n.scheduleClearDay, style: TextStyle(color: dc.danger.fg)),
+                  onTap: () {
+                    ref.read(scheduleEditProvider.notifier).clearDay(day);
+                    Navigator.pop(ctx);
+                  },
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.content_copy),
-              title: Text(l10n.scheduleCopyDay),
-              onTap: () {
-                ref.read(scheduleEditProvider.notifier).copyDay(day);
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l10n.scheduleDayCopied(weekDayName(l10n, day)))),
-                );
-              },
-            ),
-            if (clipboardSource != null) ...[
-              ListTile(
-                leading: const Icon(Icons.content_paste),
-                title: Text(l10n.schedulePasteFrom(weekDayShortName(l10n, clipboardSource))),
-                onTap: () {
-                  ref.read(scheduleEditProvider.notifier).pasteDay(day);
-                  Navigator.pop(ctx);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.work_outline),
-                title: Text(l10n.schedulePasteToWorkDays),
-                onTap: () {
-                  ref.read(scheduleEditProvider.notifier).pasteDayToWorkDays();
-                  Navigator.pop(ctx);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.calendar_view_week),
-                title: Text(l10n.schedulePasteToAllDays),
-                onTap: () {
-                  ref.read(scheduleEditProvider.notifier).pasteDayToAllDays();
-                  Navigator.pop(ctx);
-                },
-              ),
-            ],
-            const Divider(),
-            ListTile(
-              leading: Icon(Icons.delete_outline, color: colorScheme.error),
-              title: Text(l10n.scheduleClearDay, style: TextStyle(color: colorScheme.error)),
-              onTap: () {
-                ref.read(scheduleEditProvider.notifier).clearDay(day);
-                Navigator.pop(ctx);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -129,15 +127,10 @@ class VerticalDayScheduleView extends ConsumerWidget {
   }
 
   void _showEditSlotDialog(BuildContext context, WidgetRef ref, WeekDay day, TimeSlot slot) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      constraints: const BoxConstraints(maxWidth: 560),
       builder: (ctx) => _SlotEditBottomSheet(
         schedule: schedule,
         day: day,
@@ -157,15 +150,10 @@ class VerticalDayScheduleView extends ConsumerWidget {
   }
 
   void _showAddSlotDialog(BuildContext context, WidgetRef ref, WeekDay day) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      constraints: const BoxConstraints(maxWidth: 560),
       builder: (ctx) => _AddSlotBottomSheet(
         schedule: schedule,
         day: day,
@@ -189,9 +177,9 @@ class _CompactWeekView extends StatefulWidget {
   final void Function(WeekDay day)? onDayHeaderTap;
 
   // Hauteur réduite pour afficher plus d'heures
-  static const double hourHeight = 28.0;
-  static const double headerHeight = 36.0;
-  static const double timeColumnWidth = 32.0;
+  static const double hourHeight = 30.0;
+  static const double headerHeight = 44.0;
+  static const double timeColumnWidth = 44.0;
   static const int startHour = 0;
   static const int endHour = 24;
 
@@ -211,111 +199,117 @@ class _CompactWeekView extends StatefulWidget {
 class _CompactWeekViewState extends State<_CompactWeekView> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final dc = context.dc;
 
-    return Column(
-      children: [
-        // En-tête avec les jours
-        _buildDaysHeader(theme, colorScheme),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      decoration: BoxDecoration(
+        color: dc.surface,
+        borderRadius: BorderRadius.circular(DcRadius.lg),
+        border: Border.all(color: dc.border),
+        boxShadow: dc.cardShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // En-tête avec les jours
+          _buildDaysHeader(context),
 
-        // Grille scrollable
-        Expanded(
-          child: SingleChildScrollView(
-            child: SizedBox(
-              height: (_CompactWeekView.endHour - _CompactWeekView.startHour) * _CompactWeekView.hourHeight,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Colonne des heures
-                  _buildTimeColumn(theme, colorScheme),
+          // Grille scrollable
+          Expanded(
+            child: SingleChildScrollView(
+              child: SizedBox(
+                height: (_CompactWeekView.endHour - _CompactWeekView.startHour) * _CompactWeekView.hourHeight + 8,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6, bottom: 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Colonne des heures
+                      _buildTimeColumn(context),
 
-                  // Colonnes des jours
-                  Expanded(
-                    child: Row(
-                      children: WeekDay.values.map((day) {
-                        return Expanded(
-                          child: _buildDayColumn(context, day, colorScheme),
-                        );
-                      }).toList(),
-                    ),
+                      // Colonnes des jours
+                      Expanded(
+                        child: Row(
+                          children: WeekDay.values.map((day) {
+                            return Expanded(
+                              child: _buildDayColumn(context, day),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildDaysHeader(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildDaysHeader(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
     final today = _getCurrentWeekDay();
 
     return Container(
       height: _CompactWeekView.headerHeight,
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(color: colorScheme.outlineVariant),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withAlpha(15),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: dc.surface,
+        border: Border(bottom: BorderSide(color: dc.border)),
       ),
       child: Row(
         children: [
           // Espace pour la colonne des heures
-          SizedBox(width: _CompactWeekView.timeColumnWidth),
+          const SizedBox(width: _CompactWeekView.timeColumnWidth),
 
           // Labels des jours
           ...WeekDay.values.map((day) {
             final isToday = day == today;
             final isWeekend = day == WeekDay.saturday || day == WeekDay.sunday;
             final hasClipboard = widget.clipboardSourceDay == day;
+            final tone = isToday ? dc.accentTone : (hasClipboard ? dc.violet : null);
 
             return Expanded(
-              child: GestureDetector(
-                onTap: widget.isEditing ? () => widget.onDayHeaderTap?.call(day) : null,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isToday
-                        ? colorScheme.primaryContainer
-                        : (hasClipboard ? colorScheme.tertiaryContainer : null),
-                    borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+                child: Material(
+                  color: tone?.bg ?? Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(DcRadius.sm + 2),
+                    side: BorderSide(color: tone?.border ?? Colors.transparent),
                   ),
-                  margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: widget.isEditing ? () => widget.onDayHeaderTap?.call(day) : null,
+                    child: Center(
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            weekDayShortName(l10n, day),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
-                              color: isToday
-                                  ? colorScheme.onPrimaryContainer
-                                  : (isWeekend ? colorScheme.outline : colorScheme.onSurface),
-                              fontSize: 10,
+                          Flexible(
+                            child: Text(
+                              weekDayShortName(l10n, day).toUpperCase(),
+                              overflow: TextOverflow.clip,
+                              maxLines: 1,
+                              style: AppTextStyles.overline.copyWith(
+                                letterSpacing: 0.8,
+                                color: tone?.fg ?? (isWeekend ? dc.textMuted : dc.textSecondary),
+                              ),
                             ),
                           ),
-                          if (hasClipboard)
-                            Icon(
-                              Icons.content_copy,
-                              size: 12,
-                              color: colorScheme.onTertiaryContainer,
-                            ),
+                          if (hasClipboard) ...[
+                            const SizedBox(width: 4),
+                            Icon(Icons.content_copy_rounded, size: 11, color: dc.violet.fg),
+                          ] else if (widget.isEditing) ...[
+                            const SizedBox(width: 2),
+                            Icon(Icons.expand_more_rounded, size: 13, color: tone?.fg ?? dc.textMuted),
+                          ],
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -326,7 +320,8 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
     );
   }
 
-  Widget _buildTimeColumn(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildTimeColumn(BuildContext context) {
+    final dc = context.dc;
     return SizedBox(
       width: _CompactWeekView.timeColumnWidth,
       child: Column(
@@ -339,13 +334,17 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
             height: _CompactWeekView.hourHeight,
             child: Align(
               alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Text(
-                  showLabel ? '${hour}h' : '',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.outline,
-                    fontSize: 9,
+              child: Transform.translate(
+                offset: const Offset(0, -6),
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    showLabel ? '${hour.toString().padLeft(2, '0')}:00' : '',
+                    style: AppTextStyles.monospacedValue.copyWith(
+                      color: dc.textMuted,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ),
@@ -356,7 +355,8 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
     );
   }
 
-  Widget _buildDayColumn(BuildContext context, WeekDay day, ColorScheme colorScheme) {
+  Widget _buildDayColumn(BuildContext context, WeekDay day) {
+    final dc = context.dc;
     final daySchedule = widget.schedule.weeklySchedule.getDay(day);
     final slots = TimeSlotConverter.transitionsToSlots(daySchedule.sortedTransitions);
     final isWeekend = day == WeekDay.saturday || day == WeekDay.sunday;
@@ -364,96 +364,128 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
 
     return GestureDetector(
       onTap: widget.isEditing ? () => widget.onDayTap?.call(day) : null,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isWeekend
-              ? colorScheme.surfaceContainerHighest.withAlpha(30)
-              : null,
-          border: Border(
-            left: BorderSide(
-              color: colorScheme.outlineVariant.withAlpha(50),
-              width: 0.5,
-            ),
+      child: MouseRegion(
+        cursor: widget.isEditing ? SystemMouseCursors.click : MouseCursor.defer,
+        child: Container(
+          decoration: BoxDecoration(
+            color: isToday
+                ? dc.accentTone.bg.withValues(alpha: 0.35)
+                : (isWeekend ? dc.surfaceSunken : null),
+            border: Border(left: BorderSide(color: dc.border)),
           ),
-        ),
-        child: Stack(
-          children: [
-            // Lignes horizontales des heures
-            ...List.generate(_CompactWeekView.endHour - _CompactWeekView.startHour, (index) {
-              return Positioned(
-                top: index * _CompactWeekView.hourHeight,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 0.5,
-                  color: colorScheme.outlineVariant.withAlpha(40),
-                ),
-              );
-            }),
+          child: Stack(
+            children: [
+              // Lignes horizontales des heures (plus marquées toutes les 6 h)
+              ...List.generate(_CompactWeekView.endHour - _CompactWeekView.startHour, (index) {
+                final major = index % 6 == 0;
+                return Positioned(
+                  top: index * _CompactWeekView.hourHeight,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 1,
+                    color: major ? dc.border : dc.border.withValues(alpha: 0.45),
+                  ),
+                );
+              }),
 
-            // Créneaux
-            ...slots.map((slot) => _buildSlotBlock(context, day, slot, colorScheme)),
+              // Créneaux
+              ...slots.map((slot) => _buildSlotBlock(context, day, slot)),
 
-            // Indicateur heure actuelle
-            if (isToday) _buildCurrentTimeIndicator(colorScheme),
-          ],
+              // Indicateur heure actuelle
+              if (isToday) _buildCurrentTimeIndicator(context),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSlotBlock(BuildContext context, WeekDay day, TimeSlot slot, ColorScheme colorScheme) {
-    final color = ScheduleColors.getColorForValue(slot.value, widget.schedule.valueType, colorScheme);
+  Widget _buildSlotBlock(BuildContext context, WeekDay day, TimeSlot slot) {
+    final dc = context.dc;
+    final tone = ScheduleColors.blockTone(context, slot.value, widget.schedule.valueType);
+    final solid = ScheduleColors.solidColor(context, slot.value, widget.schedule.valueType);
     final startY = (slot.startMinutes / 60) * _CompactWeekView.hourHeight;
     final height = ((slot.endMinutes - slot.startMinutes) / 60) * _CompactWeekView.hourHeight;
 
     if (height < 2) return const SizedBox.shrink();
 
+    final label = height > 18
+        ? Text(
+            _getShortStateText(slot.value),
+            style: context.text.labelSmall?.copyWith(
+              color: tone.fg,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              height: 1.1,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          )
+        : null;
+    final times = height > 44
+        ? Text(
+            '${formatMinutesOfDay(slot.startMinutes)}–${formatMinutesOfDay(slot.endMinutes)}',
+            style: AppTextStyles.monospacedValue.copyWith(
+              color: tone.fg.withValues(alpha: 0.8),
+              fontSize: 9,
+              height: 1.2,
+            ),
+            overflow: TextOverflow.clip,
+            maxLines: 1,
+          )
+        : null;
+
     return Positioned(
-      left: 1,
-      right: 1,
+      left: 2,
+      right: 2,
       top: startY,
       height: height,
       child: GestureDetector(
         onTap: widget.isEditing ? () => widget.onSlotTap?.call(day, slot) : null,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 0.5),
-          decoration: BoxDecoration(
-            color: color.withAlpha(220),
-            borderRadius: BorderRadius.circular(3),
-            border: widget.isEditing
-                ? Border.all(color: colorScheme.primary.withAlpha(100), width: 1)
-                : null,
-          ),
-          child: height > 20
-              ? Center(
-                  child: Text(
-                    _getShortStateText(slot.value),
-                    style: TextStyle(
-                      color: _getContrastColor(color),
-                      fontSize: 8,
-                      fontWeight: FontWeight.w600,
+        child: Tooltip(
+          message: '${widget.schedule.localizedStateText(AppLocalizations.of(context)!, slot.value)}  '
+              '${formatMinutesOfDay(slot.startMinutes)}–${formatMinutesOfDay(slot.endMinutes)}',
+          waitDuration: const Duration(milliseconds: 500),
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 1),
+            decoration: BoxDecoration(
+              color: tone.bg,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: widget.isEditing ? tone.border : tone.border.withValues(alpha: 0.5),
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 3, color: slot.value == null ? dc.borderStrong : solid),
+                if (label != null)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 3, 3, 2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [label, ?times],
+                      ),
                     ),
-                    overflow: TextOverflow.clip,
-                    maxLines: 1,
                   ),
-                )
-              : null,
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
   String _getShortStateText(dynamic value) {
-    final text = widget.schedule.localizedStateText(AppLocalizations.of(context)!, value);
-    // Raccourcir le texte pour les petits blocs
-    if (text.length > 6) {
-      return '${text.substring(0, 5)}.';
-    }
-    return text;
+    return widget.schedule.localizedStateText(AppLocalizations.of(context)!, value);
   }
 
-  Widget _buildCurrentTimeIndicator(ColorScheme colorScheme) {
+  Widget _buildCurrentTimeIndicator(BuildContext context) {
+    final color = context.dc.danger.fg;
     final now = DateTime.now();
     final minutesSinceMidnight = now.hour * 60 + now.minute;
     final y = (minutesSinceMidnight / 60) * _CompactWeekView.hourHeight;
@@ -461,16 +493,21 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
     return Positioned(
       left: 0,
       right: 0,
-      top: y - 1,
-      child: Container(
-        height: 2,
-        decoration: BoxDecoration(
-          color: colorScheme.error,
-          boxShadow: [
-            BoxShadow(
-              color: colorScheme.error.withAlpha(100),
-              blurRadius: 2,
+      top: y - 4,
+      height: 8,
+      child: IgnorePointer(
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 4)],
+              ),
             ),
+            Expanded(child: Container(height: 2, color: color)),
           ],
         ),
       ),
@@ -481,10 +518,233 @@ class _CompactWeekViewState extends State<_CompactWeekView> {
     final now = DateTime.now();
     return WeekDay.values[(now.weekday - 1) % 7];
   }
+}
 
-  Color _getContrastColor(Color backgroundColor) {
-    final luminance = backgroundColor.computeLuminance();
-    return luminance > 0.5 ? Colors.black87 : Colors.white;
+// ---------------------------------------------------------------------------
+// Éléments communs des feuilles d'édition de créneau
+// ---------------------------------------------------------------------------
+
+/// En-tête d'une feuille d'édition : icône, titre, action optionnelle.
+class _SheetHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget? trailing;
+
+  const _SheetHeader({required this.icon, required this.title, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        DcIconBox(icon: icon, size: 36),
+        const SizedBox(width: 12),
+        Expanded(child: Text(title, style: context.text.titleMedium)),
+        ?trailing,
+      ],
+    );
+  }
+}
+
+/// Champ d'heure cliquable (début / fin) avec réglage rapide ±15 min.
+class _TimeField extends StatelessWidget {
+  final String label;
+  final int minutes;
+  final VoidCallback onTap;
+  final VoidCallback onMinus;
+  final VoidCallback onPlus;
+  final bool highlight;
+
+  const _TimeField({
+    required this.label,
+    required this.minutes,
+    required this.onTap,
+    required this.onMinus,
+    required this.onPlus,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    final tone = highlight ? dc.accentTone : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: tone?.bg ?? dc.surfaceSunken,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DcRadius.md),
+            side: BorderSide(color: tone?.border ?? dc.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label.toUpperCase(),
+                          style: AppTextStyles.overline.copyWith(color: dc.textMuted, fontSize: 10),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          formatMinutesOfDay(minutes),
+                          style: AppTextStyles.monospacedValue.copyWith(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: tone?.fg ?? dc.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.schedule_rounded, size: 18, color: tone?.fg ?? dc.textMuted),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: _QuickButton(icon: Icons.remove_rounded, label: '15', onTap: onMinus)),
+            const SizedBox(width: 6),
+            Expanded(child: _QuickButton(icon: Icons.add_rounded, label: '15', onTap: onPlus)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Bouton de réglage rapide (−15 / +15 min).
+class _QuickButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 34),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        foregroundColor: dc.textSecondary,
+        side: BorderSide(color: dc.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14),
+          const SizedBox(width: 2),
+          Text(label, style: AppTextStyles.monospacedValue.copyWith(fontSize: 12, color: dc.textSecondary)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ligne « Début → Fin ».
+class _TimeRangeRow extends StatelessWidget {
+  final Widget start;
+  final Widget end;
+
+  const _TimeRangeRow({required this.start, required this.end});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: start),
+        Padding(
+          padding: const EdgeInsets.only(top: 22, left: 8, right: 8),
+          child: Icon(Icons.arrow_forward_rounded, color: context.dc.textMuted, size: 18),
+        ),
+        Expanded(child: end),
+      ],
+    );
+  }
+}
+
+/// Sélecteur d'état (pastilles colorées selon la légende).
+class _StateChips extends StatelessWidget {
+  final Schedule schedule;
+  final dynamic selectedValue;
+  final ValueChanged<dynamic> onSelected;
+
+  const _StateChips({required this.schedule, required this.selectedValue, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.state.toUpperCase(), style: AppTextStyles.overline.copyWith(color: dc.textMuted)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: schedule.localizedPossibleValues(l10n).map((pv) {
+            final isSelected = pv.value == selectedValue;
+            final tone = ScheduleColors.blockTone(context, pv.value, schedule.valueType);
+
+            return ChoiceChip(
+              avatar: ScheduleSwatch(value: pv.value, valueType: schedule.valueType),
+              label: Text(pv.text),
+              selected: isSelected,
+              showCheckmark: false,
+              selectedColor: tone.bg,
+              side: BorderSide(color: isSelected ? tone.border : dc.border),
+              labelStyle: context.text.labelMedium?.copyWith(
+                color: isSelected ? tone.fg : dc.textPrimary,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              ),
+              onSelected: (_) => onSelected(pv.value),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+/// Boutons Annuler / Valider en bas de feuille.
+class _SheetActions extends StatelessWidget {
+  final String confirmLabel;
+  final VoidCallback onConfirm;
+
+  const _SheetActions({required this.confirmLabel, required this.onConfirm});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.cancel),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(onPressed: onConfirm, child: Text(confirmLabel)),
+        ),
+      ],
+    );
   }
 }
 
@@ -555,243 +815,72 @@ class _SlotEditBottomSheetState extends State<_SlotEditBottomSheet> {
     });
   }
 
-  Widget _buildQuickAdjustButtons({
-    required VoidCallback onMinus,
-    required VoidCallback onPlus,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildQuickButton(
-          icon: Icons.remove,
-          label: '-15',
-          onTap: onMinus,
-          colorScheme: colorScheme,
-        ),
-        const SizedBox(width: 8),
-        _buildQuickButton(
-          icon: Icons.add,
-          label: '+15',
-          onTap: onPlus,
-          colorScheme: colorScheme,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required ColorScheme colorScheme,
-  }) {
-    return Material(
-      color: colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: colorScheme.primary),
-              const SizedBox(width: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final dc = context.dc;
 
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Row(
-              children: [
-                Icon(Icons.edit_calendar, color: colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.scheduleEditDayTitle(weekDayName(l10n, widget.day)),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: Icon(Icons.delete_outline, color: colorScheme.error),
-                  onPressed: widget.onDelete,
-                ),
-              ],
+            _SheetHeader(
+              icon: Icons.edit_calendar_rounded,
+              title: l10n.scheduleEditDayTitle(weekDayName(l10n, widget.day)),
+              trailing: IconButton(
+                icon: Icon(Icons.delete_outline_rounded, color: dc.danger.fg),
+                tooltip: l10n.delete,
+                onPressed: widget.onDelete,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // Sélecteur d'heures avec boutons rapides
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Colonne Début
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildTimeButton(
-                        label: l10n.start,
-                        time: formatMinutesOfDay(_startMinutes),
-                        onTap: _selectStartTime,
-                      ),
-                      const SizedBox(height: 6),
-                      _buildQuickAdjustButtons(
-                        onMinus: () => _adjustStartTime(-15),
-                        onPlus: () => _adjustStartTime(15),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 20, left: 4, right: 4),
-                  child: Icon(Icons.arrow_forward, color: colorScheme.outline, size: 20),
-                ),
-                // Colonne Fin
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildTimeButton(
-                        label: l10n.end,
-                        time: formatMinutesOfDay(_endMinutes),
-                        onTap: _selectEndTime,
-                        highlight: _endMinutes >= 1440,
-                      ),
-                      const SizedBox(height: 6),
-                      _buildQuickAdjustButtons(
-                        onMinus: () => _adjustEndTime(-15),
-                        onPlus: () => _adjustEndTime(15),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            _TimeRangeRow(
+              start: _TimeField(
+                label: l10n.start,
+                minutes: _startMinutes,
+                onTap: _selectStartTime,
+                onMinus: () => _adjustStartTime(-15),
+                onPlus: () => _adjustStartTime(15),
+              ),
+              end: _TimeField(
+                label: l10n.end,
+                minutes: _endMinutes,
+                onTap: _selectEndTime,
+                onMinus: () => _adjustEndTime(-15),
+                onPlus: () => _adjustEndTime(15),
+                highlight: _endMinutes >= 1440,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // Sélecteur d'état
-            Text(l10n.state, style: theme.textTheme.labelMedium),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: widget.schedule.localizedPossibleValues(AppLocalizations.of(context)!).map((pv) {
-                final isSelected = pv.value == _selectedValue;
-                final color = ScheduleColors.getColorForValue(
-                  pv.value,
-                  widget.schedule.valueType,
-                  colorScheme,
-                );
-
-                return ChoiceChip(
-                  label: Text(pv.text),
-                  selected: isSelected,
-                  selectedColor: color,
-                  onSelected: (_) => setState(() => _selectedValue = pv.value),
-                );
-              }).toList(),
+            _StateChips(
+              schedule: widget.schedule,
+              selectedValue: _selectedValue,
+              onSelected: (v) => setState(() => _selectedValue = v),
             ),
             const SizedBox(height: 24),
 
-            // Boutons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(l10n.cancel),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () {
-                      final newSlot = TimeSlot(
-                        startMinutes: _startMinutes,
-                        endMinutes: _endMinutes,
-                        value: _selectedValue,
-                      );
-                      widget.onSave(newSlot);
-                    },
-                    child: Text(l10n.save),
-                  ),
-                ),
-              ],
+            _SheetActions(
+              confirmLabel: l10n.save,
+              onConfirm: () {
+                final newSlot = TimeSlot(
+                  startMinutes: _startMinutes,
+                  endMinutes: _endMinutes,
+                  value: _selectedValue,
+                );
+                widget.onSave(newSlot);
+              },
             ),
             const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimeButton({
-    required String label,
-    required String time,
-    required VoidCallback onTap,
-    bool highlight = false,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: highlight ? colorScheme.primary : colorScheme.outline,
-          ),
-          borderRadius: BorderRadius.circular(8),
-          color: highlight ? colorScheme.primaryContainer.withAlpha(50) : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: colorScheme.outline,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              time,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: highlight ? colorScheme.primary : null,
-              ),
-            ),
           ],
         ),
       ),
@@ -863,238 +952,66 @@ class _AddSlotBottomSheetState extends State<_AddSlotBottomSheet> {
     });
   }
 
-  Widget _buildQuickAdjustButtons({
-    required VoidCallback onMinus,
-    required VoidCallback onPlus,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildQuickButton(
-          icon: Icons.remove,
-          label: '-15',
-          onTap: onMinus,
-          colorScheme: colorScheme,
-        ),
-        const SizedBox(width: 8),
-        _buildQuickButton(
-          icon: Icons.add,
-          label: '+15',
-          onTap: onPlus,
-          colorScheme: colorScheme,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required ColorScheme colorScheme,
-  }) {
-    return Material(
-      color: colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: colorScheme.primary),
-              const SizedBox(width: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Row(
-              children: [
-                Icon(Icons.add_circle_outline, color: colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.scheduleAddDayTitle(weekDayName(l10n, widget.day)),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+            _SheetHeader(
+              icon: Icons.add_rounded,
+              title: l10n.scheduleAddDayTitle(weekDayName(l10n, widget.day)),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // Sélecteur d'heures avec boutons rapides
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Colonne Début
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildTimeButton(
-                        label: l10n.start,
-                        time: formatMinutesOfDay(_startMinutes),
-                        onTap: _selectStartTime,
-                      ),
-                      const SizedBox(height: 6),
-                      _buildQuickAdjustButtons(
-                        onMinus: () => _adjustStartTime(-15),
-                        onPlus: () => _adjustStartTime(15),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 20, left: 4, right: 4),
-                  child: Icon(Icons.arrow_forward, color: colorScheme.outline, size: 20),
-                ),
-                // Colonne Fin
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildTimeButton(
-                        label: l10n.end,
-                        time: formatMinutesOfDay(_endMinutes),
-                        onTap: _selectEndTime,
-                        highlight: _endMinutes >= 1440,
-                      ),
-                      const SizedBox(height: 6),
-                      _buildQuickAdjustButtons(
-                        onMinus: () => _adjustEndTime(-15),
-                        onPlus: () => _adjustEndTime(15),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            _TimeRangeRow(
+              start: _TimeField(
+                label: l10n.start,
+                minutes: _startMinutes,
+                onTap: _selectStartTime,
+                onMinus: () => _adjustStartTime(-15),
+                onPlus: () => _adjustStartTime(15),
+              ),
+              end: _TimeField(
+                label: l10n.end,
+                minutes: _endMinutes,
+                onTap: _selectEndTime,
+                onMinus: () => _adjustEndTime(-15),
+                onPlus: () => _adjustEndTime(15),
+                highlight: _endMinutes >= 1440,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // Sélecteur d'état
-            Text(l10n.state, style: theme.textTheme.labelMedium),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: widget.schedule.localizedPossibleValues(AppLocalizations.of(context)!).map((pv) {
-                final isSelected = pv.value == _selectedValue;
-                final color = ScheduleColors.getColorForValue(
-                  pv.value,
-                  widget.schedule.valueType,
-                  colorScheme,
-                );
-
-                return ChoiceChip(
-                  label: Text(pv.text),
-                  selected: isSelected,
-                  selectedColor: color,
-                  onSelected: (_) => setState(() => _selectedValue = pv.value),
-                );
-              }).toList(),
+            _StateChips(
+              schedule: widget.schedule,
+              selectedValue: _selectedValue,
+              onSelected: (v) => setState(() => _selectedValue = v),
             ),
             const SizedBox(height: 24),
 
-            // Boutons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(l10n.cancel),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () {
-                      final newSlot = TimeSlot(
-                        startMinutes: _startMinutes,
-                        endMinutes: _endMinutes,
-                        value: _selectedValue,
-                      );
-                      widget.onSave(newSlot);
-                    },
-                    child: Text(l10n.add),
-                  ),
-                ),
-              ],
+            _SheetActions(
+              confirmLabel: l10n.add,
+              onConfirm: () {
+                final newSlot = TimeSlot(
+                  startMinutes: _startMinutes,
+                  endMinutes: _endMinutes,
+                  value: _selectedValue,
+                );
+                widget.onSave(newSlot);
+              },
             ),
             const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimeButton({
-    required String label,
-    required String time,
-    required VoidCallback onTap,
-    bool highlight = false,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: highlight ? colorScheme.primary : colorScheme.outline,
-          ),
-          borderRadius: BorderRadius.circular(8),
-          color: highlight ? colorScheme.primaryContainer.withAlpha(50) : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: colorScheme.outline,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              time,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: highlight ? colorScheme.primary : null,
-              ),
-            ),
           ],
         ),
       ),

@@ -7,6 +7,7 @@ import '../../../../domain/models/schedule.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../shared/utils/schedule_l10n.dart';
 import 'schedule_colors.dart';
+import '../../../widgets/ui/ui.dart';
 
 /// Formats minutes since midnight as HH:mm ('24:00' for end of day).
 String formatMinutesOfDay(int minutes) {
@@ -78,7 +79,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
             // Option "Toute la journée"
             SwitchListTile(
               title: Text(l10n.scheduleAllDay),
-              subtitle: const Text('00:00 - 24:00'),
+              subtitle: Text('00:00 – 24:00', style: AppTextStyles.monospacedValue.copyWith(color: context.dc.textMuted)),
               value: _isAllDay,
               contentPadding: EdgeInsets.zero,
               onChanged: (value) {
@@ -107,7 +108,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
                     // Heure de début
                     Text(
                       l10n.scheduleStartTime,
-                      style: theme.textTheme.labelLarge,
+                      style: theme.textTheme.labelLarge?.copyWith(color: context.dc.textSecondary),
                     ),
                     const SizedBox(height: 8),
                     _buildStartTimePicker(context, colorScheme, theme),
@@ -117,7 +118,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
                     // Heure de fin
                     Text(
                       l10n.scheduleEndTime,
-                      style: theme.textTheme.labelLarge,
+                      style: theme.textTheme.labelLarge?.copyWith(color: context.dc.textSecondary),
                     ),
                     const SizedBox(height: 8),
                     _buildEndTimePicker(context, colorScheme, theme),
@@ -131,7 +132,7 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
             // Sélecteur d'état
             Text(
               l10n.state,
-              style: theme.textTheme.labelLarge,
+              style: theme.textTheme.labelLarge?.copyWith(color: context.dc.textSecondary),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -175,64 +176,26 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
 
   /// Sélecteur pour l'heure de début (0:00 - 23:00)
   Widget _buildStartTimePicker(BuildContext context, ColorScheme colorScheme, ThemeData theme) {
-    return InkWell(
+    return _TimeValueField(
+      minutes: _startMinutes,
       onTap: () => _showCustomTimePicker(
         context: context,
         initialMinutes: _startMinutes,
         allowMidnight: false, // Pas de 24:00 pour le début
         onSelected: (minutes) => setState(() => _startMinutes = minutes),
       ),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border.all(color: colorScheme.outline),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              formatMinutesOfDay(_startMinutes),
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontFamily: 'monospace',
-              ),
-            ),
-            Icon(Icons.access_time, color: colorScheme.primary),
-          ],
-        ),
-      ),
     );
   }
 
   /// Sélecteur pour l'heure de fin avec option 24:00 (minuit)
   Widget _buildEndTimePicker(BuildContext context, ColorScheme colorScheme, ThemeData theme) {
-    return InkWell(
+    return _TimeValueField(
+      minutes: _endMinutes,
       onTap: () => _showCustomTimePicker(
         context: context,
         initialMinutes: _endMinutes,
         allowMidnight: true, // 24:00 autorisé pour la fin
         onSelected: (minutes) => setState(() => _endMinutes = minutes),
-      ),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border.all(color: colorScheme.outline),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              formatMinutesOfDay(_endMinutes),
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontFamily: 'monospace',
-              ),
-            ),
-            Icon(Icons.access_time, color: colorScheme.primary),
-          ],
-        ),
       ),
     );
   }
@@ -275,32 +238,11 @@ class _TimeSlotDialogState extends State<TimeSlotDialog> {
       durationText = l10n.scheduleDuration('${hours}h${minutes.toString().padLeft(2, '0')}');
     }
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isValid
-            ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-            : colorScheme.errorContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isValid ? Icons.timer_outlined : Icons.warning_amber,
-            size: 18,
-            color: isValid ? colorScheme.primary : colorScheme.error,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              durationText,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: isValid ? colorScheme.primary : colorScheme.error,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return DcBanner(
+      tone: isValid ? context.dc.info : context.dc.danger,
+      icon: isValid ? Icons.timer_outlined : Icons.warning_amber_rounded,
+      message: durationText,
+      dense: true,
     );
   }
 
@@ -412,20 +354,21 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
           children: [
             // Affichage de l'heure sélectionnée en grand
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
+                color: context.dc.accentTone.bg,
+                borderRadius: BorderRadius.circular(DcRadius.lg),
+                border: Border.all(color: context.dc.accentTone.border),
               ),
               child: Center(
                 child: Text(
                   _selectedHour == 24
                       ? '24:00'
                       : '${_selectedHour.toString().padLeft(2, '0')}:${_selectedMinute.toString().padLeft(2, '0')}',
-                  style: theme.textTheme.displaySmall?.copyWith(
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onPrimaryContainer,
+                  style: AppTextStyles.monospacedValue.copyWith(
+                    fontSize: 38,
+                    fontWeight: FontWeight.w600,
+                    color: context.dc.accentTone.fg,
                   ),
                 ),
               ),
@@ -458,12 +401,10 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
                         final is24 = index == 24;
                         return Text(
                           is24 ? '24' : index.toString().padLeft(2, '0'),
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            fontFamily: 'monospace',
-                            fontWeight: _selectedHour == index ? FontWeight.bold : FontWeight.normal,
-                            color: _selectedHour == index
-                                ? colorScheme.primary
-                                : colorScheme.onSurface.withValues(alpha: 0.6),
+                          style: AppTextStyles.monospacedValue.copyWith(
+                            fontSize: 24,
+                            fontWeight: _selectedHour == index ? FontWeight.w600 : FontWeight.w400,
+                            color: _selectedHour == index ? context.dc.accentTone.fg : context.dc.textMuted,
                           ),
                         );
                       },
@@ -477,9 +418,10 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Text(
                       ':',
-                      style: theme.textTheme.headlineLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.primary,
+                      style: AppTextStyles.monospacedValue.copyWith(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w600,
+                        color: context.dc.textMuted,
                       ),
                     ),
                   ),
@@ -502,12 +444,10 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
                             final minute = _minuteOptions[index];
                             return Text(
                               minute.toString().padLeft(2, '0'),
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                fontFamily: 'monospace',
-                                fontWeight: _selectedMinute == minute ? FontWeight.bold : FontWeight.normal,
-                                color: _selectedMinute == minute
-                                    ? colorScheme.primary
-                                    : colorScheme.onSurface.withValues(alpha: 0.6),
+                              style: AppTextStyles.monospacedValue.copyWith(
+                                fontSize: 24,
+                                fontWeight: _selectedMinute == minute ? FontWeight.w600 : FontWeight.w400,
+                                color: _selectedMinute == minute ? context.dc.accentTone.fg : context.dc.textMuted,
                               ),
                             );
                           },
@@ -525,19 +465,10 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
             if (_selectedHour == 24)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: colorScheme.tertiaryContainer,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    l10n.scheduleMidnightEndOfDay,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onTertiaryContainer,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                child: DcTag(
+                  l10n.scheduleMidnightEndOfDay,
+                  icon: Icons.nights_stay_outlined,
+                  tone: context.dc.violet,
                 ),
               ),
           ],
@@ -573,14 +504,9 @@ class _CustomTimePickerDialogState extends State<CustomTimePickerDialog> {
             child: Container(
               height: 50,
               decoration: BoxDecoration(
-                color: colorScheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.symmetric(
-                  horizontal: BorderSide(
-                    color: colorScheme.primary.withValues(alpha: 0.3),
-                    width: 2,
-                  ),
-                ),
+                color: context.dc.surfaceSunken,
+                borderRadius: BorderRadius.circular(DcRadius.md),
+                border: Border.all(color: context.dc.border),
               ),
             ),
           ),
@@ -720,7 +646,6 @@ class _TransitionDialogState extends State<TransitionDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final possibleValues = widget.schedule.localizedPossibleValues(l10n);
 
     return AlertDialog(
@@ -732,7 +657,7 @@ class _TransitionDialogState extends State<TransitionDialog> {
           // Sélecteur d'heure
           Text(
             l10n.scheduleTime,
-            style: theme.textTheme.labelLarge,
+            style: theme.textTheme.labelLarge?.copyWith(color: context.dc.textSecondary),
           ),
           const SizedBox(height: 8),
           InkWell(
@@ -751,23 +676,22 @@ class _TransitionDialogState extends State<TransitionDialog> {
                 setState(() => _selectedTime = time);
               }
             },
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(DcRadius.md),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                border: Border.all(color: colorScheme.outline),
-                borderRadius: BorderRadius.circular(8),
+                color: context.dc.surfaceSunken,
+                border: Border.all(color: context.dc.border),
+                borderRadius: BorderRadius.circular(DcRadius.md),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontFamily: 'monospace',
-                    ),
+                    style: AppTextStyles.monospacedValue.copyWith(fontSize: 20, color: context.dc.textPrimary),
                   ),
-                  Icon(Icons.access_time, color: colorScheme.primary),
+                  Icon(Icons.schedule_rounded, color: context.dc.textMuted),
                 ],
               ),
             ),
@@ -778,7 +702,7 @@ class _TransitionDialogState extends State<TransitionDialog> {
           // Sélecteur de valeur
           Text(
             l10n.state,
-            style: theme.textTheme.labelLarge,
+            style: theme.textTheme.labelLarge?.copyWith(color: context.dc.textSecondary),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -839,8 +763,6 @@ class DayActionsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-
     return AlertDialog(
       title: Text(weekDayName(l10n, day)),
       content: Column(
@@ -874,10 +796,10 @@ class DayActionsDialog extends StatelessWidget {
           ],
           if (hasTransitions)
             ListTile(
-              leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+              leading: Icon(Icons.delete_outline_rounded, color: context.dc.danger.fg),
               title: Text(
                 l10n.scheduleClearDay,
-                style: TextStyle(color: theme.colorScheme.error),
+                style: TextStyle(color: context.dc.danger.fg),
               ),
               onTap: () => Navigator.of(context).pop(DayAction.clear),
             ),
@@ -915,7 +837,7 @@ class SaveConfirmDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      icon: const Icon(Icons.save_outlined),
+      icon: Icon(Icons.save_outlined, color: context.dc.accent),
       title: Text(l10n.scheduleSaveConfirmTitle),
       content: Text(
         l10n.scheduleSaveConfirmMessage,
@@ -942,7 +864,7 @@ class DiscardChangesDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      icon: Icon(Icons.warning_amber, color: Theme.of(context).colorScheme.error),
+      icon: Icon(Icons.warning_amber_rounded, color: context.dc.warning.fg),
       title: Text(l10n.scheduleDiscardConfirmTitle),
       content: Text(
         l10n.scheduleDiscardConfirmMessage,
@@ -955,7 +877,8 @@ class DiscardChangesDialog extends StatelessWidget {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: context.dc.danger.fg,
+            foregroundColor: context.dc.onSolid,
           ),
           child: Text(l10n.cancel),
         ),
@@ -979,7 +902,7 @@ class DeleteTransitionDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+      icon: Icon(Icons.delete_outline_rounded, color: context.dc.danger.fg),
       title: Text(l10n.scheduleDeleteTransitionTitle),
       content: Text(
         l10n.transitionAt(stateText, transition.formattedTime),
@@ -992,7 +915,8 @@ class DeleteTransitionDialog extends StatelessWidget {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: context.dc.danger.fg,
+            foregroundColor: context.dc.onSolid,
           ),
           child: Text(l10n.delete),
         ),
@@ -1020,7 +944,7 @@ class DeleteSlotDialog extends StatelessWidget {
         : '${slot.formattedStart} - ${slot.formattedEnd}';
 
     return AlertDialog(
-      icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+      icon: Icon(Icons.delete_outline_rounded, color: context.dc.danger.fg),
       title: Text(l10n.scheduleDeleteSlotTitle),
       content: Text(
         l10n.timeState(stateText, timeText),
@@ -1033,11 +957,49 @@ class DeleteSlotDialog extends StatelessWidget {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: context.dc.danger.fg,
+            foregroundColor: context.dc.onSolid,
           ),
           child: Text(l10n.delete),
         ),
       ],
+    );
+  }
+}
+
+/// Champ d'heure (HH:mm) cliquable, en chasse fixe.
+class _TimeValueField extends StatelessWidget {
+  final int minutes;
+  final VoidCallback onTap;
+
+  const _TimeValueField({required this.minutes, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    return Material(
+      color: dc.surfaceSunken,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DcRadius.md),
+        side: BorderSide(color: dc.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                formatMinutesOfDay(minutes),
+                style: AppTextStyles.monospacedValue.copyWith(fontSize: 20, color: dc.textPrimary),
+              ),
+              Icon(Icons.schedule_rounded, color: dc.textMuted),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

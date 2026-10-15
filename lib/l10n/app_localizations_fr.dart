@@ -827,7 +827,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get addFavoritesHint =>
-      'Ajoutez des points aux favoris en cliquant\\nsur l\'étoile dans la liste des points';
+      'Ajoutez des points aux favoris en cliquant\nsur l\'étoile dans la liste des points';
 
   @override
   String get viewPoints => 'Voir les points';
@@ -888,7 +888,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String deleteFolderMessage(Object name) {
-    return 'Le dossier \"$name\" sera supprimé.\\n\\nLes favoris qu\'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".';
+    return 'Le dossier \"$name\" sera supprimé.\n\nLes favoris qu\'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".';
   }
 
   @override
@@ -939,13 +939,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get subTypeAll => 'Tous';
 
   @override
-  String get subTypeAnalog => 'Analog';
+  String get subTypeAnalog => 'Analogiques';
 
   @override
-  String get subTypeBinary => 'Binary';
+  String get subTypeBinary => 'Binaires';
 
   @override
-  String get subTypeMulti => 'Multi';
+  String get subTypeMulti => 'Multi-états';
 
   @override
   String get autoRefreshOff => 'Désactivé';
@@ -1091,40 +1091,40 @@ class AppLocalizationsFr extends AppLocalizations {
   String get dashboard => 'Tableau de bord';
 
   @override
-  String get noDashboard => 'Aucun dashboard';
+  String get noDashboard => 'Aucun tableau de bord';
 
   @override
   String get createDashboardHint =>
-      'Créez des dashboards pour visualiser\nvos graphiques et courbes d\'historique';
+      'Créez des tableaux de bord pour visualiser\nvos graphiques et courbes d\'historique';
 
   @override
-  String get createDashboard => 'Créer un dashboard';
+  String get createDashboard => 'Créer un tableau de bord';
 
   @override
-  String get newDashboard => 'Nouveau dashboard';
+  String get newDashboard => 'Nouveau tableau de bord';
 
   @override
-  String get editDashboard => 'Modifier le dashboard';
+  String get editDashboard => 'Modifier le tableau de bord';
 
   @override
-  String get deleteDashboard => 'Supprimer le dashboard';
+  String get deleteDashboard => 'Supprimer le tableau de bord';
 
   @override
-  String get dashboardName => 'Nom du dashboard';
+  String get dashboardName => 'Nom du tableau de bord';
 
   @override
   String get dashboardNameRequired => 'Le nom est requis';
 
   @override
-  String get deleteDashboardConfirm => 'Supprimer ce dashboard ?';
+  String get deleteDashboardConfirm => 'Supprimer ce tableau de bord ?';
 
   @override
   String deleteDashboardMessage(Object name) {
-    return 'Le dashboard \"$name\" et tous ses widgets seront supprimés.';
+    return 'Le tableau de bord \"$name\" et tous ses widgets seront supprimés.';
   }
 
   @override
-  String get dashboardDeleted => 'Dashboard supprimé';
+  String get dashboardDeleted => 'Tableau de bord supprimé';
 
   @override
   String widgets(Object count) {
@@ -1886,7 +1886,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get envysionPageNotFound => 'Page non trouvée (404)';
 
   @override
-  String get dashboardNotFound => 'Dashboard introuvable';
+  String get dashboardNotFound => 'Tableau de bord introuvable';
 
   @override
   String get dashboardDeleteWidgetConfirm => 'Supprimer le widget ?';
@@ -1905,7 +1905,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get dashboardTitleHint => 'Laisser vide pour le titre par défaut';
 
   @override
-  String get dashboardSettingsTitle => 'Paramètres du dashboard';
+  String get dashboardSettingsTitle => 'Paramètres du tableau de bord';
 
   @override
   String get dashboardColumnsWithColon => 'Colonnes : ';
@@ -2454,4 +2454,13 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get homeFromCache => 'Données en cache';
+
+  @override
+  String get frmSectionAddress => 'Adresse de l\'automate';
+
+  @override
+  String get frmSectionAuth => 'Authentification';
+
+  @override
+  String get frmSectionBacnet => 'Identification BACnet';
 }

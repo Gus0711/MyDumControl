@@ -251,7 +251,7 @@
   "notConnected": "Not connected",
   "connectToViewFavorites": "Connect to a controller to view your favorites",
   "noFavorite": "No favorite",
-  "addFavoritesHint": "Add points to favorites by clicking\\nthe star in the points list",
+  "addFavoritesHint": "Add points to favorites by clicking\nthe star in the points list",
   "viewPoints": "View points",
   "assignToFolders": "Assign to folders",
   "deleteFavoritesConfirm": "Delete favorites?",
@@ -268,7 +268,7 @@
   "emptyFolderHint": "Empty folder - drag favorites here",
   "noFolder": "No folder",
   "deleteFolderConfirm": "Delete the folder?",
-  "deleteFolderMessage": "The folder \"{name}\" will be deleted.\\n\\nFavorites in it won't be deleted, they will be moved to \"No folder\".",
+  "deleteFolderMessage": "The folder \"{name}\" will be deleted.\n\nFavorites in it won't be deleted, they will be moved to \"No folder\".",
   "favoriteAddedToFolder": "Favorite added to folder",
   "removedFromFavorites": "{name} removed from favorites",
   "assignToFoldersDialog": "Assign to folders",
@@ -737,5 +737,8 @@
   "homeDeviceInfoDesc": "Identity, network and object inventory",
   "homeNoAlarm": "No alarm",
   "homeNoOverride": "No override",
-  "homeFromCache": "Cached data"
+  "homeFromCache": "Cached data",
+  "frmSectionAddress": "Controller address",
+  "frmSectionAuth": "Authentication",
+  "frmSectionBacnet": "BACnet identification"
 }
