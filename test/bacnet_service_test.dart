@@ -90,6 +90,27 @@ void main() {
     expect(service.actualPort, isNotNull);
   });
 
+  test('47808 already shared by another socket: dynamic port, replies still received', () async {
+    // Another BACnet tool (or a second instance of the app) that opened
+    // 47808 with SO_REUSEADDR. A non-exclusive bind would share the port,
+    // but on Windows unicast replies keep going to the first socket.
+    RawDatagramSocket? other;
+    try {
+      other = await RawDatagramSocket.bind(InternetAddress.anyIPv4, BacnetService.standardBacnetPort, reuseAddress: true);
+    } on SocketException {
+      // Already held exclusively by something else: same situation
+    }
+    try {
+      final device = await fake();
+      device.onDatagram = (d) => device.send(d, frame(objectNameAck(invokeIdOf(d), 'AHU')));
+      final r = await readName(service, device);
+      expect(service.isUsingStandardPort, isFalse);
+      expect(r.value, 'AHU');
+    } finally {
+      other?.close();
+    }
+  });
+
   test('a lost request is retried with the same invoke ID (A9)', () async {
     final device = await fake();
     device.onDatagram = (d) {

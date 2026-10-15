@@ -118,14 +118,24 @@ class BacnetService {
 
     // Essayer d'abord le port BACnet standard 47808 (meilleure compatibilité)
     // Si déjà utilisé, fallback sur un port dynamique
+    //
+    // The bind must be exclusive (reuseAddress: false; Dart defaults to true
+    // for datagram sockets). With SO_REUSEADDR the bind "succeeds" even when
+    // another process (a second instance of the app, YABE, a BACnet stack...)
+    // already owns 47808, but unicast datagrams keep going to only one of the
+    // sockets: on Windows the first one, on Linux the last one. The other
+    // socket then never sees any reply and every confirmed request times out.
+    // An exclusive bind fails instead and we fall back to a dynamic port,
+    // where unicast replies do arrive. On Windows it also prevents another
+    // program from hijacking our port later (SO_EXCLUSIVEADDRUSE).
     RawDatagramSocket socket;
     bool standardPort;
     try {
-      socket = await RawDatagramSocket.bind(bindAddress, standardBacnetPort, reuseAddress: true);
+      socket = await RawDatagramSocket.bind(bindAddress, standardBacnetPort, reuseAddress: false);
       standardPort = true;
     } catch (e) {
       logger.w('Could not bind to port $standardBacnetPort: $e. Using dynamic port.');
-      socket = await RawDatagramSocket.bind(bindAddress, 0);
+      socket = await RawDatagramSocket.bind(bindAddress, 0, reuseAddress: false);
       standardPort = false;
       logger.w('BACnet service using non-standard port ${socket.port} - some devices may not respond');
     }
