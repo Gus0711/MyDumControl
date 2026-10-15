@@ -340,8 +340,8 @@
   "scanComplete": "Scan terminé",
   "orManualEntry": "ou saisie manuelle :",
   "useIpScan": "Scanner plage IP (ECLYPSE)",
-  "dashboards": "Dashboards",
-  "dashboard": "Dashboard",
+  "dashboards": "Tableaux de bord",
+  "dashboard": "Tableau de bord",
   "noDashboard": "Aucun dashboard",
   "createDashboardHint": "Créez des dashboards pour visualiser\nvos graphiques et courbes d'historique",
   "createDashboard": "Créer un dashboard",
@@ -1064,5 +1064,20 @@
         "type": "String"
       }
     }
-  }
+  },
+  "connectionsSearchHint": "Rechercher une connexion (nom, adresse, modèle)…",
+  "connectionsNoMatch": "Aucune connexion ne correspond à la recherche",
+  "homeModulesTitle": "Modules",
+  "homeFavoritesDesc": "Vos points suivis, regroupés par dossier",
+  "homePointsDesc": "Entrées, sorties et variables de l'automate",
+  "homeDashboardDesc": "Courbes, comparaisons et statistiques",
+  "homeSchedulesDesc": "Programmes horaires et calendriers",
+  "homeAlarmsDesc": "Événements et défauts en cours",
+  "homeOverridesDesc": "Points forcés et dérogations actives",
+  "homeSynopticDesc": "Vues graphiques de l'installation",
+  "homeEnvysionDesc": "Ouvrir le synoptique dans le navigateur",
+  "homeDeviceInfoDesc": "Identité, réseau et inventaire des objets",
+  "homeNoAlarm": "Aucune alarme",
+  "homeNoOverride": "Aucun forçage",
+  "homeFromCache": "Données en cache"
 }

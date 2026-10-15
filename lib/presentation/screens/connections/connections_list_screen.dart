@@ -16,6 +16,7 @@ import '../../../domain/models/display_preferences.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/gradient_app_bar.dart';
 import '../../widgets/confirm_dialog.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Écran de liste des connexions sauvegardées organisées par dossiers
 class ConnectionsListScreen extends ConsumerStatefulWidget {
@@ -27,6 +28,7 @@ class ConnectionsListScreen extends ConsumerStatefulWidget {
 
 class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
   final Set<int> _expandedFolders = {};
+  String _query = '';
 
   @override
   void initState() {
@@ -40,10 +42,12 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     final l10n = AppLocalizations.of(context)!;
     final foldersAsync = ref.watch(foldersStreamProvider);
     final connectionsByFolderAsync = ref.watch(connectionsByFolderProvider);
+    final total = connectionsByFolderAsync.valueOrNull?.values.fold<int>(0, (n, l) => n + l.length);
 
     return Scaffold(
       appBar: GradientAppBar(
         title: l10n.connections,
+        subtitle: total == null ? null : l10n.connectionsCount(total),
         actions: [
           IconButton(
             icon: const Icon(Icons.create_new_folder_outlined),
@@ -51,7 +55,7 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
             tooltip: l10n.newFolder,
           ),
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_outlined),
             onPressed: () => context.push(Routes.settings),
             tooltip: l10n.settings,
           ),
@@ -69,39 +73,42 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
 
             return _buildFoldersList(context, ref, l10n, folders, connectionsByFolder);
           },
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const DcLoading(),
           error: (error, stack) => _buildErrorState(context, ref, l10n, error),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const DcLoading(),
         error: (error, stack) => _buildErrorState(context, ref, l10n, error),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(Routes.addConnection),
-        icon: const Icon(Icons.add),
+        icon: const Icon(Icons.add_rounded),
         label: Text(l10n.addConnection),
       ),
     );
   }
 
   Widget _buildErrorState(BuildContext context, WidgetRef ref, AppLocalizations l10n, Object error) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-          const SizedBox(height: 16),
-          Text(l10n.errorWithMessage('$error')),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              ref.invalidate(foldersStreamProvider);
-              ref.invalidate(connectionsByFolderProvider);
-            },
-            child: Text(l10n.retry),
-          ),
-        ],
+    return DcEmptyState.error(
+      context,
+      title: l10n.error,
+      message: '$error',
+      action: FilledButton.icon(
+        onPressed: () {
+          ref.invalidate(foldersStreamProvider);
+          ref.invalidate(connectionsByFolderProvider);
+        },
+        icon: const Icon(Icons.refresh_rounded),
+        label: Text(l10n.retry),
       ),
     );
+  }
+
+  bool _matches(Connection c) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return c.name.toLowerCase().contains(q) ||
+        c.host.toLowerCase().contains(q) ||
+        (c.modelName?.toLowerCase().contains(q) ?? false);
   }
 
   Widget _buildFoldersList(
@@ -111,47 +118,80 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     List<Folder> folders,
     Map<int?, List<Connection>> connectionsByFolder,
   ) {
-    final rootConnections = connectionsByFolder[null] ?? [];
+    final searching = _query.trim().isNotEmpty;
+    final rootConnections = (connectionsByFolder[null] ?? []).where(_matches).toList();
+    final visibleFolders = folders
+        .where((f) => !searching || (connectionsByFolder[f.id] ?? []).any(_matches))
+        .toList();
+    final noMatch = searching && rootConnections.isEmpty && visibleFolders.isEmpty;
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 80),
-      children: [
-        // Dossiers
-        ...folders.map((folder) => _buildFolderSection(
-              context,
-              ref,
-              l10n,
-              folder,
-              connectionsByFolder[folder.id] ?? [],
-            )),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.clamp(0.0, DcSpace.contentMaxWidth);
+        final columns = width >= 1100 ? 3 : (width >= 700 ? 2 : 1);
 
-        // Connexions à la racine (sans dossier)
-        if (rootConnections.isNotEmpty) ...[
-          if (folders.isNotEmpty)
-            Builder(
-              builder: (context) {
-                final isDark = Theme.of(context).brightness == Brightness.dark;
-                return Padding(
-                  padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
-                  child: Text(
-                    l10n.noFolder,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                        ),
-                  ),
-                );
-              },
+        return ListView(
+          padding: const EdgeInsets.only(bottom: 96),
+          children: [
+            DcContent(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _SearchField(
+                hint: l10n.connectionsSearchHint,
+                onChanged: (v) => setState(() => _query = v),
+              ),
             ),
-          ...rootConnections.map((connection) => _ConnectionCard(
-                connection: connection,
-                l10n: l10n,
-                onTap: () => context.push('${Routes.home}?connectionId=${connection.id}'),
-                onEdit: () => context.push(Routes.editConnectionPath(connection.id.toString())),
-                onDelete: () => _showDeleteConnectionDialog(context, ref, l10n, connection),
-                onMoveToFolder: () => _showMoveToFolderDialog(context, ref, l10n, connection),
-              )),
-        ],
-      ],
+            if (noMatch)
+              Padding(
+                padding: const EdgeInsets.only(top: 48),
+                child: DcEmptyState(
+                  icon: Icons.search_off_rounded,
+                  title: l10n.connectionsNoMatch,
+                ),
+              ),
+            // Dossiers
+            ...visibleFolders.map((folder) => DcContent(
+                  child: _buildFolderSection(
+                    context,
+                    ref,
+                    l10n,
+                    folder,
+                    (connectionsByFolder[folder.id] ?? []).where(_matches).toList(),
+                    columns,
+                    forceExpanded: searching,
+                  ),
+                )),
+
+            // Connexions à la racine (sans dossier)
+            if (rootConnections.isNotEmpty)
+              DcContent(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DcSectionHeader(
+                      folders.isNotEmpty ? l10n.noFolder : l10n.connections,
+                      count: rootConnections.length,
+                    ),
+                    _ConnectionGrid(
+                      columns: columns,
+                      children: rootConnections.map((c) => _connectionCard(context, ref, l10n, c)).toList(),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _connectionCard(BuildContext context, WidgetRef ref, AppLocalizations l10n, Connection connection) {
+    return _ConnectionCard(
+      connection: connection,
+      l10n: l10n,
+      onTap: () => context.push('${Routes.home}?connectionId=${connection.id}'),
+      onEdit: () => context.push(Routes.editConnectionPath(connection.id.toString())),
+      onDelete: () => _showDeleteConnectionDialog(context, ref, l10n, connection),
+      onMoveToFolder: () => _showMoveToFolderDialog(context, ref, l10n, connection),
     );
   }
 
@@ -161,125 +201,98 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
     AppLocalizations l10n,
     Folder folder,
     List<Connection> connections,
-  ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isExpanded = _expandedFolders.contains(folder.id);
-    final folderColor = _parseColor(folder.color);
+    int columns, {
+    bool forceExpanded = false,
+  }) {
+    final dc = context.dc;
+    final isExpanded = forceExpanded || _expandedFolders.contains(folder.id);
+    final folderTone = dc.toneOf(_parseColor(folder.color));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // En-tête du dossier
-        InkWell(
-          onTap: () {
-            setState(() {
-              if (isExpanded) {
-                _expandedFolders.remove(folder.id);
-              } else {
-                _expandedFolders.add(folder.id);
-              }
-            });
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(
-                  isExpanded ? Icons.folder_open : Icons.folder,
-                  color: folderColor,
-                  size: 28,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        folder.name,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      Text(
-                        l10n.connectionsCount(connections.length),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                            ),
-                      ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 14, 8, 4),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(DcRadius.md),
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedFolders.remove(folder.id);
+                } else {
+                  _expandedFolders.add(folder.id);
+                }
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                children: [
+                  DcIconBox(
+                    icon: isExpanded ? Icons.folder_open_rounded : Icons.folder_rounded,
+                    tone: folderTone,
+                    size: 36,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(folder.name, style: context.text.titleMedium),
+                        Text(
+                          l10n.connectionsCount(connections.length),
+                          style: context.text.bodySmall?.copyWith(color: dc.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Bouton refresh pour tout le dossier
+                  _FolderRefreshButton(
+                    connectionIds: connections.map((c) => c.id).toList(),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_horiz_rounded, color: dc.textSecondary),
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'edit':
+                          _showEditFolderDialog(context, l10n, folder);
+                          break;
+                        case 'delete':
+                          _showDeleteFolderDialog(context, ref, l10n, folder);
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      dcMenuItem(context, 'edit', Icons.edit_outlined, l10n.edit),
+                      dcMenuItem(context, 'delete', Icons.delete_outline_rounded, l10n.delete, danger: true),
                     ],
                   ),
-                ),
-                // Bouton refresh pour tout le dossier
-                _FolderRefreshButton(
-                  connectionIds: connections.map((c) => c.id).toList(),
-                ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'edit':
-                        _showEditFolderDialog(context, l10n, folder);
-                        break;
-                      case 'delete':
-                        _showDeleteFolderDialog(context, ref, l10n, folder);
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          const Icon(Icons.edit, size: 20),
-                          const SizedBox(width: 8),
-                          Text(l10n.edit),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, size: 20, color: Colors.red),
-                          const SizedBox(width: 8),
-                          Text(
-                            l10n.delete,
-                            style: TextStyle(color: Colors.red.shade400),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                Icon(
-                  isExpanded ? Icons.expand_less : Icons.expand_more,
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                ),
-              ],
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: Icon(Icons.expand_more_rounded, color: dc.textMuted),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
         // Contenu du dossier (connexions)
-        if (isExpanded)
-          ...connections.map((connection) => Padding(
-                padding: const EdgeInsets.only(left: 16),
-                child: _ConnectionCard(
-                  connection: connection,
-                  l10n: l10n,
-                  onTap: () => context.push('${Routes.home}?connectionId=${connection.id}'),
-                  onEdit: () => context.push(Routes.editConnectionPath(connection.id.toString())),
-                  onDelete: () => _showDeleteConnectionDialog(context, ref, l10n, connection),
-                  onMoveToFolder: () => _showMoveToFolderDialog(context, ref, l10n, connection),
-                ),
-              )),
+        if (isExpanded && connections.isNotEmpty)
+          _ConnectionGrid(
+            columns: columns,
+            children: connections.map((c) => _connectionCard(context, ref, l10n, c)).toList(),
+          ),
         if (isExpanded && connections.isEmpty)
           Padding(
-            padding: const EdgeInsets.only(left: 56, bottom: 8),
+            padding: const EdgeInsets.fromLTRB(64, 0, 16, 8),
             child: Text(
               l10n.connectionsEmptyFolder,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
-                    fontStyle: FontStyle.italic,
-                  ),
+              style: context.text.bodySmall?.copyWith(
+                color: dc.textMuted,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ),
       ],
@@ -597,42 +610,67 @@ class _ConnectionsListScreenState extends ConsumerState<ConnectionsListScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context, AppLocalizations l10n) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.dns_outlined,
-              size: 80,
-              color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              l10n.noConnections,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.connectionsAddToStart,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: () => context.push(Routes.addConnection),
-              icon: const Icon(Icons.add),
-              label: Text(l10n.addConnection),
-            ),
-          ],
-        ),
+    return DcEmptyState(
+      icon: Icons.dns_outlined,
+      tone: context.dc.accentTone,
+      title: l10n.noConnections,
+      message: l10n.connectionsAddToStart,
+      action: FilledButton.icon(
+        onPressed: () => context.push(Routes.addConnection),
+        icon: const Icon(Icons.add_rounded),
+        label: Text(l10n.addConnection),
+      ),
+      secondaryAction: OutlinedButton.icon(
+        onPressed: () => context.push(Routes.discoverEclypse),
+        icon: const Icon(Icons.wifi_find_rounded),
+        label: Text(l10n.discoverEclypse),
+      ),
+    );
+  }
+}
+
+/// Champ de recherche des connexions.
+class _SearchField extends StatelessWidget {
+  final String hint;
+  final ValueChanged<String> onChanged;
+
+  const _SearchField({required this.hint, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      ),
+    );
+  }
+}
+
+/// Grille responsive des cartes de connexion (1 à 3 colonnes).
+class _ConnectionGrid extends StatelessWidget {
+  final int columns;
+  final List<Widget> children;
+
+  const _ConnectionGrid({required this.columns, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    const spacing = 12.0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [for (final child in children) SizedBox(width: itemWidth, child: child)],
+          );
+        },
       ),
     );
   }
@@ -658,9 +696,12 @@ class _ConnectionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dc = context.dc;
     final protocol = connection.useHttps ? 'https' : 'http';
-    final url = '$protocol://${connection.host}:${connection.port}';
+    final isBacnet = connection.connectionType == 'bacnet';
+    final address = isBacnet
+        ? '${connection.host}:${connection.port}'
+        : '$protocol://${connection.host}:${connection.port}';
 
     // Récupérer les super favoris pour cette connexion
     final superFavsState = ref.watch(superFavoritesProvider);
@@ -669,237 +710,133 @@ class _ConnectionCard extends ConsumerWidget {
     final connectionInfo = superFavsState.getConnectionInfo(connection.id);
 
     // Connexion importée sans son mot de passe : à ressaisir
-    final isDistech = connection.connectionType != 'bacnet';
-    final missingPassword = connection.connectionType != 'bacnet' &&
+    final isDistech = !isBacnet;
+    final missingPassword = isDistech &&
         ref.watch(connectionHasPasswordProvider(connection.passwordKey)).valueOrNull == false;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
+    return DcCard(
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // En-tête de la connexion
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // En-tête de la connexion
-              Row(
-                children: [
-                  // Logo
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(10),
+              DcIconBox(
+                icon: isBacnet ? Icons.lan_outlined : Icons.memory_rounded,
+                tone: isBacnet ? dc.violet : dc.accentTone,
+                size: 42,
+              ),
+              const SizedBox(width: 12),
+              // Infos
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      connection.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.text.titleMedium,
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.asset(
-                        'assets/images/logov2_no_back.png',
-                        width: 44,
-                        height: 44,
-                        fit: BoxFit.contain,
+                    const SizedBox(height: 2),
+                    Text(
+                      address,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.monospacedValue.copyWith(
+                        fontSize: 11.5,
+                        color: dc.textMuted,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Infos
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          connection.name,
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          url,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                fontSize: 11,
-                              ),
-                        ),
-                        // Badges : Modèle (depuis DB) + API version (toujours visibles)
-                        if (connection.modelName != null ||
-                            connection.apiVersion != null ||
-                            isDistech ||
-                            missingPassword) ...[
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 4,
-                            runSpacing: 4,
-                            children: [
-                              // Badge modèle de l'automate (depuis DB = toujours visible)
-                              if (connection.modelName != null)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.teal.shade100,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    connection.modelName!,
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      color: Colors.teal.shade800,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              // Badge mot de passe manquant
-                              if (missingPassword)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.shade100,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.key_off, size: 10, color: Colors.orange.shade900),
-                                      const SizedBox(width: 3),
-                                      Text(
-                                        l10n.passwordMissingBadge,
-                                        style: TextStyle(
-                                          fontSize: 9,
-                                          color: Colors.orange.shade900,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              // Badge API version ("API ?" : détectée à la connexion)
-                              if (connection.apiVersion != null || isDistech)
-                                Tooltip(
-                                  message: connection.apiVersion != null
-                                      ? l10n.apiVersionBadgeTooltip
-                                      : l10n.apiVersionUnknownTooltip,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: connection.apiVersion != null
-                                          ? Colors.blue.shade100
-                                          : Colors.orange.shade100,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      'API ${connection.apiVersion ?? '?'}',
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        color: connection.apiVersion != null
-                                            ? Colors.blue.shade800
-                                            : Colors.orange.shade900,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                        // Heure de l'automate (si disponible)
-                        if (connectionInfo?.controllerTime != null) ...[
-                          const SizedBox(height: 4),
-                          _buildControllerTimeRow(context, connectionInfo!.controllerTime!, isDark),
-                        ],
-                      ],
-                    ),
-                  ),
-                  // Bouton refresh pour les super favoris (si présents)
-                  if (superFavorites.isNotEmpty)
-                    _RefreshButton(connectionId: connection.id),
-                  // Actions
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'edit':
-                          onEdit();
-                          break;
-                        case 'move':
-                          onMoveToFolder();
-                          break;
-                        case 'redetect':
-                          _redetectApiVersion(context, ref, l10n);
-                          break;
-                        case 'delete':
-                          onDelete();
-                          break;
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            const Icon(Icons.edit, size: 20),
-                            const SizedBox(width: 8),
-                            Text(l10n.editConnection),
-                          ],
-                        ),
-                      ),
-                      if (isDistech)
-                        PopupMenuItem(
-                          value: 'redetect',
-                          child: Row(
-                            children: [
-                              const Icon(Icons.manage_search, size: 20),
-                              const SizedBox(width: 8),
-                              Text(l10n.redetectApiVersion),
-                            ],
-                          ),
-                        ),
-                      PopupMenuItem(
-                        value: 'move',
-                        child: Row(
-                          children: [
-                            const Icon(Icons.drive_file_move_outline, size: 20),
-                            const SizedBox(width: 8),
-                            Text(l10n.connectionsMove),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, size: 20, color: Colors.red),
-                            const SizedBox(width: 8),
-                            Text(
-                              l10n.deleteConnection,
-                              style: TextStyle(color: Colors.red.shade400),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
+                ),
+              ),
+              // Bouton refresh pour les super favoris (si présents)
+              if (superFavorites.isNotEmpty) _RefreshButton(connectionId: connection.id),
+              // Actions
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert_rounded, color: dc.textSecondary, size: 20),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'edit':
+                      onEdit();
+                      break;
+                    case 'move':
+                      onMoveToFolder();
+                      break;
+                    case 'redetect':
+                      _redetectApiVersion(context, ref, l10n);
+                      break;
+                    case 'delete':
+                      onDelete();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  dcMenuItem(context, 'edit', Icons.edit_outlined, l10n.editConnection),
+                  if (isDistech)
+                    dcMenuItem(context, 'redetect', Icons.manage_search_rounded, l10n.redetectApiVersion),
+                  dcMenuItem(context, 'move', Icons.drive_file_move_outline, l10n.connectionsMove),
+                  const PopupMenuDivider(),
+                  dcMenuItem(context, 'delete', Icons.delete_outline_rounded, l10n.deleteConnection, danger: true),
                 ],
               ),
-              // Super favoris (si présents)
-              if (superFavorites.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Divider(height: 1),
-                const SizedBox(height: 8),
-                _buildSuperFavoritesList(context, superFavorites, isRefreshing, isDark),
-              ],
             ],
           ),
-        ),
+          // Badges : protocole, modèle, version d'API, mot de passe manquant
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (isBacnet)
+                  DcTag(
+                    connection.bacnetDeviceId != null
+                        ? 'BACnet · ${connection.bacnetDeviceId}'
+                        : 'BACnet/IP',
+                    tone: dc.violet,
+                    dense: true,
+                  ),
+                if (connection.modelName != null)
+                  DcTag(connection.modelName!, dense: true),
+                if (isDistech)
+                  Tooltip(
+                    message: connection.apiVersion != null
+                        ? l10n.apiVersionBadgeTooltip
+                        : l10n.apiVersionUnknownTooltip,
+                    child: DcTag(
+                      'API ${connection.apiVersion ?? '?'}',
+                      tone: connection.apiVersion != null ? dc.accentTone : dc.warning,
+                      dense: true,
+                    ),
+                  ),
+                if (missingPassword)
+                  DcTag(
+                    l10n.passwordMissingBadge,
+                    icon: Icons.key_off_rounded,
+                    tone: dc.warning,
+                    dense: true,
+                  ),
+                // Heure de l'automate (si disponible)
+                if (connectionInfo?.controllerTime != null)
+                  _buildControllerTimeTag(context, connectionInfo!.controllerTime!),
+              ],
+            ),
+          ),
+          // Super favoris (si présents)
+          if (superFavorites.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _buildSuperFavoritesList(context, superFavorites, isRefreshing),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -909,6 +846,7 @@ class _ConnectionCard extends ConsumerWidget {
   /// utiliser les bonnes routes.
   Future<void> _redetectApiVersion(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
     final messenger = ScaffoldMessenger.of(context);
+    final dc = context.dc;
     messenger.showSnackBar(SnackBar(content: Text(l10n.redetectingApiVersion)));
     String message;
     Color color;
@@ -916,10 +854,10 @@ class _ConnectionCard extends ConsumerWidget {
       final version = await ref.read(apiClientFactoryProvider).redetectApiVersion(connection);
       if (version == null) {
         message = l10n.redetectApiVersionFailed;
-        color = Colors.red;
+        color = dc.danger.fg;
       } else {
         message = l10n.redetectApiVersionDone(version);
-        color = Colors.green;
+        color = dc.success.fg;
         final active = ref.read(activeConnectionProvider);
         if (active.connection?.id == connection.id && version != connection.apiVersion) {
           await ref.read(activeConnectionProvider.notifier).connect(connection.id);
@@ -927,10 +865,10 @@ class _ConnectionCard extends ConsumerWidget {
       }
     } on ApiException catch (e) {
       message = e.message;
-      color = Colors.red;
+      color = dc.danger.fg;
     }
     messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
+    messenger.showSnackBar(dcSnackBar(message, color: color));
   }
 
   /// Construit la liste des super favoris
@@ -938,8 +876,8 @@ class _ConnectionCard extends ConsumerWidget {
     BuildContext context,
     List<SuperFavoriteWithValue> superFavorites,
     bool isRefreshing,
-    bool isDark,
   ) {
+    final dc = context.dc;
     // Vérifier s'il y a une erreur globale (même erreur sur tous les favoris)
     final globalError = superFavorites.isNotEmpty &&
         superFavorites.every((sf) => sf.error != null)
@@ -947,84 +885,69 @@ class _ConnectionCard extends ConsumerWidget {
         : null;
 
     if (globalError != null && !isRefreshing) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline, size: 14, color: Colors.orange.shade700),
-            const SizedBox(width: 6),
-            Text(
-              globalError,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.orange.shade700,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
+      return DcBanner(
+        tone: dc.warning,
+        icon: Icons.info_outline_rounded,
+        message: globalError,
+        dense: true,
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: superFavorites.map((sf) {
-        final liveData = sf.liveData;
-        final hasValue = liveData != null;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: dc.surfaceSunken,
+        borderRadius: BorderRadius.circular(DcRadius.md),
+        border: Border.all(color: dc.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: superFavorites.map((sf) {
+          final liveData = sf.liveData;
+          final hasValue = liveData != null;
+          final tone = hasValue ? dc.accentTone : dc.neutral;
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            children: [
-              // Icône du type
-              Icon(
-                BacnetTypeUtils.getIconForType(sf.favorite.objectType),
-                size: 16,
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-              ),
-              const SizedBox(width: 8),
-              // Nom du point
-              Expanded(
-                child: Text(
-                  sf.favorite.pointName,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
-                      ),
-                  overflow: TextOverflow.ellipsis,
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                // Icône du type
+                Icon(
+                  BacnetTypeUtils.getIconForType(sf.favorite.objectType),
+                  size: 15,
+                  color: dc.textMuted,
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Valeur
-              if (isRefreshing && !hasValue)
-                const SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(strokeWidth: 1.5),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: hasValue
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : (isDark ? Colors.grey.shade700 : Colors.grey.shade200),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+                const SizedBox(width: 8),
+                // Nom du point
+                Expanded(
                   child: Text(
+                    sf.favorite.pointName,
+                    style: context.text.bodySmall?.copyWith(color: dc.textSecondary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Valeur
+                if (isRefreshing && !hasValue)
+                  const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                  )
+                else
+                  Text(
                     sf.displayValue,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: hasValue
-                          ? Theme.of(context).colorScheme.primary
-                          : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
+                    style: AppTextStyles.monospacedValue.copyWith(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: hasValue ? tone.fg : dc.textMuted,
                     ),
                   ),
-                ),
-            ],
-          ),
-        );
-      }).toList(),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -1032,61 +955,29 @@ class _ConnectionCard extends ConsumerWidget {
   String _formatControllerDateTime(ControllerTime controllerTime) =>
       DisplayPreferences.formatDateTime(controllerTime.controllerDateTime);
 
-  /// Construit la ligne d'affichage de l'heure de l'automate
-  Widget _buildControllerTimeRow(BuildContext context, ControllerTime controllerTime, bool isDark) {
-    final hasTimeOffset = controllerTime.hasSignificantOffset;
-    final hasCriticalOffset = controllerTime.hasCriticalOffset;
+  /// Pastille de l'heure de l'automate (orange/rouge si décalée)
+  Widget _buildControllerTimeTag(BuildContext context, ControllerTime controllerTime) {
+    final dc = context.dc;
+    final tone = controllerTime.hasCriticalOffset
+        ? dc.danger
+        : controllerTime.hasSignificantOffset
+            ? dc.warning
+            : dc.neutral;
+    final label = controllerTime.hasSignificantOffset
+        ? '${_formatControllerDateTime(controllerTime)} · ${controllerTime.offsetDescription}'
+        : _formatControllerDateTime(controllerTime);
 
-    return Row(
-      children: [
-        Icon(
-          hasTimeOffset ? Icons.warning_amber : Icons.access_time,
-          size: 12,
-          color: hasCriticalOffset
-              ? Colors.red.shade600
-              : hasTimeOffset
-                  ? Colors.orange.shade600
-                  : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          _formatControllerDateTime(controllerTime),
-          style: TextStyle(
-            fontSize: 10,
-            color: hasCriticalOffset
-                ? Colors.red.shade700
-                : hasTimeOffset
-                    ? Colors.orange.shade700
-                    : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-            fontWeight: hasTimeOffset ? FontWeight.bold : FontWeight.w500,
-            fontFamily: 'monospace',
-          ),
-        ),
-        // Indicateur de décalage si significatif
-        if (hasTimeOffset) ...[
-          const SizedBox(width: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-            decoration: BoxDecoration(
-              color: hasCriticalOffset ? Colors.red.shade100 : Colors.orange.shade100,
-              borderRadius: BorderRadius.circular(3),
-            ),
-            child: Text(
-              controllerTime.offsetDescription,
-              style: TextStyle(
-                fontSize: 8,
-                fontWeight: FontWeight.bold,
-                color: hasCriticalOffset ? Colors.red.shade800 : Colors.orange.shade800,
-              ),
-            ),
-          ),
-        ],
-      ],
+    return DcTag(
+      label,
+      icon: controllerTime.hasSignificantOffset ? Icons.warning_amber_rounded : Icons.schedule_rounded,
+      tone: tone,
+      dense: true,
+      mono: true,
     );
   }
 }
 
-/// Bouton de refresh pour un dossier entier (tous les automates)
+// Bouton de refresh pour un dossier entier (tous les automates)
 class _FolderRefreshButton extends ConsumerStatefulWidget {
   final List<int> connectionIds;
 
@@ -1190,7 +1081,6 @@ class _FolderRefreshButtonState extends ConsumerState<_FolderRefreshButton> {
 
     // Cooldown actif : afficher le chrono
     if (maxSecondsRemaining > 0) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
       return SizedBox(
         width: 40,
         height: 40,
@@ -1200,7 +1090,8 @@ class _FolderRefreshButtonState extends ConsumerState<_FolderRefreshButton> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
+              color: context.dc.textMuted,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ),
@@ -1296,7 +1187,6 @@ class _RefreshButtonState extends ConsumerState<_RefreshButton> {
 
     // Cooldown actif : afficher le chrono
     if (secondsRemaining > 0) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
       return SizedBox(
         width: 40,
         height: 40,
@@ -1306,7 +1196,8 @@ class _RefreshButtonState extends ConsumerState<_RefreshButton> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
+              color: context.dc.textMuted,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ),

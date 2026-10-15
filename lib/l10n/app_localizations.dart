@@ -2063,13 +2063,13 @@ abstract class AppLocalizations {
   /// No description provided for @dashboards.
   ///
   /// In fr, this message translates to:
-  /// **'Dashboards'**
+  /// **'Tableaux de bord'**
   String get dashboards;
 
   /// No description provided for @dashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Dashboard'**
+  /// **'Tableau de bord'**
   String get dashboard;
 
   /// No description provided for @noDashboard.
@@ -4309,6 +4309,96 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Ajouter - {day}'**
   String scheduleAddDayTitle(String day);
+
+  /// No description provided for @connectionsSearchHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Rechercher une connexion (nom, adresse, modèle)…'**
+  String get connectionsSearchHint;
+
+  /// No description provided for @connectionsNoMatch.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune connexion ne correspond à la recherche'**
+  String get connectionsNoMatch;
+
+  /// No description provided for @homeModulesTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modules'**
+  String get homeModulesTitle;
+
+  /// No description provided for @homeFavoritesDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Vos points suivis, regroupés par dossier'**
+  String get homeFavoritesDesc;
+
+  /// No description provided for @homePointsDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Entrées, sorties et variables de l\'automate'**
+  String get homePointsDesc;
+
+  /// No description provided for @homeDashboardDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Courbes, comparaisons et statistiques'**
+  String get homeDashboardDesc;
+
+  /// No description provided for @homeSchedulesDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Programmes horaires et calendriers'**
+  String get homeSchedulesDesc;
+
+  /// No description provided for @homeAlarmsDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Événements et défauts en cours'**
+  String get homeAlarmsDesc;
+
+  /// No description provided for @homeOverridesDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Points forcés et dérogations actives'**
+  String get homeOverridesDesc;
+
+  /// No description provided for @homeSynopticDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Vues graphiques de l\'installation'**
+  String get homeSynopticDesc;
+
+  /// No description provided for @homeEnvysionDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir le synoptique dans le navigateur'**
+  String get homeEnvysionDesc;
+
+  /// No description provided for @homeDeviceInfoDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Identité, réseau et inventaire des objets'**
+  String get homeDeviceInfoDesc;
+
+  /// No description provided for @homeNoAlarm.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune alarme'**
+  String get homeNoAlarm;
+
+  /// No description provided for @homeNoOverride.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun forçage'**
+  String get homeNoOverride;
+
+  /// No description provided for @homeFromCache.
+  ///
+  /// In fr, this message translates to:
+  /// **'Données en cache'**
+  String get homeFromCache;
 }
 
 class _AppLocalizationsDelegate

@@ -2400,4 +2400,50 @@ class AppLocalizationsEn extends AppLocalizations {
   String scheduleAddDayTitle(String day) {
     return 'Add - $day';
   }
+
+  @override
+  String get connectionsSearchHint =>
+      'Search connections (name, address, model)…';
+
+  @override
+  String get connectionsNoMatch => 'No connection matches the search';
+
+  @override
+  String get homeModulesTitle => 'Modules';
+
+  @override
+  String get homeFavoritesDesc => 'Your watched points, grouped by folder';
+
+  @override
+  String get homePointsDesc => 'Controller inputs, outputs and values';
+
+  @override
+  String get homeDashboardDesc => 'Charts, comparisons and statistics';
+
+  @override
+  String get homeSchedulesDesc => 'Time schedules and calendars';
+
+  @override
+  String get homeAlarmsDesc => 'Active events and faults';
+
+  @override
+  String get homeOverridesDesc => 'Forced points and active overrides';
+
+  @override
+  String get homeSynopticDesc => 'Graphic views of the plant';
+
+  @override
+  String get homeEnvysionDesc => 'Open the graphics in the browser';
+
+  @override
+  String get homeDeviceInfoDesc => 'Identity, network and object inventory';
+
+  @override
+  String get homeNoAlarm => 'No alarm';
+
+  @override
+  String get homeNoOverride => 'No override';
+
+  @override
+  String get homeFromCache => 'Cached data';
 }

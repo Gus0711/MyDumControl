@@ -722,5 +722,20 @@
   "scheduleAddSlot": "Add time slot",
   "scheduleFullDay": "All day",
   "scheduleEditDayTitle": "Edit - {day}",
-  "scheduleAddDayTitle": "Add - {day}"
+  "scheduleAddDayTitle": "Add - {day}",
+  "connectionsSearchHint": "Search connections (name, address, model)…",
+  "connectionsNoMatch": "No connection matches the search",
+  "homeModulesTitle": "Modules",
+  "homeFavoritesDesc": "Your watched points, grouped by folder",
+  "homePointsDesc": "Controller inputs, outputs and values",
+  "homeDashboardDesc": "Charts, comparisons and statistics",
+  "homeSchedulesDesc": "Time schedules and calendars",
+  "homeAlarmsDesc": "Active events and faults",
+  "homeOverridesDesc": "Forced points and active overrides",
+  "homeSynopticDesc": "Graphic views of the plant",
+  "homeEnvysionDesc": "Open the graphics in the browser",
+  "homeDeviceInfoDesc": "Identity, network and object inventory",
+  "homeNoAlarm": "No alarm",
+  "homeNoOverride": "No override",
+  "homeFromCache": "Cached data"
 }

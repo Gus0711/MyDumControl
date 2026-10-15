@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/dc_tokens.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../../domain/models/display_preferences.dart';
 import '../../../l10n/app_localizations.dart';
@@ -75,43 +77,50 @@ class BacnetTypeUtils {
     }
   }
 
-  /// Retourne la couleur associée à un type BACnet
-  /// Chaque type a une couleur unique pour une meilleure différenciation visuelle :
-  /// - AI (Analog Input)    : Vert - mesures/capteurs analogiques
-  /// - BI (Binary Input)    : Bleu - états binaires en lecture
-  /// - AO (Analog Output)   : Orange - commandes analogiques
-  /// - BO (Binary Output)   : Rouge/Rose - commandes binaires
-  /// - AV (Analog Value)    : Cyan - variables analogiques internes
-  /// - BV (Binary Value)    : Violet - variables binaires internes
-  /// - MSI (MultiState In)  : Indigo - états multiples en lecture
-  /// - MSO (MultiState Out) : Ambre - commandes multi-états
-  /// - MSV (MultiState Val) : Teal - variables multi-états
+  /// Retourne la couleur associée à un type BACnet (palette de l'app).
+  /// Entrées : teintes froides ; sorties : teintes chaudes ; variables :
+  /// teintes intermédiaires. Pour un texte ou un fond, préférer
+  /// [typeTone], qui s'adapte au thème clair/sombre.
   static Color getTypeColor(BacnetObjectType type) {
     switch (type) {
-      // Inputs - teintes froides (lecture seule)
       case BacnetObjectType.analogInput:
-        return Colors.green;           // AI - Vert
+        return AppColors.analogInput;
       case BacnetObjectType.binaryInput:
-        return Colors.blue;            // BI - Bleu
+        return AppColors.binaryInput;
       case BacnetObjectType.multiStateInput:
-        return Colors.indigo;          // MSI - Indigo
-      // Outputs - teintes chaudes (commandes)
+        return AppColors.multiStateInput;
       case BacnetObjectType.analogOutput:
-        return Colors.orange;          // AO - Orange
+        return AppColors.analogOutput;
       case BacnetObjectType.binaryOutput:
-        return Colors.pink;            // BO - Rose
+        return AppColors.binaryOutput;
       case BacnetObjectType.multiStateOutput:
-        return Colors.amber;           // MSO - Ambre
-      // Values - teintes intermédiaires (variables internes)
+        return AppColors.multiStateOutput;
       case BacnetObjectType.analogValue:
-        return Colors.cyan;            // AV - Cyan
+        return AppColors.analogValue;
       case BacnetObjectType.binaryValue:
-        return Colors.purple;          // BV - Violet
+        return AppColors.binaryValue;
       case BacnetObjectType.multiStateValue:
-        return Colors.teal;            // MSV - Teal
+        return AppColors.multiStateValue;
       default:
-        return Colors.grey;
+        return AppColors.disconnected;
     }
+  }
+
+  /// Ton (texte, fond, bordure) d'un type BACnet, lisible dans le thème courant.
+  static DcTone typeTone(BuildContext context, BacnetObjectType type) =>
+      context.dc.toneOf(getTypeColor(type));
+
+  /// Ton de la valeur d'un point : entrée hors service / forçage (orange),
+  /// binaire actif (vert), inactif ou absent (neutre), autre (accent).
+  static DcTone valueTone(BuildContext context, BacnetObject point) {
+    final dc = context.dc;
+    if (point.outOfService == true) return dc.overrideTone;
+    final value = point.presentValue;
+    if (value == null) return dc.neutral;
+    if (point.type.isBinary) {
+      return isBinaryActive(value) ? dc.success : dc.neutral;
+    }
+    return dc.accentTone;
   }
 
   /// Vérifie si une valeur binaire est active
@@ -225,16 +234,17 @@ class BacnetTypeUtils {
   }
 
   /// Retourne la couleur de la valeur d'un point
+  /// Préférer [valueTone] (adapté au thème).
   static Color getValueColor(BacnetObject point) {
-    if (point.outOfService == true) return Colors.orange;
+    if (point.outOfService == true) return AppColors.overrideActive;
 
     final value = point.presentValue;
-    if (value == null) return Colors.grey;
+    if (value == null) return AppColors.disconnected;
 
     if (point.type.isBinary) {
-      return isBinaryActive(value) ? Colors.green : Colors.grey;
+      return isBinaryActive(value) ? AppColors.success : AppColors.disconnected;
     }
 
-    return Colors.blue;
+    return AppColors.brandSky;
   }
 }

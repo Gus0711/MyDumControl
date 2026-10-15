@@ -1085,10 +1085,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get useIpScan => 'Scanner plage IP (ECLYPSE)';
 
   @override
-  String get dashboards => 'Dashboards';
+  String get dashboards => 'Tableaux de bord';
 
   @override
-  String get dashboard => 'Dashboard';
+  String get dashboard => 'Tableau de bord';
 
   @override
   String get noDashboard => 'Aucun dashboard';
@@ -2407,4 +2407,51 @@ class AppLocalizationsFr extends AppLocalizations {
   String scheduleAddDayTitle(String day) {
     return 'Ajouter - $day';
   }
+
+  @override
+  String get connectionsSearchHint =>
+      'Rechercher une connexion (nom, adresse, modèle)…';
+
+  @override
+  String get connectionsNoMatch =>
+      'Aucune connexion ne correspond à la recherche';
+
+  @override
+  String get homeModulesTitle => 'Modules';
+
+  @override
+  String get homeFavoritesDesc => 'Vos points suivis, regroupés par dossier';
+
+  @override
+  String get homePointsDesc => 'Entrées, sorties et variables de l\'automate';
+
+  @override
+  String get homeDashboardDesc => 'Courbes, comparaisons et statistiques';
+
+  @override
+  String get homeSchedulesDesc => 'Programmes horaires et calendriers';
+
+  @override
+  String get homeAlarmsDesc => 'Événements et défauts en cours';
+
+  @override
+  String get homeOverridesDesc => 'Points forcés et dérogations actives';
+
+  @override
+  String get homeSynopticDesc => 'Vues graphiques de l\'installation';
+
+  @override
+  String get homeEnvysionDesc => 'Ouvrir le synoptique dans le navigateur';
+
+  @override
+  String get homeDeviceInfoDesc => 'Identité, réseau et inventaire des objets';
+
+  @override
+  String get homeNoAlarm => 'Aucune alarme';
+
+  @override
+  String get homeNoOverride => 'Aucun forçage';
+
+  @override
+  String get homeFromCache => 'Données en cache';
 }
