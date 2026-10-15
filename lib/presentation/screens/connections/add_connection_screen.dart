@@ -163,9 +163,16 @@ class _AddConnectionScreenState extends ConsumerState<AddConnectionScreen> {
           _useHttps = result['useHttps'];
         }
       });
+      // Version API / modele detectes sans identifiants : information
+      // seulement, la version enregistree reste celle du test authentifie.
+      final details = [
+        if (result['apiVersion'] != null) 'API ${result['apiVersion']}',
+        if (result['model'] != null) '${result['model']}',
+      ].join(', ');
+      final label = '${result['name'] ?? result['host']}${details.isNotEmpty ? ' ($details)' : ''}';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context)!.addConnSelected('${result['name'] ?? result['host']}')),
+          content: Text(AppLocalizations.of(context)!.addConnSelected(label)),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 2),
         ),

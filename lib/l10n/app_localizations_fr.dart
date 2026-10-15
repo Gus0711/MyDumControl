@@ -2175,6 +2175,36 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucun ECLYPSE n\'a été trouvé sur le réseau.\nVérifiez que vous êtes connecté au même réseau que l\'automate.';
 
   @override
+  String get discoverProbing => 'Détection API…';
+
+  @override
+  String discoverApiAdvertised(String version) {
+    return 'API $version annoncée';
+  }
+
+  @override
+  String get discoverApiUnknown => 'API détectée à la connexion';
+
+  @override
+  String get discoverUnreachable => 'Injoignable';
+
+  @override
+  String discoverModel(String model) {
+    return 'Modèle : $model';
+  }
+
+  @override
+  String discoverFirmware(String version) {
+    return 'Firmware : $version';
+  }
+
+  @override
+  String get discoverFirmwareAfterLogin => 'Firmware visible après connexion';
+
+  @override
+  String get discoverCreateConnection => 'Créer la connexion';
+
+  @override
   String discoverDeviceIdConflictWithId(String deviceId) {
     return 'Conflit Device ID $deviceId';
   }

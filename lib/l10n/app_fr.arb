@@ -925,6 +925,35 @@
   "discoverMdnsError": "Erreur mDNS",
   "discoverSearchingEclypse": "Recherche des automates ECLYPSE sur le réseau...",
   "discoverNoEclypseFoundMessage": "Aucun ECLYPSE n'a été trouvé sur le réseau.\nVérifiez que vous êtes connecté au même réseau que l'automate.",
+  "discoverProbing": "Détection API…",
+  "discoverApiAdvertised": "API {version} annoncée",
+  "@discoverApiAdvertised": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "discoverApiUnknown": "API détectée à la connexion",
+  "discoverUnreachable": "Injoignable",
+  "discoverModel": "Modèle : {model}",
+  "@discoverModel": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "discoverFirmware": "Firmware : {version}",
+  "@discoverFirmware": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "discoverFirmwareAfterLogin": "Firmware visible après connexion",
+  "discoverCreateConnection": "Créer la connexion",
   "discoverDeviceIdConflictWithId": "Conflit Device ID {deviceId}",
   "@discoverDeviceIdConflictWithId": {
     "placeholders": {

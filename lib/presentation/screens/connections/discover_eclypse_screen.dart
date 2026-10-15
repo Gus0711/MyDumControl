@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../data/services/eclypse_probe.dart';
 import '../../../data/services/mdns_discovery_service.dart';
 
 /// Ecran de decouverte des ECLYPSE via mDNS
@@ -14,8 +15,17 @@ class DiscoverEclypseScreen extends ConsumerStatefulWidget {
 
 class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
   final _mdnsService = MdnsDiscoveryService();
+  final _probe = EclypseProbe();
+  final _probeRunner = BoundedTaskRunner(maxConcurrent: 4);
   bool _isDiscovering = false;
   List<EclypseDevice> _discoveredDevices = [];
+
+  /// Résultats de sonde par nom d'appareil (absent = sonde en cours).
+  final Map<String, EclypseProbeResult> _probeResults = {};
+
+  /// Incrémenté à chaque recherche : ignore les sondes d'une recherche
+  /// précédente.
+  int _generation = 0;
   String? _errorMessage;
 
   @override
@@ -25,10 +35,20 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
     _startDiscovery();
   }
 
+  @override
+  void dispose() {
+    _probeRunner.clear();
+    _mdnsService.stop();
+    super.dispose();
+  }
+
   Future<void> _startDiscovery() async {
+    _probeRunner.clear();
+    final generation = ++_generation;
     setState(() {
       _isDiscovering = true;
       _discoveredDevices = [];
+      _probeResults.clear();
       _errorMessage = null;
     });
 
@@ -36,21 +56,20 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
       await _mdnsService.discoverEclypseDevices(
         timeout: const Duration(seconds: 5),
         onDeviceFound: (device) {
-          if (mounted) {
-            setState(() {
-              if (!_discoveredDevices.any((d) => d.name == device.name)) {
-                _discoveredDevices.add(device);
-              }
-            });
+          if (mounted && generation == _generation) {
+            if (!_discoveredDevices.any((d) => d.name == device.name)) {
+              setState(() => _discoveredDevices.add(device));
+              _scheduleProbe(device, generation);
+            }
           }
         },
       );
 
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() => _isDiscovering = false);
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() {
           _isDiscovering = false;
           _errorMessage = e.toString();
@@ -59,13 +78,35 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
     }
   }
 
+  /// Sonde non authentifiée (4 en parallèle au plus) ; un échec n'efface
+  /// pas l'appareil de la liste.
+  void _scheduleProbe(EclypseDevice device, int generation) {
+    _probeRunner.add(() async {
+      if (!mounted || generation != _generation) return;
+      final result = await _probe.probe(
+        host: device.address,
+        port: device.connectionPort,
+        useHttps: device.prefersHttps,
+      );
+      if (mounted && generation == _generation) {
+        setState(() => _probeResults[device.name] = result);
+      }
+    });
+  }
+
   void _selectDevice(EclypseDevice device) {
+    final probe = _probeResults[device.name];
     // Retourner les donnees a la page precedente
     context.pop({
       'name': device.name,
-      'host': device.ipAddress ?? device.host,
-      'port': device.port,
-      'useHttps': device.port == 443,
+      'host': device.address,
+      'port': device.connectionPort,
+      'useHttps': device.prefersHttps,
+      // Version confirmée sans identifiants uniquement
+      'apiVersion': probe?.apiVersion,
+      'model': device.model,
+      'firmwareVersion': device.firmwareVersion,
+      'mac': device.macAddress,
     });
   }
 
@@ -269,6 +310,7 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
               final device = _discoveredDevices[index];
               return _DeviceCard(
                 device: device,
+                probeResult: _probeResults[device.name],
                 onTap: () => _selectDevice(device),
               );
             },
@@ -281,16 +323,25 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
 
 class _DeviceCard extends StatelessWidget {
   final EclypseDevice device;
+  final EclypseProbeResult? probeResult;
   final VoidCallback onTap;
 
   const _DeviceCard({
     required this.device,
+    required this.probeResult,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final model = device.model;
+    final firmware = device.firmwareVersion;
+    final mac = device.macAddress;
+    final secondaryStyle = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -330,40 +381,125 @@ class _DeviceCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${device.ipAddress ?? device.host}:${device.port}',
+                      '${device.address}:${device.connectionPort}',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    if (device.port == 443)
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.lock,
-                            size: 14,
-                            color: Colors.green.shade700,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'HTTPS',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.green.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
+                    if (model != null)
+                      Text(l10n.discoverModel(model), style: secondaryStyle),
+                    Text(
+                      firmware != null
+                          ? l10n.discoverFirmware(firmware)
+                          : l10n.discoverFirmwareAfterLogin,
+                      style: secondaryStyle,
+                    ),
+                    if (mac != null) Text('MAC $mac', style: secondaryStyle),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        _Tag(
+                          icon: device.prefersHttps ? Icons.lock : Icons.lock_open,
+                          label: device.prefersHttps ? 'HTTPS' : 'HTTP',
+                          color: device.prefersHttps
+                              ? Colors.green.shade700
+                              : Colors.orange.shade800,
+                        ),
+                        _buildApiTag(l10n, theme),
+                      ],
+                    ),
                   ],
                 ),
               ),
 
-              // Fleche
-              Icon(
-                Icons.chevron_right,
-                color: theme.colorScheme.onSurfaceVariant,
+              // Creer la connexion (champs pre-remplis)
+              Tooltip(
+                message: l10n.discoverCreateConnection,
+                child: Icon(
+                  Icons.add_link,
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildApiTag(AppLocalizations l10n, ThemeData theme) {
+    final probe = probeResult;
+    if (probe == null) {
+      return _Tag(
+        label: l10n.discoverProbing,
+        color: theme.colorScheme.onSurfaceVariant,
+        loading: true,
+      );
+    }
+    if (probe.apiVersion != null) {
+      return _Tag(
+        icon: Icons.api,
+        label: 'API ${probe.apiVersion}',
+        color: theme.colorScheme.primary,
+      );
+    }
+    if (!probe.reachable) {
+      return _Tag(
+        icon: Icons.cloud_off,
+        label: l10n.discoverUnreachable,
+        color: theme.colorScheme.error,
+      );
+    }
+    // Joignable mais version indeterminable sans identifiants
+    final advertised = device.advertisedApiVersion;
+    return _Tag(
+      icon: Icons.help_outline,
+      label: advertised != null
+          ? l10n.discoverApiAdvertised(advertised)
+          : l10n.discoverApiUnknown,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  final IconData? icon;
+  final String label;
+  final Color color;
+  final bool loading;
+
+  const _Tag({
+    this.icon,
+    required this.label,
+    required this.color,
+    this.loading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (loading)
+            SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
+            )
+          else if (icon != null)
+            Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: theme.textTheme.bodySmall?.copyWith(color: color)),
+        ],
       ),
     );
   }

@@ -3890,6 +3890,54 @@ abstract class AppLocalizations {
   /// **'Aucun ECLYPSE n\'a été trouvé sur le réseau.\nVérifiez que vous êtes connecté au même réseau que l\'automate.'**
   String get discoverNoEclypseFoundMessage;
 
+  /// No description provided for @discoverProbing.
+  ///
+  /// In fr, this message translates to:
+  /// **'Détection API…'**
+  String get discoverProbing;
+
+  /// No description provided for @discoverApiAdvertised.
+  ///
+  /// In fr, this message translates to:
+  /// **'API {version} annoncée'**
+  String discoverApiAdvertised(String version);
+
+  /// No description provided for @discoverApiUnknown.
+  ///
+  /// In fr, this message translates to:
+  /// **'API détectée à la connexion'**
+  String get discoverApiUnknown;
+
+  /// No description provided for @discoverUnreachable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Injoignable'**
+  String get discoverUnreachable;
+
+  /// No description provided for @discoverModel.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modèle : {model}'**
+  String discoverModel(String model);
+
+  /// No description provided for @discoverFirmware.
+  ///
+  /// In fr, this message translates to:
+  /// **'Firmware : {version}'**
+  String discoverFirmware(String version);
+
+  /// No description provided for @discoverFirmwareAfterLogin.
+  ///
+  /// In fr, this message translates to:
+  /// **'Firmware visible après connexion'**
+  String get discoverFirmwareAfterLogin;
+
+  /// No description provided for @discoverCreateConnection.
+  ///
+  /// In fr, this message translates to:
+  /// **'Créer la connexion'**
+  String get discoverCreateConnection;
+
   /// No description provided for @discoverDeviceIdConflictWithId.
   ///
   /// In fr, this message translates to:
