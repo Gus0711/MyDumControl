@@ -701,8 +701,9 @@ class PointsNotifier extends StateNotifier<PointsState> {
       );
 
       if (success) {
-        // Mettre à jour la valeur localement (sans forçage)
+        // Mettre à jour la valeur localement (sans forçage), puis relire
         _updatePointLocally(point, presentValue: value, isOverridden: false);
+        await _rereadPoint(point);
       }
 
       if (!success) _recordApiFailure(connectionState.client!);
@@ -731,8 +732,9 @@ class PointsNotifier extends StateNotifier<PointsState> {
         value: value,
       );
 
-      // Mettre à jour la valeur localement
+      // Mettre à jour la valeur localement, puis relire la valeur effective
       _updatePointLocally(point, presentValue: value, isOverridden: false);
+      await _rereadPoint(point);
       return true;
     } catch (e) {
       logger.e('_writeValueBacnet error: $e');
@@ -782,6 +784,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
           overridePriority: priority,
           overrideValue: value,
         );
+        await _rereadPoint(point);
       }
 
       if (!success) _recordApiFailure(connectionState.client!);
@@ -819,6 +822,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         overridePriority: priority,
         overrideValue: value,
       );
+      await _rereadPoint(point);
       return true;
     } catch (e) {
       logger.e('_writeOverrideBacnet error: $e');
@@ -862,7 +866,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         // réelle : la présente valeur repasse à la priorité suivante ou au
         // relinquish-default, elle n'est plus la valeur forcée.
         _updatePointLocally(point, isOverridden: false);
-        await _rereadPointAfterRelease(point);
+        await _rereadPoint(point);
       }
 
       if (!success) _recordApiFailure(connectionState.client!);
@@ -895,7 +899,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
       // Mettre à jour localement (plus de forçage), puis relire la valeur réelle
       _updatePointLocally(point, isOverridden: false);
-      await _rereadPointAfterRelease(point);
+      await _rereadPoint(point);
       return true;
     } catch (e) {
       logger.e('_releaseOverrideBacnet error: $e');
@@ -938,7 +942,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         // réelle : la présente valeur repasse à la priorité suivante ou au
         // relinquish-default, elle n'est plus la valeur forcée.
         _updatePointLocally(point, isOverridden: false);
-        await _rereadPointAfterRelease(point);
+        await _rereadPoint(point);
       }
 
       if (!success) _recordApiFailure(connectionState.client!);
@@ -1032,6 +1036,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
           presentValue: value,
           outOfService: true,
         );
+        await _rereadPoint(point);
       }
 
       if (!success) _recordApiFailure(connectionState.client!);
@@ -1103,12 +1108,13 @@ class PointsNotifier extends StateNotifier<PointsState> {
         return false;
       }
 
-      // Mettre à jour localement
+      // Mettre à jour localement, puis relire la valeur effective
       _updatePointLocally(
         point,
         presentValue: value,
         outOfService: true,
       );
+      await _rereadPoint(point);
       return true;
     } catch (e) {
       logger.e('_forceInputBacnet error: $e');
@@ -1149,7 +1155,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       if (success) {
         // Mettre à jour localement, puis relire la valeur mesurée
         _updatePointLocally(point, outOfService: false);
-        await _rereadPointAfterRelease(point);
+        await _rereadPoint(point);
       }
 
       if (!success) _recordApiFailure(connectionState.client!);
@@ -1281,10 +1287,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
     _lastActionError = error != null ? describeError(error) : null;
   }
 
-  /// Relit un point après une libération (forçage ou entrée forcée) : sans
-  /// cela l'interface garderait la valeur forcée alors que l'automate est
-  /// revenu à la valeur de la priorité suivante.
-  Future<void> _rereadPointAfterRelease(BacnetObject point) async {
+  /// Relit un point sur l'automate après une écriture, un forçage ou une
+  /// libération : l'interface affiche la valeur effective (une priorité plus
+  /// haute peut masquer la valeur écrite ; après une libération l'automate
+  /// revient à la priorité suivante), pas la valeur envoyée.
+  Future<void> _rereadPoint(BacnetObject point) async {
     final connectionState = _ref.read(activeConnectionProvider);
     try {
       if (connectionState.isBacnetConnection) {
@@ -1302,7 +1309,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         outOfService: fresh.outOfService,
       );
     } catch (e) {
-      logger.w('_rereadPointAfterRelease: ${point.type.apiName}:${point.instance}: $e');
+      logger.w('_rereadPoint: ${point.type.apiName}:${point.instance}: $e');
     }
   }
 

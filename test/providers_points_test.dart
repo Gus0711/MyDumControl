@@ -20,6 +20,19 @@ class FakeBacnetService extends BacnetService {
   Completer<List<BacnetObject>>? discoverCompleter;
   int discoverCalls = 0;
 
+  /// Effective present-value held by the fake controller, per instance
+  /// (null = unknown: the app keeps its local value).
+  final Map<int, dynamic> controllerValues = {};
+
+  @override
+  Future<dynamic> refreshPointValue({
+    required String host,
+    required int port,
+    required int objectType,
+    required int objectInstance,
+  }) async =>
+      controllerValues[objectInstance];
+
   @override
   Future<BacnetResponse> writeProperty({
     required String host,
@@ -216,6 +229,32 @@ void main() {
 
       expect(await notifier().emergencyRelease(av), isFalse);
       expect(container.read(pointsProvider).points.single.isOverridden, isTrue);
+    });
+  });
+
+  group('re-read after a write (BACnet)', () {
+    test('release shows the value the controller went back to', () async {
+      final bv = _point(BacnetObjectType.binaryValue, 3, overridden: true)
+          .copyWith(presentValue: 'inactive', overrideValue: 'inactive');
+      await seedPoints([bv]);
+      // Forced OFF at priority 8, the program still commands ON below it
+      bacnet.controllerValues[3] = 'active';
+
+      expect(await notifier().releaseOverride(bv, priority: 8), isTrue);
+      final p = container.read(pointsProvider).points.single;
+      expect(p.isOverridden, isFalse);
+      expect(p.presentValue, 'active');
+    });
+
+    test('an override masked by a higher priority shows the effective value', () async {
+      final av = _point(BacnetObjectType.analogValue, 4);
+      await seedPoints([av]);
+      bacnet.controllerValues[4] = 21.0; // priority 1 holds 21.0
+
+      expect(await notifier().writeOverride(av, 30.0, priority: 8), isTrue);
+      final p = container.read(pointsProvider).points.single;
+      expect(p.isOverridden, isTrue);
+      expect(p.presentValue, 21.0);
     });
   });
 
