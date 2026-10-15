@@ -1,13 +1,23 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/formatters.dart';
 import '../../application/providers/multi_curve_provider.dart';
 import '../../application/providers/trend_log_provider.dart';
 import '../../domain/models/multi_curve_chart.dart';
+import '../../l10n/app_localizations.dart';
+import '../../core/theme/app_text_styles.dart';
+import '../../core/theme/dc_tokens.dart';
+import 'chart_chrome.dart';
+import 'chart_downsample.dart';
 import 'trend_log_viewer.dart';
+import 'ui/dc_banner.dart';
+import 'ui/dc_layout.dart';
+import 'ui/dc_tag.dart';
 
 // =============================================================================
 // MultiCurveChart - Widget principal pour afficher plusieurs courbes
@@ -55,6 +65,30 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
     _initializeChart();
   }
 
+  @override
+  void didUpdateWidget(covariant MultiCurveChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final configChanged = oldWidget.chartId != widget.chartId ||
+        !listEquals(oldWidget.initialTrendLogInstances, widget.initialTrendLogInstances) ||
+        !mapEquals(oldWidget.curveNames, widget.curveNames) ||
+        !mapEquals(oldWidget.curveUnits, widget.curveUnits);
+    final instances = widget.initialTrendLogInstances;
+    if (!configChanged || instances == null || instances.isEmpty) return;
+
+    // Reconfiguration (ex: dashboard widget edited): re-initialize the provider
+    final chartId = widget.chartId;
+    final names = widget.curveNames == null ? null : Map<int, String>.of(widget.curveNames!);
+    final units = widget.curveUnits == null ? null : Map<int, String?>.of(widget.curveUnits!);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(multiCurveViewerProvider(chartId).notifier).reconfigure(
+            List<int>.of(instances),
+            names: names,
+            units: units,
+          );
+    });
+  }
+
   void _initializeChart() {
     if (_initialized) return;
     if (widget.initialTrendLogInstances == null || widget.initialTrendLogInstances!.isEmpty) return;
@@ -87,18 +121,14 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
   Widget build(BuildContext context) {
     final state = ref.watch(multiCurveViewerProvider(widget.chartId));
 
+    final dc = context.dc;
     return Container(
       height: widget.height,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(8),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: dc.surface,
+        borderRadius: BorderRadius.circular(DcRadius.lg),
+        border: Border.all(color: dc.border),
+        boxShadow: dc.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,7 +149,7 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
           // Légende
           if (widget.showLegend && state.data != null && state.data!.curves.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
               child: _CurveLegend(
                 chartId: widget.chartId,
                 curves: state.data!.curves,
@@ -135,7 +165,7 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
           // Statistiques
           if (widget.showStatistics && state.data != null)
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: _MultiCurveStatistics(data: state.data!),
             ),
         ],
@@ -144,41 +174,42 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
   }
 
   Widget _buildHeader(BuildContext context, MultiCurveViewerState state) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
       child: Row(
         children: [
-          Icon(
-            Icons.multiline_chart,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 8),
+          DcIconBox(icon: Icons.stacked_line_chart_rounded, tone: context.dc.violet, size: 34),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Comparaison (${state.curveCount} courbes)',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              l10n.chartComparisonTitle(state.curveCount),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.text.titleMedium,
             ),
           ),
           if (state.isLoading)
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            const Padding(
+              padding: EdgeInsets.all(10),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ),
           if (!state.isLoading) ...[
             // Bouton ajouter courbe
             if (state.canAddCurve && widget.onAddCurve != null)
               IconButton(
-                icon: const Icon(Icons.add),
-                tooltip: 'Ajouter une courbe',
+                icon: const Icon(Icons.add_rounded, size: 20),
+                tooltip: l10n.chartAddCurve,
                 onPressed: widget.onAddCurve,
               ),
             // Bouton rafraîchir
             IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Rafraîchir',
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              tooltip: l10n.refresh,
               onPressed: () => ref
                   .read(multiCurveViewerProvider(widget.chartId).notifier)
                   .refresh(),
@@ -186,8 +217,8 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
             // Bouton plein écran
             if (widget.onExpandToFullscreen != null)
               IconButton(
-                icon: const Icon(Icons.fullscreen),
-                tooltip: 'Plein écran',
+                icon: const Icon(Icons.open_in_full_rounded, size: 20),
+                tooltip: l10n.trendFullscreen,
                 onPressed: widget.onExpandToFullscreen,
               ),
           ],
@@ -212,11 +243,44 @@ class _MultiCurveChartState extends ConsumerState<MultiCurveChart> {
       return const _EmptyState();
     }
 
-    return Padding(
+    final chart = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _MultiCurveLineChart(
         data: state.data!,
         visibility: state.curveVisibility,
+      ),
+    );
+
+    // Partial failure: keep the loaded curves and show the error above them
+    final error = state.error ??
+        (state.curveErrors.isEmpty
+            ? null
+            : AppLocalizations.of(context)!.chartCurvesNotLoaded(state.curveErrors.length));
+    if (error == null) return chart;
+
+    return Column(
+      children: [
+        _ErrorBanner(message: error),
+        Expanded(child: chart),
+      ],
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+
+  const _ErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: DcBanner(
+        tone: context.dc.warning,
+        icon: Icons.warning_amber_rounded,
+        message: message,
+        dense: true,
       ),
     );
   }
@@ -245,9 +309,12 @@ class _CurveLegend extends ConsumerWidget {
         children: curves.map((curve) {
           final colorTheme = ChartColorTheme.fromName(curve.colorThemeName);
           final isVisible = visibility[curve.trendLogInstance] ?? true;
+          final dc = context.dc;
+          final seriesColor = chartSeriesColor(context, colorTheme.primaryColor);
+          final tone = dc.toneOf(colorTheme.primaryColor);
 
           return Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(right: 8),
             child: InkWell(
               onTap: () {
                 HapticFeedback.lightImpact();
@@ -255,50 +322,41 @@ class _CurveLegend extends ConsumerWidget {
                     .read(multiCurveViewerProvider(chartId).notifier)
                     .toggleCurveVisibility(curve.trendLogInstance);
               },
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(DcRadius.md),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: isVisible
-                      ? colorTheme.primaryColor.withAlpha(30)
-                      : Colors.grey.withAlpha(20),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isVisible
-                        ? colorTheme.primaryColor.withAlpha(60)
-                        : Colors.grey.withAlpha(40),
-                  ),
+                  color: isVisible ? tone.bg : Colors.transparent,
+                  borderRadius: BorderRadius.circular(DcRadius.md),
+                  border: Border.all(color: isVisible ? tone.border : dc.border),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 12,
-                      height: 12,
+                      width: 14,
+                      height: 3,
                       decoration: BoxDecoration(
-                        color: isVisible ? colorTheme.primaryColor : Colors.grey,
-                        shape: BoxShape.circle,
+                        color: isVisible ? seriesColor : dc.textMuted,
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       curve.name,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: isVisible ? colorTheme.primaryColor : Colors.grey,
-                        decoration:
-                            isVisible ? null : TextDecoration.lineThrough,
+                      style: context.text.labelMedium?.copyWith(
+                        color: isVisible ? dc.textPrimary : dc.textMuted,
+                        decoration: isVisible ? null : TextDecoration.lineThrough,
                       ),
                     ),
                     if (curve.units != null) ...[
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       Text(
-                        '(${curve.units})',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade600,
+                        curve.units!,
+                        style: AppTextStyles.monospacedValue.copyWith(
+                          fontSize: 10.5,
+                          color: isVisible ? tone.fg : dc.textMuted,
                         ),
                       ),
                     ],
@@ -328,29 +386,14 @@ class _MultiCurvePeriodSelector extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: TrendPeriod.values
-            .where((p) => p != TrendPeriod.custom)
-            .map((period) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(period.label),
-                    selected: state.selectedPeriod == period,
-                    onSelected: state.isLoading
-                        ? null
-                        : (selected) {
-                            if (selected) {
-                              ref
-                                  .read(multiCurveViewerProvider(chartId).notifier)
-                                  .setPeriod(period);
-                            }
-                          },
-                  ),
-                ))
-            .toList(),
-      ),
+    final l10n = AppLocalizations.of(context)!;
+    return ChartSegmented<TrendPeriod>(
+      values: TrendPeriod.values.where((p) => p != TrendPeriod.custom).toList(),
+      selected: state.selectedPeriod,
+      labelOf: (period) => trendPeriodLabel(l10n, period),
+      onSelected: state.isLoading
+          ? null
+          : (period) => ref.read(multiCurveViewerProvider(chartId).notifier).setPeriod(period),
     );
   }
 }
@@ -376,6 +419,18 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
   // Zoom & Pan
   double _zoomLevel = 1.0;
   double _panOffset = 0.0;
+  double _baseZoom = 1.0; // zoom at the start of the current gesture
+  double _chartWidth = 300.0; // last known width, used for pan sensitivity
+
+  @override
+  void didUpdateWidget(covariant _MultiCurveLineChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // New data set: restart from the full view
+    if (!identical(oldWidget.data, widget.data)) {
+      _zoomLevel = 1.0;
+      _panOffset = 0.0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -384,20 +439,23 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
         .toList();
 
     if (visibleCurves.isEmpty) {
-      return const Center(
-        child: Text(
-          'Aucune courbe visible\nTouchez la légende pour afficher',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey),
-        ),
+      return ChartMessage(
+        icon: Icons.visibility_off_outlined,
+        message: AppLocalizations.of(context)!.chartNoVisibleCurve,
+        compact: true,
       );
     }
 
     // Calculer les limites X
     final allSpots = visibleCurves.expand((c) => c.spots).toList();
     if (allSpots.isEmpty) {
-      return const Center(child: Text('Aucune donnée'));
+      return ChartMessage(
+        icon: Icons.show_chart_rounded,
+        message: AppLocalizations.of(context)!.noData,
+        compact: true,
+      );
     }
+    final palette = ChartPalette.of(context);
 
     final minX = allSpots.map((s) => s.x).reduce(math.min);
     final maxX = allSpots.map((s) => s.x).reduce(math.max);
@@ -413,22 +471,28 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
       if (curve.minValue < visibleMinY) visibleMinY = curve.minValue;
       if (curve.maxValue > visibleMaxY) visibleMaxY = curve.maxValue;
     }
-    final yPadding = (visibleMaxY - visibleMinY) * 0.1;
+    // Padding minimal quand toutes les valeurs sont identiques (min == max)
+    final yRange = visibleMaxY - visibleMinY;
+    final yPadding = yRange > 0 ? yRange * 0.1 : 1.0;
 
+    return LayoutBuilder(builder: (context, constraints) {
+    if (constraints.maxWidth.isFinite && constraints.maxWidth > 0) {
+      _chartWidth = constraints.maxWidth;
+    }
     return GestureDetector(
-      onScaleStart: (_) {},
+      onScaleStart: (_) => _baseZoom = _zoomLevel,
       onScaleUpdate: (details) {
         setState(() {
-          // Zoom
-          final newZoom = (_zoomLevel * details.scale).clamp(1.0, 10.0);
-          _zoomLevel = newZoom;
+          // Zoom relatif au zoom de départ (details.scale est cumulatif)
+          _zoomLevel = (_baseZoom * details.scale).clamp(1.0, 10.0);
 
-          // Pan (uniquement si zoomé)
+          // Pan proportionnel à la plage visible, re-clampé à chaque update
+          final maxPan = totalRange - (totalRange / _zoomLevel);
           if (_zoomLevel > 1.0) {
-            final maxPan = totalRange - (totalRange / _zoomLevel);
-            _panOffset = (_panOffset - details.focalPointDelta.dx * 0.5)
-                .clamp(0.0, maxPan);
+            final minutesPerPixel = (totalRange / _zoomLevel) / _chartWidth;
+            _panOffset = _panOffset - details.focalPointDelta.dx * minutesPerPixel;
           }
+          _panOffset = _panOffset.clamp(0.0, maxPan > 0 ? maxPan : 0.0);
         });
       },
       onDoubleTap: () {
@@ -443,28 +507,34 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
             LineChartData(
               lineBarsData: visibleCurves.map((curve) {
                 final colorTheme = ChartColorTheme.fromName(curve.colorThemeName);
+                final seriesColor = chartSeriesColor(context, colorTheme.primaryColor);
+                final spots = downsampleMinMax(
+                  visibleWindow(curve.spots, actualMinX - visibleRange * 0.1,
+                      actualMaxX + visibleRange * 0.1),
+                );
                 return LineChartBarData(
-                  spots: curve.spots,
-                  isCurved: true,
+                  spots: spots.isNotEmpty ? spots : downsampleMinMax(curve.spots),
+                  isCurved: spots.length <= kRichRenderingMaxPoints,
                   curveSmoothness: 0.2,
-                  color: colorTheme.primaryColor,
+                  color: seriesColor,
                   barWidth: 2,
                   isStrokeCapRound: true,
+                  isStrokeJoinRound: true,
                   dotData: FlDotData(
-                    show: curve.spots.length < 50,
-                    getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
+                    show: spots.length < 50,
+                    getDotPainter: (spot, _, _, _) => FlDotCirclePainter(
                       radius: 3,
-                      color: colorTheme.dotBorderColor,
+                      color: palette.dotStroke,
                       strokeWidth: 2,
-                      strokeColor: colorTheme.primaryColor,
+                      strokeColor: seriesColor,
                     ),
                   ),
                   belowBarData: BarAreaData(
                     show: visibleCurves.length == 1,
                     gradient: LinearGradient(
                       colors: [
-                        colorTheme.gradientStart,
-                        colorTheme.gradientEnd,
+                        seriesColor.withValues(alpha: context.dc.isDark ? 0.28 : 0.2),
+                        seriesColor.withValues(alpha: 0.0),
                       ],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -482,8 +552,9 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
                 drawVerticalLine: false,
                 horizontalInterval: _calculateYInterval(visibleMinY, visibleMaxY),
                 getDrawingHorizontalLine: (value) => FlLine(
-                  color: Colors.grey.withAlpha(30),
+                  color: palette.grid,
                   strokeWidth: 1,
+                  dashArray: [3, 4],
                 ),
               ),
               titlesData: FlTitlesData(
@@ -494,7 +565,7 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
                     showTitles: true,
                     reservedSize: 30,
                     interval: _calculateXInterval(actualMinX, actualMaxX),
-                    getTitlesWidget: (value, meta) => _buildDateLabel(value),
+                    getTitlesWidget: (value, meta) => _buildDateLabel(value, palette),
                   ),
                 ),
                 leftTitles: AxisTitles(
@@ -505,22 +576,26 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
                     getTitlesWidget: (value, meta) => Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Text(
-                        _formatValue(value),
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 10,
-                        ),
+                        formatNumber(value),
+                        textAlign: TextAlign.right,
+                        style: palette.axisLabel,
                       ),
                     ),
                   ),
                 ),
               ),
-              borderData: FlBorderData(show: false),
+              borderData: FlBorderData(
+                show: true,
+                border: Border(bottom: BorderSide(color: palette.axis)),
+              ),
               lineTouchData: LineTouchData(
                 enabled: true,
                 touchTooltipData: LineTouchTooltipData(
                   fitInsideHorizontally: true,
                   fitInsideVertically: true,
+                  tooltipRoundedRadius: DcRadius.md,
+                  tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  getTooltipColor: (_) => palette.tooltipBackground,
                   getTooltipItems: (touchedSpots) {
                     return touchedSpots.map((spot) {
                       final curveIndex = spot.barIndex;
@@ -531,21 +606,41 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
                       final timestamp = DateTime.fromMillisecondsSinceEpoch(
                         (widget.data.minTimestamp + spot.x * 60 * 1000).toInt(),
                       );
+                      // Pastille de la série, lisible sur le fond inversé de l'infobulle
+                      final marker = context.dc.isDark
+                          ? colorTheme.primaryColor
+                          : DcTone.fromColor(colorTheme.primaryColor, Brightness.dark).fg;
 
                       return LineTooltipItem(
-                        '${curve.name}\n${DateFormat('HH:mm').format(timestamp)}: ${_formatValue(spot.y)}${curve.units != null ? ' ${curve.units}' : ''}',
-                        TextStyle(
-                          color: colorTheme.tooltipText,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
+                        '',
+                        AppTextStyles.monospacedValue.copyWith(
+                          color: palette.tooltipText,
+                          fontSize: 11.5,
+                          height: 1.4,
                         ),
+                        textAlign: TextAlign.left,
+                        children: [
+                          TextSpan(text: '● ', style: TextStyle(color: marker)),
+                          TextSpan(
+                            text: '${curve.name}\n',
+                            style: TextStyle(fontFamily: AppTextStyles.fontFamily, fontWeight: FontWeight.w600),
+                          ),
+                          TextSpan(
+                            text: '${DateFormat('HH:mm').format(timestamp)}  ',
+                            style: TextStyle(color: palette.tooltipText.withValues(alpha: 0.7)),
+                          ),
+                          TextSpan(
+                            text: '${formatNumber(spot.y)}${curve.units != null ? ' ${curve.units}' : ''}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ],
                       );
                     }).toList();
                   },
                 ),
               ),
             ),
-            duration: const Duration(milliseconds: 150),
+            duration: Duration.zero,
           ),
 
           // Indicateur de zoom
@@ -553,37 +648,29 @@ class _MultiCurveLineChartState extends State<_MultiCurveLineChart> {
             Positioned(
               top: 8,
               right: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withAlpha(200),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${_zoomLevel.toStringAsFixed(1)}x',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              child: DcTag(
+                '${_zoomLevel.toStringAsFixed(1)}×',
+                icon: Icons.zoom_in_rounded,
+                tone: context.dc.accentTone,
+                mono: true,
               ),
             ),
         ],
       ),
     );
+    });
   }
 
-  Widget _buildDateLabel(double value) {
+  Widget _buildDateLabel(double value, ChartPalette palette) {
     final timestamp = DateTime.fromMillisecondsSinceEpoch(
       (widget.data.minTimestamp + value * 60 * 1000).toInt(),
     );
 
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 6),
       child: Text(
         DateFormat('dd/MM\nHH:mm').format(timestamp),
-        style: TextStyle(color: Colors.grey.shade600, fontSize: 9),
+        style: palette.axisLabel.copyWith(fontSize: 9.5),
         textAlign: TextAlign.center,
       ),
     );
@@ -619,100 +706,80 @@ class _MultiCurveStatistics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
     final visibleCurves = data.visibleCurves;
     if (visibleCurves.isEmpty) return const SizedBox.shrink();
 
+    final headerStyle = AppTextStyles.overline.copyWith(color: dc.textMuted, fontSize: 10);
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.grey.withAlpha(10),
-        borderRadius: BorderRadius.circular(12),
+        color: dc.surfaceSunken,
+        borderRadius: BorderRadius.circular(DcRadius.md),
+        border: Border.all(color: dc.border),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: Table(
+        columnWidths: const {
+          0: FlexColumnWidth(2.2),
+          1: FlexColumnWidth(),
+          2: FlexColumnWidth(),
+          3: FlexColumnWidth(),
+        },
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
         children: [
-          _StatColumn(
-            label: 'Min',
-            values: visibleCurves
-                .map((c) => (
-                      name: c.name,
-                      value: c.minValue,
-                      color: ChartColorTheme.fromName(c.colorThemeName).primaryColor,
-                    ))
-                .toList(),
+          TableRow(
+            children: [
+              const SizedBox.shrink(),
+              for (final label in [l10n.statisticsMin, l10n.statisticsMax, l10n.statisticsAvg])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(label.toUpperCase(), textAlign: TextAlign.right, style: headerStyle),
+                ),
+            ],
           ),
-          _StatColumn(
-            label: 'Max',
-            values: visibleCurves
-                .map((c) => (
-                      name: c.name,
-                      value: c.maxValue,
-                      color: ChartColorTheme.fromName(c.colorThemeName).primaryColor,
-                    ))
-                .toList(),
-          ),
-          _StatColumn(
-            label: 'Moy',
-            values: visibleCurves
-                .map((c) => (
-                      name: c.name,
-                      value: c.avgValue,
-                      color: ChartColorTheme.fromName(c.colorThemeName).primaryColor,
-                    ))
-                .toList(),
-          ),
+          for (final c in visibleCurves)
+            TableRow(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: chartSeriesColor(context, ChartColorTheme.fromName(c.colorThemeName).primaryColor),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          c.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.text.bodySmall?.copyWith(color: dc.textSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                for (final v in [c.minValue, c.maxValue, c.avgValue])
+                  Text(
+                    formatNumber(v),
+                    textAlign: TextAlign.right,
+                    style: AppTextStyles.monospacedValue.copyWith(
+                      color: dc.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
         ],
       ),
-    );
-  }
-}
-
-class _StatColumn extends StatelessWidget {
-  final String label;
-  final List<({String name, double value, Color color})> values;
-
-  const _StatColumn({required this.label, required this.values});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 4),
-        ...values.map((v) => Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: v.color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _formatValue(v.value),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: v.color,
-                    ),
-                  ),
-                ],
-              ),
-            )),
-      ],
     );
   }
 }
@@ -727,27 +794,7 @@ class _LoadingState extends StatelessWidget {
   const _LoadingState({this.message});
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            if (message != null) ...[
-              const SizedBox(height: 16),
-              Text(
-                message!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ChartMessage.loading(message: message, compact: true);
 }
 
 class _ErrorState extends ConsumerWidget {
@@ -758,28 +805,15 @@ class _ErrorState extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.red.shade600),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () =>
-                  ref.read(multiCurveViewerProvider(chartId).notifier).refresh(),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Réessayer'),
-            ),
-          ],
-        ),
+    return ChartMessage(
+      icon: Icons.error_outline_rounded,
+      tone: context.dc.danger,
+      message: error,
+      compact: true,
+      action: OutlinedButton.icon(
+        onPressed: () => ref.read(multiCurveViewerProvider(chartId).notifier).refresh(),
+        icon: const Icon(Icons.refresh_rounded, size: 18),
+        label: Text(AppLocalizations.of(context)!.retry),
       ),
     );
   }
@@ -790,22 +824,10 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.multiline_chart, size: 48, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              'Aucune courbe sélectionnée\nAjoutez des trend logs à comparer',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-          ],
-        ),
-      ),
+    return ChartMessage(
+      icon: Icons.stacked_line_chart_rounded,
+      message: AppLocalizations.of(context)!.chartNoCurveSelected,
+      compact: true,
     );
   }
 }
@@ -814,9 +836,3 @@ class _EmptyState extends StatelessWidget {
 // Utilitaires
 // =============================================================================
 
-String _formatValue(double value) {
-  if (value == value.truncateToDouble()) {
-    return value.toInt().toString();
-  }
-  return value.toStringAsFixed(2);
-}

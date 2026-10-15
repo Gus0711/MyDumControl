@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/dc_tokens.dart';
+
 /// Widget shimmer pour effet de chargement
 class ShimmerEffect extends StatefulWidget {
   final Widget child;
@@ -26,11 +28,11 @@ class _ShimmerEffectState extends State<ShimmerEffect>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1600),
       vsync: this,
     )..repeat();
 
-    _animation = Tween<double>(begin: -2, end: 2).animate(
+    _animation = Tween<double>(begin: -1.5, end: 1.5).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOutSine),
     );
   }
@@ -43,12 +45,10 @@ class _ShimmerEffectState extends State<ShimmerEffect>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final baseColor = widget.baseColor ??
-        (isDark ? const Color(0xFF23262E) : const Color(0xFFE0E0E0));
+    final dc = context.dc;
+    final baseColor = widget.baseColor ?? dc.surfaceSunken;
     final highlightColor = widget.highlightColor ??
-        (isDark ? const Color(0xFF2E3440) : const Color(0xFFF5F5F5));
+        Color.lerp(dc.surfaceSunken, dc.borderStrong, dc.isDark ? 0.55 : 0.35)!;
 
     return AnimatedBuilder(
       animation: _animation,
@@ -56,18 +56,10 @@ class _ShimmerEffectState extends State<ShimmerEffect>
         return ShaderMask(
           shaderCallback: (bounds) {
             return LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                baseColor,
-                highlightColor,
-                baseColor,
-              ],
-              stops: [
-                0.0,
-                0.5 + (_animation.value * 0.2),
-                1.0,
-              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [baseColor, highlightColor, baseColor],
+              stops: const [0.35, 0.5, 0.65],
               transform: _SlidingGradientTransform(_animation.value),
             ).createShader(bounds);
           },
@@ -90,46 +82,68 @@ class _SlidingGradientTransform extends GradientTransform {
   }
 }
 
-/// Skeleton pour une carte du dashboard
+/// Bloc gris arrondi (ligne de texte, icône…) d'un squelette.
+class _Bone extends StatelessWidget {
+  final double? width;
+  final double height;
+  final double radius;
+
+  const _Bone({this.width, required this.height, this.radius = 4});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: context.dc.surfaceSunken,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
+/// Cadre de carte (surface + bordure) contenant des os de squelette.
+class _SkeletonCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _SkeletonCard({required this.child, this.padding = const EdgeInsets.all(16)});
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: dc.surface,
+        borderRadius: BorderRadius.circular(DcRadius.lg),
+        border: Border.all(color: dc.border),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Skeleton d'une tuile de module de l'accueil
 class DashboardCardSkeleton extends StatelessWidget {
   const DashboardCardSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return ShimmerEffect(
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF23262E) : const Color(0xFFE8E8E8),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Stack(
+    return const _SkeletonCard(
+      child: ShimmerEffect(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Cercle pour l'icône
-            Center(
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark ? const Color(0xFF2E3440) : const Color(0xFFD0D0D0),
-                ),
-              ),
-            ),
-            // Barre pour le titre
-            Positioned(
-              bottom: 14,
-              left: 14,
-              right: 40,
-              child: Container(
-                height: 14,
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF2E3440) : const Color(0xFFD0D0D0),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
+            _Bone(width: 44, height: 44, radius: 12),
+            SizedBox(height: 16),
+            _Bone(width: 110, height: 14),
+            SizedBox(height: 8),
+            _Bone(height: 10),
+            SizedBox(height: 5),
+            _Bone(width: 140, height: 10),
           ],
         ),
       ),
@@ -137,7 +151,8 @@ class DashboardCardSkeleton extends StatelessWidget {
   }
 }
 
-/// Grille de skeleton pour le dashboard
+/// Squelette de l'accueil d'un automate pendant la connexion : reprend la
+/// mise en page de l'accueil (en-tête, indicateurs, modules).
 class DashboardSkeletonGrid extends StatelessWidget {
   final int itemCount;
   final String? statusMessage;
@@ -152,177 +167,186 @@ class DashboardSkeletonGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth.clamp(0.0, DcSpace.contentMaxWidth) - 40;
+              final kpiColumns = width >= 860 ? 4 : 2;
+              final moduleColumns = width >= 1000 ? 4 : (width >= 640 ? 3 : (width >= 380 ? 2 : 1));
+              const spacing = 14.0;
+              final kpiWidth = (width - spacing * (kpiColumns - 1)) / kpiColumns;
+              final moduleWidth = (width - spacing * (moduleColumns - 1)) / moduleColumns;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  const Color(0xFF111318),
-                  const Color(0xFF151922),
-                  const Color(0xFF111318),
-                ]
-              : [
-                  const Color(0xFFF5F7FA),
-                  const Color(0xFFE8ECF2),
-                  const Color(0xFFF0F4F8),
-                ],
-          stops: const [0.0, 0.5, 1.0],
-        ),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          int crossAxisCount = 2;
-          if (constraints.maxWidth > 600) crossAxisCount = 3;
-          if (constraints.maxWidth > 900) crossAxisCount = 4;
-
-          final padding = 24.0;
-          final spacing = 24.0;
-          final statusHeight = statusMessage != null ? 80.0 : 0.0;
-          final availableWidth = constraints.maxWidth - (padding * 2);
-          final availableHeight = constraints.maxHeight - (padding * 2) - statusHeight;
-          final rows = (itemCount / crossAxisCount).ceil();
-
-          final maxCardWidth =
-              (availableWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
-          final maxCardHeight = (availableHeight - (spacing * (rows - 1))) / rows;
-          final cardSize = maxCardWidth < maxCardHeight ? maxCardWidth : maxCardHeight;
-
-          return Column(
-            children: [
-              // Grille de skeletons
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.all(padding),
-                  child: Center(
-                    child: Wrap(
-                      spacing: spacing,
-                      runSpacing: spacing,
-                      alignment: WrapAlignment.center,
-                      children: List.generate(
-                        itemCount,
-                        (index) => SizedBox(
-                          width: cardSize.clamp(120.0, 180.0),
-                          height: cardSize.clamp(120.0, 180.0),
-                          child: _AnimatedSkeletonCard(index: index),
-                        ),
+              return SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: DcSpace.contentMaxWidth),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // En-tête de l'automate
+                          const _SkeletonCard(
+                            padding: EdgeInsets.all(18),
+                            child: ShimmerEffect(
+                              child: Row(
+                                children: [
+                                  _Bone(width: 56, height: 56, radius: 16),
+                                  SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        _Bone(width: 220, height: 20, radius: 5),
+                                        SizedBox(height: 14),
+                                        Row(
+                                          children: [
+                                            _Bone(width: 130, height: 20, radius: 6),
+                                            SizedBox(width: 6),
+                                            _Bone(width: 110, height: 20, radius: 6),
+                                            SizedBox(width: 6),
+                                            _Bone(width: 60, height: 20, radius: 6),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: spacing),
+                          // Indicateurs
+                          Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: List.generate(
+                              4,
+                              (_) => SizedBox(
+                                width: kpiWidth,
+                                child: const _SkeletonCard(
+                                  padding: EdgeInsets.fromLTRB(14, 12, 14, 12),
+                                  child: ShimmerEffect(
+                                    child: Row(
+                                      children: [
+                                        _Bone(width: 36, height: 36, radius: 10),
+                                        SizedBox(width: 12),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            _Bone(width: 48, height: 20, radius: 5),
+                                            SizedBox(height: 6),
+                                            _Bone(width: 80, height: 10),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+                          const _Bone(width: 70, height: 10),
+                          const SizedBox(height: 14),
+                          // Modules
+                          Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: List.generate(
+                              itemCount,
+                              (index) => SizedBox(
+                                width: moduleWidth,
+                                child: _AnimatedSkeletonCard(index: index),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ),
-              // Message de statut
-              if (statusMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: _StatusIndicator(
-                    message: statusMessage!,
-                    deviceName: deviceName,
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
+              );
+            },
+          ),
+        ),
+        // Message de statut
+        if (statusMessage != null)
+          _StatusIndicator(
+            message: statusMessage!,
+            deviceName: deviceName,
+          ),
+      ],
     );
   }
 }
 
-/// Indicateur de statut animé
-class _StatusIndicator extends StatefulWidget {
+/// Barre de statut de la connexion (progression + message + automate)
+class _StatusIndicator extends StatelessWidget {
   final String message;
   final String? deviceName;
 
   const _StatusIndicator({required this.message, this.deviceName});
 
   @override
-  State<_StatusIndicator> createState() => _StatusIndicatorState();
-}
-
-class _StatusIndicatorState extends State<_StatusIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dc = context.dc;
+    final textTheme = Theme.of(context).textTheme;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Indicateur de progression animé
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List.generate(3, (index) {
-                    final delay = index * 0.2;
-                    final value = ((_controller.value + delay) % 1.0);
-                    final opacity = (value < 0.5 ? value : 1.0 - value) * 2;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: Opacity(
-                        opacity: 0.3 + (opacity * 0.7),
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isDark
-                                ? const Color(0xFF5E92F3)
-                                : const Color(0xFF1565C0),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                );
-              },
-            ),
-            const SizedBox(width: 12),
-            Text(
-              widget.message,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white70 : Colors.grey.shade700,
-              ),
-            ),
-          ],
-        ),
-        if (widget.deviceName != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            widget.deviceName!,
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.white38 : Colors.grey.shade500,
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: dc.surface,
+        border: Border(top: BorderSide(color: dc.border)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const LinearProgressIndicator(minHeight: 2),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    message,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: dc.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (deviceName != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text('·', style: textTheme.bodyMedium?.copyWith(color: dc.textMuted)),
+                  ),
+                  Flexible(
+                    child: Text(
+                      deviceName!,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(color: dc.textSecondary),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 }
@@ -355,7 +379,7 @@ class _AnimatedSkeletonCardState extends State<_AnimatedSkeletonCard>
     );
 
     // Délai décalé pour effet cascade
-    Future.delayed(Duration(milliseconds: 50 * widget.index), () {
+    Future.delayed(Duration(milliseconds: 40 * widget.index), () {
       if (mounted) {
         _controller.forward();
       }
@@ -396,47 +420,23 @@ class ListItemSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = isDark ? const Color(0xFF23262E) : const Color(0xFFE8E8E8);
-
     return ShimmerEffect(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             if (showAvatar) ...[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: baseColor,
-                ),
-              ),
+              const _Bone(width: 40, height: 40, radius: 10),
               const SizedBox(width: 16),
             ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    height: 14,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: baseColor,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
+                  const _Bone(width: double.infinity, height: 14),
                   if (showSubtitle) ...[
                     const SizedBox(height: 8),
-                    Container(
-                      height: 12,
-                      width: 150,
-                      decoration: BoxDecoration(
-                        color: baseColor,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
+                    const _Bone(width: 150, height: 12),
                   ],
                 ],
               ),

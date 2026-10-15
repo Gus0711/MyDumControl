@@ -3,12 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/providers/dashboard_provider.dart';
 import '../../../application/providers/multi_curve_provider.dart';
+import '../../../application/providers/trend_log_provider.dart';
 import '../../../data/database/app_database.dart';
 import '../../../data/database/tables/dashboard_tables.dart';
 import '../../widgets/gradient_app_bar.dart';
 import '../../widgets/curve_selection_dialog.dart';
 import 'widgets/dashboard_widget_card.dart';
 import 'widgets/add_widget_dialog.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../widgets/confirm_dialog.dart';
+import '../../widgets/ui/ui.dart';
+import 'dashboard_list_screen.dart' show DashboardGridPreview;
 
 /// Écran affichant un dashboard avec sa grille de widgets
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -21,26 +26,32 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  static const double _gridPadding = 16;
+  static const double _gridGap = 14;
+
   @override
   Widget build(BuildContext context) {
     final dashboardAsync = ref.watch(watchDashboardByIdProvider(widget.dashboardId));
     final widgetsAsync = ref.watch(dashboardWidgetsProvider(widget.dashboardId));
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: dashboardAsync.when(
         data: (dashboard) => GradientAppBar(
-          title: dashboard?.name ?? 'Dashboard',
+          title: dashboard?.name ?? l10n.dashboard,
+          subtitle: dashboard != null ? l10n.dashboardGridSize(dashboard.columns, dashboard.rows) : null,
           actions: [
             // Rafraîchir
             IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Rafraîchir',
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: l10n.refresh,
               onPressed: () {
                 ref.invalidate(dashboardWidgetsProvider(widget.dashboardId));
               },
             ),
             // Menu
             PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded),
               onSelected: (value) async {
                 switch (value) {
                   case 'settings':
@@ -52,45 +63,71 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'settings',
-                  child: ListTile(
-                    leading: Icon(Icons.settings),
-                    title: Text('Paramètres'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: ListTile(
-                    leading: Icon(Icons.delete, color: Colors.red),
-                    title: Text('Supprimer', style: TextStyle(color: Colors.red)),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
+                dcMenuItem(context, 'settings', Icons.tune_rounded, l10n.settings),
+                const PopupMenuDivider(),
+                dcMenuItem(context, 'delete', Icons.delete_outline_rounded, l10n.delete, danger: true),
               ],
             ),
           ],
         ),
-        loading: () => const GradientAppBar(title: 'Chargement...'),
-        error: (_, __) => const GradientAppBar(title: 'Erreur'),
+        loading: () => GradientAppBar(title: l10n.loading),
+        error: (_, _) => GradientAppBar(title: l10n.error),
       ),
       body: dashboardAsync.when(
         data: (dashboard) {
           if (dashboard == null) {
-            return const Center(child: Text('Dashboard introuvable'));
+            return DcEmptyState(
+              icon: Icons.search_off_rounded,
+              title: l10n.dashboardNotFound,
+              action: OutlinedButton.icon(
+                onPressed: () => context.pop(),
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: Text(l10n.back),
+              ),
+            );
           }
 
           return widgetsAsync.when(
             data: (widgets) => _buildGrid(context, dashboard, widgets),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(child: Text('Erreur: $error')),
+            loading: () => const DcLoading(),
+            error: (error, _) => DcEmptyState.error(context, title: l10n.error, message: '$error'),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Erreur: $error')),
+        loading: () => const DcLoading(),
+        error: (error, _) => DcEmptyState.error(context, title: l10n.error, message: '$error'),
       ),
     );
+  }
+
+  /// Refreshes the data of every chart/stats widget (deduplicated per trend log).
+  Future<void> _refreshAll(List<DashboardWidget> widgets) async {
+    final futures = <Future<void>>[];
+    final seen = <int>{};
+    for (final w in widgets) {
+      switch (w.widgetType) {
+        case DashboardWidgetType.singleTrendChart:
+          final c = SingleChartWidgetConfig.fromJsonString(w.configJson);
+          if (c != null && seen.add(c.trendLogInstance)) {
+            futures.add(ref.read(trendLogViewerProvider(c.trendLogInstance).notifier).refresh());
+          }
+          break;
+        case DashboardWidgetType.statsCard:
+          final c = StatsWidgetConfig.fromJsonString(w.configJson);
+          if (c != null && seen.add(c.trendLogInstance)) {
+            futures.add(ref.read(trendLogViewerProvider(c.trendLogInstance).notifier).refresh());
+          }
+          break;
+        case DashboardWidgetType.multiCurveChart:
+          futures.add(ref.read(multiCurveViewerProvider('dashboard_widget_${w.id}').notifier).refresh());
+          break;
+      }
+    }
+    await Future.wait(futures.map((f) => f.catchError((_) {})));
+  }
+
+  /// Disposes a dialog controller once the closing animation is over.
+  void _disposeLater(TextEditingController controller) {
+    Future.delayed(const Duration(milliseconds: 400), controller.dispose);
   }
 
   Widget _buildGrid(BuildContext context, Dashboard dashboard, List<DashboardWidget> widgets) {
@@ -103,16 +140,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(dashboardWidgetsProvider(widget.dashboardId));
-      },
+      onRefresh: () => _refreshAll(widgets),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(_gridPadding),
         child: GridView.builder(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: dashboard.columns,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
+            mainAxisSpacing: _gridGap,
+            crossAxisSpacing: _gridGap,
             childAspectRatio: _calculateAspectRatio(context, dashboard),
           ),
           itemCount: totalSlots,
@@ -136,8 +171,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final screenHeight = MediaQuery.of(context).size.height;
     final availableHeight = screenHeight - 200; // AppBar + padding
 
-    final cellWidth = (screenWidth - 32 - (dashboard.columns - 1) * 12) / dashboard.columns;
-    final cellHeight = (availableHeight - (dashboard.rows - 1) * 12) / dashboard.rows;
+    final cellWidth = (screenWidth - 2 * _gridPadding - (dashboard.columns - 1) * _gridGap) / dashboard.columns;
+    final cellHeight = (availableHeight - (dashboard.rows - 1) * _gridGap) / dashboard.rows;
 
     // Limiter pour éviter des widgets trop grands ou trop petits
     final ratio = (cellWidth / cellHeight).clamp(0.8, 2.0);
@@ -160,46 +195,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _buildEmptySlot(BuildContext context, Dashboard dashboard, int position) {
-    return Card(
-      elevation: 0,
-      color: Colors.grey.withAlpha(20),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: Colors.grey.withAlpha(50),
-          width: 2,
-          strokeAlign: BorderSide.strokeAlignInside,
-        ),
-      ),
-      child: InkWell(
-        onTap: () => _addWidget(context, dashboard, position),
-        borderRadius: BorderRadius.circular(16),
-        child: Builder(
-          builder: (context) {
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.add_circle_outline,
-                    size: 40,
-                    color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Ajouter',
-                    style: TextStyle(
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
+    return _EmptySlot(
+      label: AppLocalizations.of(context)!.add,
+      onTap: () => _addWidget(context, dashboard, position),
     );
   }
 
@@ -236,7 +234,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           createdAt: DateTime.now(),
         );
 
-        if (mounted) {
+        if (context.mounted) {
           await _configureWidget(context, dashboard, tempWidget);
         }
       }
@@ -266,7 +264,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // Récupérer la liste des trend logs disponibles
     final trendLogs = await ref.read(availableTrendLogsProvider.future);
 
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     final currentConfig = widgetData.configJson != null
         ? SingleChartWidgetConfig.fromJsonString(widgetData.configJson)
@@ -314,7 +312,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<void> _configureStatsCard(BuildContext context, DashboardWidget widgetData) async {
     final trendLogs = await ref.read(availableTrendLogsProvider.future);
 
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     final currentConfig = widgetData.configJson != null
         ? StatsWidgetConfig.fromJsonString(widgetData.configJson)
@@ -338,23 +336,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _deleteWidget(DashboardWidget widgetData) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Supprimer le widget ?'),
-        content: const Text('Ce widget sera supprimé du tableau de bord.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.dashboardDeleteWidgetConfirm,
+      message: l10n.dashboardDeleteWidgetMessage,
+      confirmLabel: l10n.delete,
+      destructive: true,
     );
 
     if (confirmed == true && mounted) {
@@ -383,34 +371,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
 
     final controller = TextEditingController(text: currentTitle);
+    final l10n = AppLocalizations.of(context)!;
 
     final newTitle = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Modifier le titre'),
+        title: Text(l10n.dashboardEditTitle),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Titre',
-            hintText: 'Laisser vide pour le titre par défaut',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.dashboardTitleLabel,
+            hintText: l10n.dashboardTitleHint,
+            prefixIcon: const Icon(Icons.title_rounded, size: 20),
           ),
           autofocus: true,
           textCapitalization: TextCapitalization.sentences,
+          onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Annuler'),
+            child: Text(l10n.cancel),
           ),
-          ElevatedButton(
+          FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Enregistrer'),
+            child: Text(l10n.save),
           ),
         ],
       ),
     );
 
+    _disposeLater(controller);
     if (newTitle == null || !mounted) return;
 
     // Mettre à jour la config avec le nouveau titre
@@ -471,75 +462,73 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final nameController = TextEditingController(text: dashboard.name);
     int columns = dashboard.columns;
     int rows = dashboard.rows;
+    final l10n = AppLocalizations.of(context)!;
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Paramètres du dashboard'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nom',
-                  border: OutlineInputBorder(),
+          title: Text(l10n.dashboardSettingsTitle),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: l10n.name,
+                    prefixIcon: const Icon(Icons.insights_rounded, size: 20),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text('Colonnes: '),
-                  IconButton(
-                    icon: const Icon(Icons.remove),
-                    onPressed: columns > 1
-                        ? () => setDialogState(() => columns--)
-                        : null,
-                  ),
-                  Text('$columns'),
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: columns < 4
-                        ? () => setDialogState(() => columns++)
-                        : null,
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  const Text('Lignes: '),
-                  IconButton(
-                    icon: const Icon(Icons.remove),
-                    onPressed: rows > 1 ? () => setDialogState(() => rows--) : null,
-                  ),
-                  Text('$rows'),
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: rows < 4 ? () => setDialogState(() => rows++) : null,
-                  ),
-                ],
-              ),
-            ],
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _CounterRow(
+                            label: l10n.dashboardColumns,
+                            value: columns,
+                            onDecrement: columns > 1 ? () => setDialogState(() => columns--) : null,
+                            onIncrement: columns < 4 ? () => setDialogState(() => columns++) : null,
+                          ),
+                          const SizedBox(height: 10),
+                          _CounterRow(
+                            label: l10n.dashboardRows,
+                            value: rows,
+                            onDecrement: rows > 1 ? () => setDialogState(() => rows--) : null,
+                            onIncrement: rows < 4 ? () => setDialogState(() => rows++) : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    DashboardGridPreview(columns: columns, rows: rows, size: 72),
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Annuler'),
+              child: Text(l10n.cancel),
             ),
-            ElevatedButton(
+            FilledButton(
               onPressed: () => Navigator.of(context).pop({
                 'name': nameController.text.trim(),
                 'columns': columns,
                 'rows': rows,
               }),
-              child: const Text('Enregistrer'),
+              child: Text(l10n.save),
             ),
           ],
         ),
       ),
     );
 
+    _disposeLater(nameController);
     if (result != null && mounted) {
       await ref.read(dashboardNotifierProvider.notifier).updateDashboard(
             id: dashboard.id,
@@ -551,30 +540,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Supprimer le tableau de bord ?'),
-        content: const Text(
-          'Ce tableau de bord et tous ses widgets seront supprimés définitivement.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.deleteDashboardConfirm,
+      message: l10n.dashboardDeletePermanentMessage,
+      confirmLabel: l10n.delete,
+      destructive: true,
     );
 
     if (confirmed == true && mounted) {
       await ref.read(dashboardNotifierProvider.notifier).deleteDashboard(widget.dashboardId);
-      if (mounted) {
+      if (context.mounted) {
         context.pop();
       }
     }
@@ -616,43 +593,63 @@ class _TrendLogSelectionDialogState extends State<_TrendLogSelectionDialog> {
       return tl.pointKey.toLowerCase().contains(searchLower) ||
           (tl.pointName?.toLowerCase().contains(searchLower) ?? false);
     }).toList();
+    final l10n = AppLocalizations.of(context)!;
+
+    final dc = context.dc;
 
     return AlertDialog(
-      title: const Text('Sélectionner un trend log'),
+      icon: const Icon(Icons.show_chart_rounded),
+      title: Text(l10n.selectTrendLog),
       content: SizedBox(
-        width: 400,
-        height: 400,
+        width: 440,
+        height: 420,
         child: Column(
           children: [
             TextField(
-              decoration: const InputDecoration(
-                hintText: 'Rechercher...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: l10n.dashboardSearchHint,
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 isDense: true,
               ),
               onChanged: (value) => setState(() => _search = value),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Expanded(
-              child: ListView.builder(
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final tl = filtered[index];
-                  final isSelected = _selected == tl.instance;
+              child: Container(
+                decoration: BoxDecoration(
+                  color: dc.surfaceSunken,
+                  borderRadius: BorderRadius.circular(DcRadius.md),
+                  border: Border.all(color: dc.border),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: RadioGroup<int>(
+                  groupValue: _selected,
+                  onChanged: (value) => setState(() => _selected = value),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(4),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final tl = filtered[index];
+                      final isSelected = _selected == tl.instance;
 
-                  return ListTile(
-                    title: Text(tl.pointName ?? tl.pointKey),
-                    subtitle: Text('TL ${tl.instance}'),
-                    selected: isSelected,
-                    leading: Radio<int>(
-                      value: tl.instance,
-                      groupValue: _selected,
-                      onChanged: (value) => setState(() => _selected = value),
-                    ),
-                    onTap: () => setState(() => _selected = tl.instance),
-                  );
-                },
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          tl.pointName ?? tl.pointKey,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          'TL ${tl.instance} · ${tl.pointKey}',
+                          style: AppTextStyles.monospacedValue.copyWith(fontSize: 11, color: dc.textMuted),
+                        ),
+                        selected: isSelected,
+                        leading: Radio<int>(value: tl.instance),
+                        onTap: () => setState(() => _selected = tl.instance),
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
           ],
@@ -661,11 +658,176 @@ class _TrendLogSelectionDialogState extends State<_TrendLogSelectionDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(l10n.cancel),
         ),
-        ElevatedButton(
+        FilledButton(
           onPressed: _selected != null ? () => Navigator.of(context).pop(_selected) : null,
-          child: const Text('Valider'),
+          child: Text(l10n.validate),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// Emplacement vide et compteur
+// =============================================================================
+
+/// Emplacement libre de la grille : contour pointillé, « + Ajouter ».
+class _EmptySlot extends StatefulWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _EmptySlot({required this.label, required this.onTap});
+
+  @override
+  State<_EmptySlot> createState() => _EmptySlotState();
+}
+
+class _EmptySlotState extends State<_EmptySlot> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    final color = _hover ? dc.accentTone.fg : dc.textMuted;
+    final radius = BorderRadius.circular(DcRadius.lg);
+
+    return CustomPaint(
+      foregroundPainter: _DashedBorderPainter(
+        color: _hover ? dc.accentTone.border : dc.borderStrong,
+        radius: DcRadius.lg,
+      ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        decoration: BoxDecoration(
+          color: _hover ? dc.accentTone.bg.withValues(alpha: 0.5) : dc.surfaceSunken.withValues(alpha: 0.5),
+          borderRadius: radius,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHover: (h) => setState(() => _hover = h),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _hover ? dc.accentTone.bg : dc.surface,
+                      border: Border.all(color: _hover ? dc.accentTone.border : dc.border),
+                    ),
+                    child: Icon(Icons.add_rounded, size: 22, color: color),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    widget.label,
+                    style: context.text.labelLarge?.copyWith(color: color),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bordure en pointillés arrondie.
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+
+  const _DashedBorderPainter({required this.color, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    ).deflate(0.75);
+    final path = Path()..addRRect(rrect);
+    const dash = 6.0;
+    const gap = 5.0;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        canvas.drawPath(metric.extractPath(distance, distance + dash), paint);
+        distance += dash + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
+}
+
+/// Ligne « libellé  [-] n [+] » des réglages de grille.
+class _CounterRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final VoidCallback? onDecrement;
+  final VoidCallback? onIncrement;
+
+  const _CounterRow({
+    required this.label,
+    required this.value,
+    this.onDecrement,
+    this.onIncrement,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    return Row(
+      children: [
+        Expanded(child: Text(label)),
+        Container(
+          decoration: BoxDecoration(
+            color: dc.surfaceSunken,
+            borderRadius: BorderRadius.circular(DcRadius.md),
+            border: Border.all(color: dc.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.remove_rounded, size: 18),
+                onPressed: onDecrement,
+                visualDensity: VisualDensity.compact,
+              ),
+              SizedBox(
+                width: 28,
+                child: Text(
+                  '$value',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.monospacedValue.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: dc.textPrimary,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_rounded, size: 18),
+                onPressed: onIncrement,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
         ),
       ],
     );

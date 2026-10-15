@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import '../../core/theme/dc_tokens.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Widget d'overlay de chargement avec animation élégante
 /// Affiche une animation de connexion avec des étapes progressives
@@ -68,12 +70,10 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final dc = context.dc;
 
     return Container(
-      color: isDark
-          ? Colors.black.withAlpha(200)
-          : Colors.white.withAlpha(230),
+      color: dc.canvas.withValues(alpha: 0.92),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -84,10 +84,9 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
 
             // Message principal
             Text(
-              widget.message ?? 'Connexion en cours',
+              widget.message ?? AppLocalizations.of(context)!.widgetConnecting,
               style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.primary,
+                color: dc.textPrimary,
               ),
             ),
 
@@ -105,7 +104,7 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
                 child: Text(
                   widget.subMessage!,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withAlpha(150),
+                    color: dc.textSecondary,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -174,7 +173,7 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
                     margin: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: theme.scaffoldBackgroundColor,
+                      color: context.dc.canvas,
                     ),
                   ),
                 ),
@@ -198,7 +197,7 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
               ],
             ),
             child: Icon(
-              Icons.settings_remote,
+              Icons.memory_rounded,
               size: 28,
               color: theme.colorScheme.primary,
             ),
@@ -242,11 +241,12 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
 
   Widget _buildProgressSteps(ThemeData theme) {
     // Étapes disponibles (4 au total)
+    final l10n = AppLocalizations.of(context)!;
     final allSteps = [
-      ('Connexion', Icons.wifi),
-      ('Auth', Icons.lock_open),
-      ('Données', Icons.cloud_download),
-      ('Points', Icons.list_alt),
+      (l10n.connection, Icons.wifi_rounded),
+      (l10n.widgetStepAuth, Icons.lock_open_rounded),
+      (l10n.data, Icons.cloud_download_outlined),
+      (l10n.points, Icons.format_list_bulleted_rounded),
     ];
 
     // Utiliser le nombre d'étapes demandé
@@ -268,7 +268,7 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
                 decoration: BoxDecoration(
                   color: isCompleted
                       ? theme.colorScheme.primary
-                      : theme.colorScheme.outline.withAlpha(50),
+                      : context.dc.border,
                   borderRadius: BorderRadius.circular(1),
                 ),
               ),
@@ -300,6 +300,7 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
     required bool isActive,
     required bool isCompleted,
   }) {
+    final dc = context.dc;
     Color backgroundColor;
     Color iconColor;
 
@@ -307,11 +308,11 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
       backgroundColor = theme.colorScheme.primary;
       iconColor = theme.colorScheme.onPrimary;
     } else if (isActive) {
-      backgroundColor = theme.colorScheme.primaryContainer;
-      iconColor = theme.colorScheme.primary;
+      backgroundColor = dc.accentTone.bg;
+      iconColor = dc.accentTone.fg;
     } else {
-      backgroundColor = theme.colorScheme.surfaceContainerHighest;
-      iconColor = theme.colorScheme.outline;
+      backgroundColor = dc.surfaceSunken;
+      iconColor = dc.textMuted;
     }
 
     return Column(
@@ -335,7 +336,7 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
                 : null,
           ),
           child: Icon(
-            isCompleted ? Icons.check : icon,
+            isCompleted ? Icons.check_rounded : icon,
             size: 20,
             color: iconColor,
           ),
@@ -344,11 +345,9 @@ class _ConnectionLoadingOverlayState extends State<ConnectionLoadingOverlay>
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: isActive
-                ? theme.colorScheme.primary
-                : theme.colorScheme.outline,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-            fontSize: 10,
+            color: isActive ? dc.accentTone.fg : dc.textMuted,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+            fontSize: 10.5,
           ),
         ),
       ],

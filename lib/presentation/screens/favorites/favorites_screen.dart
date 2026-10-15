@@ -7,6 +7,7 @@ import '../../../application/providers/points_provider.dart';
 import '../../../application/providers/active_connection_provider.dart';
 import '../../../application/providers/trend_log_provider.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../data/database/app_database.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
@@ -14,9 +15,30 @@ import '../../widgets/favorite_button.dart';
 import '../../widgets/favorite_folder_dialog.dart';
 import '../../widgets/assign_folders_dialog.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/point_widgets.dart';
+import '../../widgets/ui/ui.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Écran des favoris - affiche les points favoris organisés par dossiers
+/// Live points indexed by objectId (O(1) lookup per favorite tile).
+final _pointsByIdProvider = Provider<Map<String, BacnetObject>>((ref) {
+  final points = ref.watch(pointsProvider.select((s) => s.points));
+  return {for (final p in points) p.objectId: p};
+});
+
+/// favoriteId -> folders containing it, derived from the folder streams.
+final _foldersByFavoriteProvider = Provider<Map<int, List<FavoriteFolder>>>((ref) {
+  final folders = ref.watch(favoriteFoldersProvider).valueOrNull ?? const <FavoriteFolder>[];
+  final map = <int, List<FavoriteFolder>>{};
+  for (final folder in folders) {
+    final favorites = ref.watch(favoritesInFolderProvider(folder.id)).valueOrNull ?? const <Favorite>[];
+    for (final favorite in favorites) {
+      map.putIfAbsent(favorite.id, () => []).add(folder);
+    }
+  }
+  return map;
+});
+
 class FavoritesScreen extends ConsumerStatefulWidget {
   const FavoritesScreen({super.key});
 
@@ -82,7 +104,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
             : Text(l10n.favorites),
         leading: _selectionMode
             ? IconButton(
-                icon: const Icon(Icons.close),
+                icon: const Icon(Icons.close_rounded),
                 onPressed: _toggleSelectionMode,
               )
             : null,
@@ -93,8 +115,8 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               data: (allFavorites) => IconButton(
                 icon: Icon(
                   _selectedFavoriteIds.length == allFavorites.length
-                      ? Icons.deselect
-                      : Icons.select_all,
+                      ? Icons.deselect_rounded
+                      : Icons.select_all_rounded,
                 ),
                 tooltip: _selectedFavoriteIds.length == allFavorites.length
                     ? l10n.deselectAll
@@ -112,7 +134,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
           ] else ...[
             // Mode normal
             IconButton(
-              icon: const Icon(Icons.checklist),
+              icon: const Icon(Icons.checklist_rounded),
               tooltip: l10n.selectionMode,
               onPressed: _toggleSelectionMode,
             ),
@@ -122,7 +144,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               onPressed: () => _createFolder(context),
             ),
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
               tooltip: l10n.refresh,
               onPressed: () => ref.read(pointsProvider.notifier).refresh(),
             ),
@@ -134,11 +156,11 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
           : foldersAsync.when(
               data: (folders) => unassignedAsync.when(
                 data: (unassigned) => _buildContent(context, folders, unassigned),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('${l10n.error}: $e')),
+                loading: () => const DcLoading(),
+                error: (e, _) => DcEmptyState.error(context, title: l10n.error, message: '$e'),
               ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('${l10n.error}: $e')),
+              loading: () => const DcLoading(),
+              error: (e, _) => DcEmptyState.error(context, title: l10n.error, message: '$e'),
             ),
       // Barre d'actions en bas quand sélection active
       bottomNavigationBar: _selectionMode && _selectedFavoriteIds.isNotEmpty
@@ -149,39 +171,38 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
   Widget _buildSelectionActions(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(20),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        color: dc.surface,
+        border: Border(top: BorderSide(color: dc.border)),
+        boxShadow: dc.raisedShadow,
       ),
       child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
+        child: DcContent(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.selectedCount(_selectedFavoriteIds.length),
+                  style: context.text.bodyMedium?.copyWith(color: dc.textSecondary),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _deleteSelected(context),
+                icon: Icon(Icons.delete_outline_rounded, color: dc.danger.fg),
+                label: Text(l10n.delete, style: TextStyle(color: dc.danger.fg)),
+                style: OutlinedButton.styleFrom(side: BorderSide(color: dc.danger.border)),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
                 onPressed: () => _assignSelectedToFolders(context),
-                icon: const Icon(Icons.folder),
+                icon: const Icon(Icons.drive_file_move_outline),
                 label: Text(l10n.assignToFolders),
               ),
-            ),
-            const SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: () => _deleteSelected(context),
-              icon: const Icon(Icons.delete),
-              label: Text(l10n.delete),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -193,9 +214,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     final folders = foldersAsync.valueOrNull ?? [];
 
     if (folders.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.createFolderFirst)),
-      );
+      context.showInfo(l10n.createFolderFirst);
       return;
     }
 
@@ -207,21 +226,16 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
     if (selectedFolderIds != null && selectedFolderIds.isNotEmpty) {
       final notifier = ref.read(favoriteFoldersNotifierProvider.notifier);
-      for (final favoriteId in _selectedFavoriteIds) {
+      final ids = _selectedFavoriteIds.toList(); // snapshot: the set may change during awaits
+      for (final favoriteId in ids) {
         // Ajouter aux dossiers sélectionnés (sans retirer des autres)
         for (final folderId in selectedFolderIds) {
           await notifier.assignToFolder(favoriteId, folderId);
         }
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              l10n.favoritesAssigned(_selectedFavoriteIds.length, selectedFolderIds.length),
-            ),
-          ),
-        );
+      if (context.mounted) {
+        context.showSuccess(l10n.favoritesAssigned(ids.length, selectedFolderIds.length));
         _toggleSelectionMode();
       }
     }
@@ -241,11 +255,11 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: Text(l10n.cancel),
           ),
-          ElevatedButton(
+          FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+            style: FilledButton.styleFrom(
+              backgroundColor: context.dc.danger.fg,
+              foregroundColor: context.dc.onSolid,
             ),
             child: Text(l10n.delete),
           ),
@@ -255,16 +269,13 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
     if (confirmed == true) {
       final notifier = ref.read(favoritesNotifierProvider.notifier);
-      for (final favoriteId in _selectedFavoriteIds) {
+      final ids = _selectedFavoriteIds.toList(); // snapshot: the set may change during awaits
+      for (final favoriteId in ids) {
         await notifier.removeFavoriteById(favoriteId);
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.favoritesDeleted(_selectedFavoriteIds.length)),
-          ),
-        );
+      if (context.mounted) {
+        context.showSuccess(l10n.favoritesDeleted(ids.length));
         _toggleSelectionMode();
       }
     }
@@ -272,24 +283,10 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
   Widget _buildNotConnected(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.cloud_off, size: 64, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            l10n.notConnected,
-            style: TextStyle(fontSize: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.connectToViewFavorites,
-            style: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey.shade500),
-          ),
-        ],
-      ),
+    return DcEmptyState(
+      icon: Icons.cloud_off_rounded,
+      title: l10n.notConnected,
+      message: l10n.connectToViewFavorites,
     );
   }
 
@@ -307,10 +304,10 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     return RefreshIndicator(
       onRefresh: () => ref.read(pointsProvider.notifier).refresh(),
       child: ReorderableListView(
-        padding: EdgeInsets.only(bottom: _selectionMode ? 100 : 80),
-        onReorder: (oldIndex, newIndex) {
+        padding: EdgeInsets.only(top: 8, bottom: _selectionMode ? 100 : 80),
+        // onReorderItem: newIndex is already adjusted for the removed item
+        onReorderItem: (oldIndex, newIndex) {
           if (_selectionMode) return; // Pas de réordonnancement en mode sélection
-          if (newIndex > oldIndex) newIndex--;
           final folderIds = folders.map((f) => f.id).toList();
           if (oldIndex < folderIds.length && newIndex <= folderIds.length) {
             final movedId = folderIds.removeAt(oldIndex);
@@ -320,8 +317,10 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         },
         children: [
           // Dossiers
-          ...folders.map((folder) => _FolderSection(
+          for (final (index, folder) in folders.indexed)
+            _FolderSection(
                 key: ValueKey('folder_${folder.id}'),
+                index: index,
                 folder: folder,
                 isExpanded: _expandedFolders.contains(folder.id),
                 onToggle: () => setState(() {
@@ -337,7 +336,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                 selectedIds: _selectedFavoriteIds,
                 onToggleSelection: _toggleFavoriteSelection,
                 onAssignFavorite: (favoriteId, folderId) => _assignFavoriteToFolder(context, favoriteId, folderId),
-              )),
+              ),
 
           // Favoris sans dossier
           if (unassigned.isNotEmpty)
@@ -359,32 +358,15 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
 
   Widget _buildEmptyState(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.star_border, size: 80, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
-          const SizedBox(height: 24),
-          Text(
-            l10n.noFavorite,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.addFavoritesHint,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade500),
-          ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: () => GoRouter.of(context).push(Routes.points),
-            icon: const Icon(Icons.list_alt),
-            label: Text(l10n.viewPoints),
-          ),
-        ],
+    return DcEmptyState(
+      icon: Icons.star_outline_rounded,
+      tone: context.dc.toneOf(AppColors.multiStateOutput),
+      title: l10n.noFavorite,
+      message: l10n.addFavoritesHint,
+      action: FilledButton.icon(
+        onPressed: () => GoRouter.of(context).push(Routes.points),
+        icon: const Icon(Icons.format_list_bulleted_rounded),
+        label: Text(l10n.viewPoints),
       ),
     );
   }
@@ -420,10 +402,11 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   Future<void> _assignFavoriteToFolder(BuildContext context, int favoriteId, int folderId) async {
     final l10n = AppLocalizations.of(context)!;
     final success = await ref.read(favoriteFoldersNotifierProvider.notifier).assignToFolder(favoriteId, folderId);
-    if (success && mounted) {
+    if (success && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.favoriteAddedToFolder),
+        dcSnackBar(
+          l10n.favoriteAddedToFolder,
+          color: AppSnackColors.success,
           duration: const Duration(seconds: 1),
         ),
       );
@@ -444,11 +427,11 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: Text(l10n.cancel),
           ),
-          ElevatedButton(
+          FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+            style: FilledButton.styleFrom(
+              backgroundColor: context.dc.danger.fg,
+              foregroundColor: context.dc.onSolid,
             ),
             child: Text(l10n.delete),
           ),
@@ -463,8 +446,70 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   }
 }
 
+/// Couleur d'un dossier (#RRGGBB), bleu par défaut.
+Color _parseFolderColor(String hex) {
+  try {
+    final hexCode = hex.replaceFirst('#', '');
+    return Color(int.parse('FF$hexCode', radix: 16));
+  } catch (e) {
+    return AppColors.brandSky;
+  }
+}
+
+/// Icône d'un dossier d'après son nom enregistré.
+IconData _folderIconData(String iconName) {
+  final entry = folderIcons.cast<(String, IconData)?>().firstWhere(
+        (e) => e?.$1 == iconName,
+        orElse: () => null,
+      );
+  return entry?.$2 ?? Icons.folder_rounded;
+}
+
+/// Cadre d'une section (dossier ou « sans dossier ») : surface bordée.
+class _SectionFrame extends StatelessWidget {
+  final Widget header;
+  final List<Widget> rows;
+  final DcTone? highlight;
+
+  const _SectionFrame({required this.header, required this.rows, this.highlight});
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    return DcContent(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          color: highlight != null ? Color.alphaBlend(highlight!.bg, dc.surface) : dc.surface,
+          borderRadius: BorderRadius.circular(DcRadius.lg),
+          border: Border.all(color: highlight?.fg ?? dc.border, width: highlight != null ? 1.5 : 1),
+          boxShadow: dc.cardShadow,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: BorderRadius.circular(DcRadius.lg),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              if (rows.isNotEmpty) ...[
+                const Divider(height: 1),
+                ...rows,
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Section d'un dossier de favoris
 class _FolderSection extends ConsumerWidget {
+  /// Position dans la liste réordonnable (poignée de déplacement).
+  final int index;
   final FavoriteFolder folder;
   final bool isExpanded;
   final VoidCallback onToggle;
@@ -477,6 +522,7 @@ class _FolderSection extends ConsumerWidget {
 
   const _FolderSection({
     super.key,
+    required this.index,
     required this.folder,
     required this.isExpanded,
     required this.onToggle,
@@ -488,195 +534,125 @@ class _FolderSection extends ConsumerWidget {
     required this.onAssignFavorite,
   });
 
-  Color _parseColor(String hex) {
-    try {
-      final hexCode = hex.replaceFirst('#', '');
-      return Color(int.parse('FF$hexCode', radix: 16));
-    } catch (e) {
-      return Colors.blue;
-    }
-  }
-
-  IconData _getIconData(String iconName) {
-    final entry = folderIcons.cast<(String, IconData)?>().firstWhere(
-          (e) => e?.$1 == iconName,
-          orElse: () => null,
-        );
-    return entry?.$2 ?? Icons.folder;
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
     final favoritesAsync = ref.watch(favoritesInFolderProvider(folder.id));
-    final color = _parseColor(folder.color);
-    final icon = _getIconData(folder.icon);
+    final tone = dc.toneOf(_parseFolderColor(folder.color));
+    final icon = _folderIconData(folder.icon);
 
     return favoritesAsync.when(
-      data: (favorites) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // En-tête du dossier avec DragTarget
-          DragTarget<int>(
-            onWillAcceptWithDetails: (details) => true,
-            onAcceptWithDetails: (details) {
-              onAssignFavorite(details.data, folder.id);
-            },
-            builder: (context, candidateData, rejectedData) {
-              final isHovering = candidateData.isNotEmpty;
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: isHovering ? color.withAlpha(30) : Colors.transparent,
-                  border: isHovering
-                      ? Border.all(color: color, width: 2)
-                      : null,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                margin: isHovering
-                    ? const EdgeInsets.symmetric(horizontal: 4, vertical: 2)
-                    : EdgeInsets.zero,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: onToggle,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Row(
+      data: (favorites) => DragTarget<int>(
+        onWillAcceptWithDetails: (details) => true,
+        onAcceptWithDetails: (details) {
+          onAssignFavorite(details.data, folder.id);
+        },
+        builder: (context, candidateData, rejectedData) {
+          final isHovering = candidateData.isNotEmpty;
+          return _SectionFrame(
+            highlight: isHovering ? tone : null,
+            header: InkWell(
+              onTap: onToggle,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+                child: Row(
+                  children: [
+                    // Handle drag
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.grab,
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(Icons.drag_indicator_rounded, color: dc.textMuted, size: 20),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // Icône du dossier
+                    AnimatedScale(
+                      scale: isHovering ? 1.12 : 1.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: DcIconBox(icon: icon, tone: tone, size: 38),
+                    ),
+                    const SizedBox(width: 12),
+                    // Nom et compteur
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Handle drag
-                          ReorderableDragStartListener(
-                            index: 0,
-                            child: Icon(Icons.drag_handle, color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade600 : Colors.grey.shade400, size: 20),
+                          Text(
+                            folder.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.text.titleMedium,
                           ),
-                          const SizedBox(width: 8),
-                          // Icône du dossier
-                          AnimatedScale(
-                            scale: isHovering ? 1.2 : 1.0,
-                            duration: const Duration(milliseconds: 200),
-                            child: Icon(icon, color: color, size: 28),
-                          ),
-                          const SizedBox(width: 12),
-                          // Nom et compteur
-                          Expanded(
-                            child: Builder(
-                              builder: (context) {
-                                final l10n = AppLocalizations.of(context)!;
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      folder.name,
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                    Builder(
-                                      builder: (ctx) {
-                                        final isDark = Theme.of(ctx).brightness == Brightness.dark;
-                                        return Text(
-                                          isHovering
-                                              ? l10n.dropHereToAdd
-                                              : l10n.favoritesCount(favorites.length),
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isHovering ? color : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                                            fontWeight: isHovering ? FontWeight.w500 : FontWeight.normal,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                );
-                              },
+                          Text(
+                            isHovering ? l10n.dropHereToAdd : l10n.favoritesCount(favorites.length),
+                            style: context.text.bodySmall?.copyWith(
+                              color: isHovering ? tone.fg : dc.textMuted,
+                              fontWeight: isHovering ? FontWeight.w600 : null,
                             ),
-                          ),
-                          // Menu actions
-                          PopupMenuButton<String>(
-                            onSelected: (value) {
-                              switch (value) {
-                                case 'edit':
-                                  onEdit();
-                                  break;
-                                case 'delete':
-                                  onDelete();
-                                  break;
-                              }
-                            },
-                            itemBuilder: (context) {
-                              final l10n = AppLocalizations.of(context)!;
-                              return [
-                                PopupMenuItem(
-                                  value: 'edit',
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.edit, size: 20),
-                                      const SizedBox(width: 8),
-                                      Text(l10n.editFolder),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.delete, size: 20, color: Colors.red),
-                                      const SizedBox(width: 8),
-                                      Text(l10n.deleteFolder, style: TextStyle(color: Colors.red.shade400)),
-                                    ],
-                                  ),
-                                ),
-                              ];
-                            },
-                          ),
-                          // Chevron expand/collapse
-                          Builder(
-                            builder: (ctx) {
-                              final isDark = Theme.of(ctx).brightness == Brightness.dark;
-                              return Icon(
-                                isExpanded ? Icons.expand_less : Icons.expand_more,
-                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                              );
-                            },
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ),
-              );
-            },
-          ),
-          // Favoris dans le dossier
-          if (isExpanded) ...[
-            if (favorites.isEmpty)
-              Builder(
-                builder: (context) {
-                  final l10n = AppLocalizations.of(context)!;
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 72, bottom: 8),
-                    child: Text(
-                      l10n.emptyFolderHint,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
-                        fontStyle: FontStyle.italic,
-                      ),
+                    // Menu actions
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_horiz_rounded, color: dc.textSecondary),
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'edit':
+                            onEdit();
+                            break;
+                          case 'delete':
+                            onDelete();
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        dcMenuItem(context, 'edit', Icons.edit_outlined, l10n.editFolder),
+                        dcMenuItem(context, 'delete', Icons.delete_outline_rounded, l10n.deleteFolder, danger: true),
+                      ],
                     ),
-                  );
-                },
-              )
-            else
-              ...favorites.map((favorite) => _FavoriteTileInFolder(
-                    favorite: favorite,
-                    folderId: folder.id,
-                    selectionMode: selectionMode,
-                    isSelected: selectedIds.contains(favorite.id),
-                    onToggleSelection: () => onToggleSelection(favorite.id),
-                  )),
-          ],
-          const Divider(height: 1),
-        ],
+                    // Chevron expand/collapse
+                    AnimatedRotation(
+                      turns: isExpanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: Icon(Icons.expand_more_rounded, color: dc.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            rows: !isExpanded
+                ? const []
+                : favorites.isEmpty
+                    ? [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                          child: Text(
+                            l10n.emptyFolderHint,
+                            style: context.text.bodySmall?.copyWith(
+                              color: dc.textMuted,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ]
+                    : [
+                        for (final favorite in favorites)
+                          _FavoriteTileInFolder(
+                            favorite: favorite,
+                            folderId: folder.id,
+                            selectionMode: selectionMode,
+                            isSelected: selectedIds.contains(favorite.id),
+                            onToggleSelection: () => onToggleSelection(favorite.id),
+                          ),
+                      ],
+          );
+        },
       ),
       loading: () => const SizedBox.shrink(),
       error: (_, _) => const SizedBox.shrink(),
@@ -705,65 +681,52 @@ class _UnassignedSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // En-tête
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onToggle,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  const SizedBox(width: 28), // Espace pour aligner avec les dossiers
-                  Icon(Icons.folder_off_outlined, color: isDark ? Colors.grey.shade400 : Colors.grey.shade500, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Builder(
-                      builder: (context) {
-                        final l10n = AppLocalizations.of(context)!;
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              l10n.noFolder,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
-                                  ),
-                            ),
-                            Text(
-                              l10n.favoritesCount(favorites.length),
-                              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                            ),
-                          ],
-                        );
-                      },
+    final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
+    return _SectionFrame(
+      header: InkWell(
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+          child: Row(
+            children: [
+              const SizedBox(width: 34), // Aligné avec les dossiers (poignée)
+              DcIconBox(icon: Icons.folder_off_outlined, tone: dc.neutral, size: 38),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.noFolder, style: context.text.titleMedium),
+                    Text(
+                      l10n.favoritesCount(favorites.length),
+                      style: context.text.bodySmall?.copyWith(color: dc.textMuted),
                     ),
-                  ),
-                  Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              AnimatedRotation(
+                turns: isExpanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: Icon(Icons.expand_more_rounded, color: dc.textMuted),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
         ),
-        // Favoris
-        if (isExpanded)
-          ...favorites.map((favorite) => _FavoriteTileInFolder(
-                favorite: favorite,
-                folderId: null,
-                selectionMode: selectionMode,
-                isSelected: selectedIds.contains(favorite.id),
-                onToggleSelection: () => onToggleSelection(favorite.id),
-              )),
-        const Divider(height: 1),
-      ],
+      ),
+      rows: !isExpanded
+          ? const []
+          : [
+              for (final favorite in favorites)
+                _FavoriteTileInFolder(
+                  favorite: favorite,
+                  folderId: null,
+                  selectionMode: selectionMode,
+                  isSelected: selectedIds.contains(favorite.id),
+                  onToggleSelection: () => onToggleSelection(favorite.id),
+                ),
+            ],
     );
   }
 }
@@ -784,30 +747,21 @@ class _FavoriteTileInFolder extends ConsumerWidget {
     this.onToggleSelection,
   });
 
-  Color _parseColor(String hex) {
-    try {
-      final hexCode = hex.replaceFirst('#', '');
-      return Color(int.parse('FF$hexCode', radix: 16));
-    } catch (e) {
-      return Colors.blue;
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pointsState = ref.watch(pointsProvider);
-    final livePoint = _findLivePoint(pointsState.points, favorite);
-    final folderIdsAsync = ref.watch(folderIdsForFavoriteProvider(favorite.id));
-    final foldersAsync = ref.watch(foldersForFavoriteProvider(favorite.id));
+    final dc = context.dc;
+    final l10n = AppLocalizations.of(context)!;
+    // Only rebuild when this favorite's live point changes (O(1) lookup)
+    final livePoint = ref.watch(_pointsByIdProvider.select((m) => m[favorite.pointRef]));
+    // Folders of this favorite derived from already-watched folder streams (no per-tile query)
+    final folders = ref.watch(_foldersByFavoriteProvider.select((m) => m[favorite.id])) ?? const <FavoriteFolder>[];
+    final folderIds = folders.map((f) => f.id).toList();
 
     final type = BacnetObjectType.values.cast<BacnetObjectType?>().firstWhere(
           (t) => t?.apiName == favorite.objectType,
           orElse: () => null,
         );
-
-    final typeColor = type != null ? BacnetTypeUtils.getTypeColor(type) : Colors.grey;
-    final valueColor = livePoint != null ? BacnetTypeUtils.getValueColor(livePoint) : Colors.grey;
+    final typeTone = type != null ? BacnetTypeUtils.typeTone(context, type) : dc.neutral;
 
     // Trend log
     final parts = favorite.pointRef.split(':');
@@ -815,131 +769,128 @@ class _FavoriteTileInFolder extends ConsumerWidget {
     final trendLogKey = '${favorite.objectType}:$instance';
     final hasTrendLog = ref.watch(hasTrendLogProvider(trendLogKey));
 
-    // Tags des dossiers
-    final folders = foldersAsync.valueOrNull ?? [];
-
     // Widget du contenu de la tile
-    final tileContent = ListTile(
-      onTap: selectionMode
-          ? onToggleSelection
-          : () => _navigateToPoint(context, favorite),
-      onLongPress: selectionMode
-          ? null
-          : () => _showAssignDialog(context, ref, favorite, folderIdsAsync),
-      contentPadding: EdgeInsets.only(left: selectionMode ? 16 : 56, right: 8),
-      leading: selectionMode
-          ? Checkbox(
-              value: isSelected,
-              onChanged: (_) => onToggleSelection?.call(),
-            )
-          : Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: typeColor.withAlpha(30),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                type != null ? BacnetTypeUtils.getTypeIcon(type) : Icons.help_outline,
-                color: typeColor,
-                size: 18,
-              ),
-            ),
-      title: Text(
-        favorite.pointName,
-        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Row(
-        children: [
-          Text(
-            favorite.pointRef,
-            style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600, fontFamily: 'monospace'),
+    final tileContent = Material(
+      color: isSelected ? dc.accentTone.bg : Colors.transparent,
+      child: InkWell(
+        onTap: selectionMode ? onToggleSelection : () => _navigateToPoint(context, favorite),
+        onLongPress: selectionMode ? null : () => _showAssignDialog(context, ref, favorite, folderIds),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: dc.border.withValues(alpha: 0.6))),
           ),
-          if (folders.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            // Tags colorés des dossiers
-            ...folders.take(4).map((folder) => Tooltip(
-                  message: folder.name,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    margin: const EdgeInsets.only(right: 3),
-                    decoration: BoxDecoration(
-                      color: _parseColor(folder.color),
-                      shape: BoxShape.circle,
+          padding: EdgeInsets.fromLTRB(selectionMode ? 6 : 16, 9, 10, 9),
+          child: Row(
+            children: [
+              if (selectionMode)
+                Checkbox(
+                  value: isSelected,
+                  onChanged: (_) => onToggleSelection?.call(),
+                )
+              else if (type != null)
+                PointTypeBadge(type: type, size: 36)
+              else
+                DcIconBox(icon: Icons.help_outline_rounded, tone: dc.neutral, size: 36),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      favorite.pointName,
+                      style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.w500),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          favorite.pointRef,
+                          style: AppTextStyles.monospacedValue.copyWith(fontSize: 11, color: dc.textMuted),
+                        ),
+                        if (folders.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          // Pastilles colorées des dossiers
+                          ...folders.take(4).map((folder) => Tooltip(
+                                message: folder.name,
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  margin: const EdgeInsets.only(right: 3),
+                                  decoration: BoxDecoration(
+                                    color: _parseFolderColor(folder.color),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              )),
+                          if (folders.length > 4)
+                            Text(
+                              '+${folders.length - 4}',
+                              style: context.text.labelSmall?.copyWith(color: dc.textMuted),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Bouton assigner aux dossiers
+              IconButton(
+                icon: Icon(Icons.drive_file_move_outline, size: 18, color: dc.textMuted),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                tooltip: l10n.assignToFoldersDialog,
+                onPressed: () => _showAssignDialog(context, ref, favorite, folderIds),
+              ),
+              // Bouton favori
+              if (livePoint != null)
+                FavoriteButton(point: livePoint, size: 18)
+              else
+                Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    favorite.isSuperFavorite ? Icons.auto_awesome_rounded : Icons.star_rounded,
+                    color: favorite.isSuperFavorite ? AppColors.brandOrange : AppColors.multiStateOutput,
+                    size: 18,
                   ),
-                )),
-            if (folders.length > 4)
-              Text(
-                '+${folders.length - 4}',
-                style: TextStyle(fontSize: 10, color: isDark ? Colors.grey.shade400 : Colors.grey.shade500),
-              ),
-          ],
-        ],
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Bouton assigner aux dossiers
-          IconButton(
-            icon: Icon(
-              Icons.folder_outlined,
-              size: 18,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            tooltip: AppLocalizations.of(context)!.assignToFoldersDialog,
-            onPressed: () => _showAssignDialog(context, ref, favorite, folderIdsAsync),
+                ),
+              // Trend log
+              if (hasTrendLog)
+                Tooltip(
+                  message: l10n.trendLogAvailable,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(Icons.show_chart_rounded, size: 18, color: dc.accentTone.fg),
+                  ),
+                ),
+              // État (alarme, forçage, hors service)
+              if (livePoint != null && PointStatusTags.hasAny(livePoint)) ...[
+                const SizedBox(width: 4),
+                PointStatusTags(point: livePoint),
+              ],
+              const SizedBox(width: 8),
+              // Valeur
+              if (livePoint != null)
+                PointValueChip(point: livePoint, minWidth: 56)
+              else
+                Container(
+                  constraints: const BoxConstraints(minWidth: 56),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: dc.neutral.bg,
+                    borderRadius: BorderRadius.circular(DcRadius.md - 2),
+                    border: Border.all(color: dc.neutral.border),
+                  ),
+                  child: Text(
+                    '—',
+                    textAlign: TextAlign.right,
+                    style: AppTextStyles.monospacedValue.copyWith(color: dc.textMuted),
+                  ),
+                ),
+            ],
           ),
-          // Bouton favori
-          if (livePoint != null)
-            FavoriteButton(point: livePoint, size: 18)
-          else
-            Padding(
-              padding: const EdgeInsets.all(6),
-              child: Icon(
-                favorite.isSuperFavorite ? Icons.auto_awesome : Icons.star,
-                color: favorite.isSuperFavorite ? Colors.amber.shade600 : Colors.amber,
-                size: 18,
-              ),
-            ),
-          // Trend log
-          if (hasTrendLog)
-            Icon(Icons.show_chart, size: 18, color: isDark ? Colors.blue.shade400 : Colors.blue.shade600),
-          // Override indicator
-          if (livePoint?.isOverridden == true)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              margin: const EdgeInsets.only(left: 4),
-              decoration: BoxDecoration(
-                color: Colors.red.shade100,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                'P${livePoint!.overridePriority}',
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.red.shade700),
-              ),
-            ),
-          // Valeur
-          Container(
-            constraints: const BoxConstraints(minWidth: 50),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            margin: const EdgeInsets.only(left: 4),
-            decoration: BoxDecoration(
-              color: valueColor.withAlpha(30),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              livePoint != null ? BacnetTypeUtils.formatValue(livePoint) : '-',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: valueColor),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
+        ),
       ),
     );
 
@@ -952,25 +903,25 @@ class _FavoriteTileInFolder extends ConsumerWidget {
     return LongPressDraggable<int>(
       data: favorite.id,
       feedback: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.transparent,
         child: Container(
-          width: 200,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          width: 240,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: typeColor, width: 2),
+            color: dc.surfaceRaised,
+            borderRadius: BorderRadius.circular(DcRadius.md),
+            border: Border.all(color: typeTone.fg, width: 1.5),
+            boxShadow: dc.raisedShadow,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.star, color: Colors.amber, size: 16),
+              const Icon(Icons.star_rounded, color: AppColors.multiStateOutput, size: 16),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
                   favorite.pointName,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  style: context.text.labelLarge?.copyWith(color: dc.textPrimary),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -979,37 +930,28 @@ class _FavoriteTileInFolder extends ConsumerWidget {
         ),
       ),
       childWhenDragging: Opacity(
-        opacity: 0.5,
+        opacity: 0.4,
         child: tileContent,
       ),
       child: Dismissible(
         key: ValueKey('fav_${favorite.id}_$folderId'),
         direction: DismissDirection.endToStart,
         background: Container(
-          color: Colors.red,
+          color: dc.danger.bg,
           alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 16),
-          child: const Icon(Icons.delete, color: Colors.white),
+          padding: const EdgeInsets.only(right: 20),
+          child: Icon(Icons.delete_outline_rounded, color: dc.danger.fg),
         ),
         onDismissed: (_) async {
+          // Capture before the await: the tile is already out of the tree
+          final messenger = ScaffoldMessenger.of(context);
+          final message = AppLocalizations.of(context)!.removedFromFavorites(favorite.pointName);
           await ref.read(favoritesNotifierProvider.notifier).removeFavoriteById(favorite.id);
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context)!.removedFromFavorites(favorite.pointName))),
-            );
-          }
+          messenger.showSnackBar(dcSnackBar(message));
         },
         child: tileContent,
       ),
     );
-  }
-
-  BacnetObject? _findLivePoint(List<BacnetObject> points, Favorite favorite) {
-    try {
-      return points.firstWhere((p) => p.objectId == favorite.pointRef);
-    } catch (_) {
-      return null;
-    }
   }
 
   void _navigateToPoint(BuildContext context, Favorite favorite) {
@@ -1030,9 +972,9 @@ class _FavoriteTileInFolder extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     Favorite favorite,
-    AsyncValue<List<int>> folderIdsAsync,
+    List<int> folderIds,
   ) async {
-    final currentIds = folderIdsAsync.valueOrNull ?? [];
+    final currentIds = folderIds;
     final result = await AssignFoldersDialog.show(
       context,
       favorite: favorite,
@@ -1061,86 +1003,65 @@ class _SelectFoldersForBatchDialog extends StatefulWidget {
 class _SelectFoldersForBatchDialogState extends State<_SelectFoldersForBatchDialog> {
   final Set<int> _selectedFolderIds = {};
 
-  Color _parseColor(String hex) {
-    try {
-      final hexCode = hex.replaceFirst('#', '');
-      return Color(int.parse('FF$hexCode', radix: 16));
-    } catch (e) {
-      return Colors.blue;
-    }
-  }
-
-  IconData _getIconData(String iconName) {
-    final entry = folderIcons.cast<(String, IconData)?>().firstWhere(
-          (e) => e?.$1 == iconName,
-          orElse: () => null,
-        );
-    return entry?.$2 ?? Icons.folder;
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final dc = context.dc;
     return AlertDialog(
       title: Text(l10n.assignToFoldersDialog),
-      content: Builder(
-        builder: (context) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          return SizedBox(
-            width: 300,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.selectFoldersToAdd,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 300),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: widget.folders.map((folder) {
-                        final isSelected = _selectedFolderIds.contains(folder.id);
-                        final color = _parseColor(folder.color);
-                        final icon = _getIconData(folder.icon);
-
-                        return CheckboxListTile(
-                          value: isSelected,
-                          onChanged: (value) {
-                            setState(() {
-                              if (value == true) {
-                                _selectedFolderIds.add(folder.id);
-                              } else {
-                                _selectedFolderIds.remove(folder.id);
-                              }
-                            });
-                          },
-                          title: Text(folder.name),
-                          secondary: Icon(icon, color: color),
-                          dense: true,
-                          controlAffinity: ListTileControlAffinity.trailing,
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ],
+      content: SizedBox(
+        width: 340,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.selectFoldersToAdd,
+              style: context.text.bodyMedium?.copyWith(color: dc.textSecondary),
             ),
-          );
-        },
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: widget.folders.map((folder) {
+                    final isSelected = _selectedFolderIds.contains(folder.id);
+                    final tone = dc.toneOf(_parseFolderColor(folder.color));
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: CheckboxListTile(
+                        value: isSelected,
+                        selected: isSelected,
+                        onChanged: (value) {
+                          setState(() {
+                            if (value == true) {
+                              _selectedFolderIds.add(folder.id);
+                            } else {
+                              _selectedFolderIds.remove(folder.id);
+                            }
+                          });
+                        },
+                        title: Text(folder.name),
+                        secondary: DcIconBox(icon: _folderIconData(folder.icon), tone: tone, size: 32),
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.trailing,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(l10n.cancel),
         ),
-        ElevatedButton(
+        FilledButton(
           onPressed: _selectedFolderIds.isEmpty
               ? null
               : () => Navigator.pop(context, _selectedFolderIds.toList()),

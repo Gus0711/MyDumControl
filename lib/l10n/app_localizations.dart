@@ -386,6 +386,18 @@ abstract class AppLocalizations {
   /// **'Réessayer'**
   String get retry;
 
+  /// No description provided for @bacnetReadingDeviceName.
+  ///
+  /// In fr, this message translates to:
+  /// **'Lecture du nom…'**
+  String get bacnetReadingDeviceName;
+
+  /// No description provided for @bacnetDeviceNameUnavailable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nom non lu (l\'appareil ne répond pas)'**
+  String get bacnetDeviceNameUnavailable;
+
   /// No description provided for @noData.
   ///
   /// In fr, this message translates to:
@@ -950,6 +962,12 @@ abstract class AppLocalizations {
   /// **'État'**
   String get state;
 
+  /// No description provided for @scheduleStateN.
+  ///
+  /// In fr, this message translates to:
+  /// **'État {value}'**
+  String scheduleStateN(int value);
+
   /// No description provided for @enterState.
   ///
   /// In fr, this message translates to:
@@ -1261,6 +1279,12 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Schedule non trouvé'**
   String get scheduleNotFound;
+
+  /// No description provided for @weeklyScheduleUnreadable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Programme hebdomadaire illisible : modification désactivée pour ne pas écraser l\'automate'**
+  String get weeklyScheduleUnreadable;
 
   /// No description provided for @errorLoadingSchedule.
   ///
@@ -1583,7 +1607,7 @@ abstract class AppLocalizations {
   /// No description provided for @addFavoritesHint.
   ///
   /// In fr, this message translates to:
-  /// **'Ajoutez des points aux favoris en cliquant\\nsur l\'étoile dans la liste des points'**
+  /// **'Ajoutez des points aux favoris en cliquant\nsur l\'étoile dans la liste des points'**
   String get addFavoritesHint;
 
   /// No description provided for @viewPoints.
@@ -1685,7 +1709,7 @@ abstract class AppLocalizations {
   /// No description provided for @deleteFolderMessage.
   ///
   /// In fr, this message translates to:
-  /// **'Le dossier \"{name}\" sera supprimé.\\n\\nLes favoris qu\'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".'**
+  /// **'Le dossier \"{name}\" sera supprimé.\n\nLes favoris qu\'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".'**
   String deleteFolderMessage(Object name);
 
   /// No description provided for @favoriteAddedToFolder.
@@ -1781,19 +1805,19 @@ abstract class AppLocalizations {
   /// No description provided for @subTypeAnalog.
   ///
   /// In fr, this message translates to:
-  /// **'Analog'**
+  /// **'Analogiques'**
   String get subTypeAnalog;
 
   /// No description provided for @subTypeBinary.
   ///
   /// In fr, this message translates to:
-  /// **'Binary'**
+  /// **'Binaires'**
   String get subTypeBinary;
 
   /// No description provided for @subTypeMulti.
   ///
   /// In fr, this message translates to:
-  /// **'Multi'**
+  /// **'Multi-états'**
   String get subTypeMulti;
 
   /// No description provided for @autoRefreshOff.
@@ -2039,55 +2063,55 @@ abstract class AppLocalizations {
   /// No description provided for @dashboards.
   ///
   /// In fr, this message translates to:
-  /// **'Dashboards'**
+  /// **'Tableaux de bord'**
   String get dashboards;
 
   /// No description provided for @dashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Dashboard'**
+  /// **'Tableau de bord'**
   String get dashboard;
 
   /// No description provided for @noDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Aucun dashboard'**
+  /// **'Aucun tableau de bord'**
   String get noDashboard;
 
   /// No description provided for @createDashboardHint.
   ///
   /// In fr, this message translates to:
-  /// **'Créez des dashboards pour visualiser\nvos graphiques et courbes d\'historique'**
+  /// **'Créez des tableaux de bord pour visualiser\nvos graphiques et courbes d\'historique'**
   String get createDashboardHint;
 
   /// No description provided for @createDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Créer un dashboard'**
+  /// **'Créer un tableau de bord'**
   String get createDashboard;
 
   /// No description provided for @newDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Nouveau dashboard'**
+  /// **'Nouveau tableau de bord'**
   String get newDashboard;
 
   /// No description provided for @editDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Modifier le dashboard'**
+  /// **'Modifier le tableau de bord'**
   String get editDashboard;
 
   /// No description provided for @deleteDashboard.
   ///
   /// In fr, this message translates to:
-  /// **'Supprimer le dashboard'**
+  /// **'Supprimer le tableau de bord'**
   String get deleteDashboard;
 
   /// No description provided for @dashboardName.
   ///
   /// In fr, this message translates to:
-  /// **'Nom du dashboard'**
+  /// **'Nom du tableau de bord'**
   String get dashboardName;
 
   /// No description provided for @dashboardNameRequired.
@@ -2099,19 +2123,19 @@ abstract class AppLocalizations {
   /// No description provided for @deleteDashboardConfirm.
   ///
   /// In fr, this message translates to:
-  /// **'Supprimer ce dashboard ?'**
+  /// **'Supprimer ce tableau de bord ?'**
   String get deleteDashboardConfirm;
 
   /// No description provided for @deleteDashboardMessage.
   ///
   /// In fr, this message translates to:
-  /// **'Le dashboard \"{name}\" et tous ses widgets seront supprimés.'**
+  /// **'Le tableau de bord \"{name}\" et tous ses widgets seront supprimés.'**
   String deleteDashboardMessage(Object name);
 
   /// No description provided for @dashboardDeleted.
   ///
   /// In fr, this message translates to:
-  /// **'Dashboard supprimé'**
+  /// **'Tableau de bord supprimé'**
   String get dashboardDeleted;
 
   /// No description provided for @widgets.
@@ -2431,6 +2455,1968 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Impossible de charger le synoptique Envysion. Vérifiez l\'URL et votre connexion.'**
   String get envysionLoadErrorMessage;
+
+  /// No description provided for @certificateChangedTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Certificat de l\'automate modifié'**
+  String get certificateChangedTitle;
+
+  /// No description provided for @trustNewCertificate.
+  ///
+  /// In fr, this message translates to:
+  /// **'Faire confiance au nouveau certificat'**
+  String get trustNewCertificate;
+
+  /// No description provided for @trustNewCertificateMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le certificat présenté par l\'automate est différent de celui enregistré lors de la première connexion.\n\nCela peut venir d\'un renouvellement du certificat (mise à jour, réinitialisation de l\'automate) ou d\'une interception du trafic. Ne faites confiance au nouveau certificat que si vous êtes sûr qu\'il est légitime.\n\nEmpreinte attendue :\n{expected}\n\nNouvelle empreinte :\n{received}'**
+  String trustNewCertificateMessage(String expected, String received);
+
+  /// No description provided for @trust.
+  ///
+  /// In fr, this message translates to:
+  /// **'Faire confiance'**
+  String get trust;
+
+  /// No description provided for @backToConnections.
+  ///
+  /// In fr, this message translates to:
+  /// **'Retour aux connexions'**
+  String get backToConnections;
+
+  /// No description provided for @certificateFingerprintLabel.
+  ///
+  /// In fr, this message translates to:
+  /// **'Empreinte du certificat (SHA-256)'**
+  String get certificateFingerprintLabel;
+
+  /// No description provided for @certificateFingerprintDiffers.
+  ///
+  /// In fr, this message translates to:
+  /// **'Différente de l\'empreinte enregistrée : le certificat de l\'automate a changé.'**
+  String get certificateFingerprintDiffers;
+
+  /// No description provided for @certificateFingerprintPinnedInfo.
+  ///
+  /// In fr, this message translates to:
+  /// **'Elle sera enregistrée et vérifiée à chaque connexion.'**
+  String get certificateFingerprintPinnedInfo;
+
+  /// No description provided for @httpCleartextWarning.
+  ///
+  /// In fr, this message translates to:
+  /// **'HTTP non chiffré : le mot de passe circule en clair sur le réseau. Préférez HTTPS si l\'automate le permet.'**
+  String get httpCleartextWarning;
+
+  /// No description provided for @passwordMissingBadge.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mot de passe à ressaisir'**
+  String get passwordMissingBadge;
+
+  /// No description provided for @apiVersionBadgeTooltip.
+  ///
+  /// In fr, this message translates to:
+  /// **'Version de l\'API REST Distech utilisée pour cet automate'**
+  String get apiVersionBadgeTooltip;
+
+  /// No description provided for @apiVersionUnknownTooltip.
+  ///
+  /// In fr, this message translates to:
+  /// **'Version d\'API pas encore détectée : elle le sera à la prochaine connexion'**
+  String get apiVersionUnknownTooltip;
+
+  /// No description provided for @redetectApiVersion.
+  ///
+  /// In fr, this message translates to:
+  /// **'Re-détecter la version API'**
+  String get redetectApiVersion;
+
+  /// No description provided for @redetectingApiVersion.
+  ///
+  /// In fr, this message translates to:
+  /// **'Détection de la version d\'API…'**
+  String get redetectingApiVersion;
+
+  /// No description provided for @redetectApiVersionDone.
+  ///
+  /// In fr, this message translates to:
+  /// **'Version d\'API détectée : {version}'**
+  String redetectApiVersionDone(String version);
+
+  /// No description provided for @redetectApiVersionFailed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Automate injoignable : version d\'API non détectée'**
+  String get redetectApiVersionFailed;
+
+  /// No description provided for @overrideDuration.
+  ///
+  /// In fr, this message translates to:
+  /// **'Durée du forçage'**
+  String get overrideDuration;
+
+  /// No description provided for @overridePermanent.
+  ///
+  /// In fr, this message translates to:
+  /// **'Permanent'**
+  String get overridePermanent;
+
+  /// No description provided for @durationMinutes.
+  ///
+  /// In fr, this message translates to:
+  /// **'{minutes} min'**
+  String durationMinutes(int minutes);
+
+  /// No description provided for @durationHours.
+  ///
+  /// In fr, this message translates to:
+  /// **'{hours} h'**
+  String durationHours(int hours);
+
+  /// No description provided for @timedOverrideHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le relâchement automatique est fait par l\'application : elle doit être ouverte à l\'échéance (sinon il a lieu à sa prochaine ouverture).'**
+  String get timedOverrideHint;
+
+  /// No description provided for @forcedAtTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Forcé depuis l\'app à {time}'**
+  String forcedAtTime(String time);
+
+  /// No description provided for @autoReleaseAtTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Relâchement automatique à {time}'**
+  String autoReleaseAtTime(String time);
+
+  /// No description provided for @autoReleaseFailed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Relâchement automatique en échec, nouvel essai en cours : {error}'**
+  String autoReleaseFailed(String error);
+
+  /// No description provided for @overrideOriginUnknown.
+  ///
+  /// In fr, this message translates to:
+  /// **'Forcé hors de l\'application (heure inconnue)'**
+  String get overrideOriginUnknown;
+
+  /// No description provided for @overridesSelected.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =0{Aucun point sélectionné} =1{1 point sélectionné} other{{count} points sélectionnés}}'**
+  String overridesSelected(int count);
+
+  /// No description provided for @releaseSelection.
+  ///
+  /// In fr, this message translates to:
+  /// **'Relâcher la sélection'**
+  String get releaseSelection;
+
+  /// No description provided for @releaseSelectionMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =1{Relâcher le forçage de 1 point ?} other{Relâcher le forçage de {count} points ?}}'**
+  String releaseSelectionMessage(int count);
+
+  /// No description provided for @releaseSelectionDone.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =1{1 point relâché} other{{count} points relâchés}}'**
+  String releaseSelectionDone(int count);
+
+  /// No description provided for @releaseSelectionFailed.
+  ///
+  /// In fr, this message translates to:
+  /// **'{failed} relâchement(s) sur {total} en échec'**
+  String releaseSelectionFailed(int failed, int total);
+
+  /// No description provided for @invalidCredentialsMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Identifiants invalides ({status}). Vérifiez le nom d\'utilisateur et le mot de passe de la connexion.'**
+  String invalidCredentialsMessage(String status);
+
+  /// No description provided for @close.
+  ///
+  /// In fr, this message translates to:
+  /// **'Fermer'**
+  String get close;
+
+  /// No description provided for @add.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ajouter'**
+  String get add;
+
+  /// No description provided for @rename.
+  ///
+  /// In fr, this message translates to:
+  /// **'Renommer'**
+  String get rename;
+
+  /// No description provided for @create.
+  ///
+  /// In fr, this message translates to:
+  /// **'Créer'**
+  String get create;
+
+  /// No description provided for @apply.
+  ///
+  /// In fr, this message translates to:
+  /// **'Appliquer'**
+  String get apply;
+
+  /// No description provided for @yes.
+  ///
+  /// In fr, this message translates to:
+  /// **'Oui'**
+  String get yes;
+
+  /// No description provided for @no.
+  ///
+  /// In fr, this message translates to:
+  /// **'Non'**
+  String get no;
+
+  /// No description provided for @back.
+  ///
+  /// In fr, this message translates to:
+  /// **'Retour'**
+  String get back;
+
+  /// No description provided for @copy.
+  ///
+  /// In fr, this message translates to:
+  /// **'Copier'**
+  String get copy;
+
+  /// No description provided for @clearAction.
+  ///
+  /// In fr, this message translates to:
+  /// **'Effacer'**
+  String get clearAction;
+
+  /// No description provided for @validate.
+  ///
+  /// In fr, this message translates to:
+  /// **'Valider'**
+  String get validate;
+
+  /// No description provided for @details.
+  ///
+  /// In fr, this message translates to:
+  /// **'Détails'**
+  String get details;
+
+  /// No description provided for @unknown.
+  ///
+  /// In fr, this message translates to:
+  /// **'Inconnu'**
+  String get unknown;
+
+  /// No description provided for @errorWithMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Erreur : {error}'**
+  String errorWithMessage(String error);
+
+  /// No description provided for @trendColorBlue.
+  ///
+  /// In fr, this message translates to:
+  /// **'Bleu'**
+  String get trendColorBlue;
+
+  /// No description provided for @trendColorGreen.
+  ///
+  /// In fr, this message translates to:
+  /// **'Vert'**
+  String get trendColorGreen;
+
+  /// No description provided for @trendColorOrange.
+  ///
+  /// In fr, this message translates to:
+  /// **'Orange'**
+  String get trendColorOrange;
+
+  /// No description provided for @trendColorPurple.
+  ///
+  /// In fr, this message translates to:
+  /// **'Violet'**
+  String get trendColorPurple;
+
+  /// No description provided for @trendColorRed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Rouge'**
+  String get trendColorRed;
+
+  /// No description provided for @trendColorCyan.
+  ///
+  /// In fr, this message translates to:
+  /// **'Cyan'**
+  String get trendColorCyan;
+
+  /// No description provided for @trendColorTeal.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sarcelle'**
+  String get trendColorTeal;
+
+  /// No description provided for @trendColorIndigo.
+  ///
+  /// In fr, this message translates to:
+  /// **'Indigo'**
+  String get trendColorIndigo;
+
+  /// No description provided for @trendPeriodHour.
+  ///
+  /// In fr, this message translates to:
+  /// **'1h'**
+  String get trendPeriodHour;
+
+  /// No description provided for @trendPeriodDay.
+  ///
+  /// In fr, this message translates to:
+  /// **'24h'**
+  String get trendPeriodDay;
+
+  /// No description provided for @trendPeriodWeek.
+  ///
+  /// In fr, this message translates to:
+  /// **'7j'**
+  String get trendPeriodWeek;
+
+  /// No description provided for @trendPeriodMonth.
+  ///
+  /// In fr, this message translates to:
+  /// **'30j'**
+  String get trendPeriodMonth;
+
+  /// No description provided for @trendPeriodAll.
+  ///
+  /// In fr, this message translates to:
+  /// **'Tout'**
+  String get trendPeriodAll;
+
+  /// No description provided for @trendPeriodCustom.
+  ///
+  /// In fr, this message translates to:
+  /// **'Perso.'**
+  String get trendPeriodCustom;
+
+  /// No description provided for @trendChangeColor.
+  ///
+  /// In fr, this message translates to:
+  /// **'Changer la couleur'**
+  String get trendChangeColor;
+
+  /// No description provided for @trendAnnotations.
+  ///
+  /// In fr, this message translates to:
+  /// **'Annotations'**
+  String get trendAnnotations;
+
+  /// No description provided for @trendMinMaxMarkers.
+  ///
+  /// In fr, this message translates to:
+  /// **'Marqueurs Min/Max'**
+  String get trendMinMaxMarkers;
+
+  /// No description provided for @trendAverageLine.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ligne moyenne'**
+  String get trendAverageLine;
+
+  /// No description provided for @trendMinLine.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ligne minimum'**
+  String get trendMinLine;
+
+  /// No description provided for @trendMaxLine.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ligne maximum'**
+  String get trendMaxLine;
+
+  /// No description provided for @trendHideAll.
+  ///
+  /// In fr, this message translates to:
+  /// **'Tout masquer'**
+  String get trendHideAll;
+
+  /// No description provided for @trendNoDataForPeriod.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune donnée pour cette période'**
+  String get trendNoDataForPeriod;
+
+  /// No description provided for @trendDateTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Date/Heure'**
+  String get trendDateTime;
+
+  /// No description provided for @trendHistory.
+  ///
+  /// In fr, this message translates to:
+  /// **'Historique'**
+  String get trendHistory;
+
+  /// No description provided for @trendFullscreen.
+  ///
+  /// In fr, this message translates to:
+  /// **'Plein écran'**
+  String get trendFullscreen;
+
+  /// No description provided for @trendShowChart.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voir graphique'**
+  String get trendShowChart;
+
+  /// No description provided for @trendShowTable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voir tableau'**
+  String get trendShowTable;
+
+  /// No description provided for @trendExportCsv.
+  ///
+  /// In fr, this message translates to:
+  /// **'Exporter CSV'**
+  String get trendExportCsv;
+
+  /// No description provided for @trendExportSubject.
+  ///
+  /// In fr, this message translates to:
+  /// **'Export historique {name}'**
+  String trendExportSubject(String name);
+
+  /// No description provided for @trendPortraitMode.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mode portrait'**
+  String get trendPortraitMode;
+
+  /// No description provided for @trendLandscapeMode.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mode paysage'**
+  String get trendLandscapeMode;
+
+  /// No description provided for @trendNoNumericData.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune donnée numérique'**
+  String get trendNoNumericData;
+
+  /// No description provided for @trendNoDataToDisplay.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune donnée à afficher'**
+  String get trendNoDataToDisplay;
+
+  /// No description provided for @trendInvalidData.
+  ///
+  /// In fr, this message translates to:
+  /// **'Données invalides'**
+  String get trendInvalidData;
+
+  /// No description provided for @trendAvgLineLabel.
+  ///
+  /// In fr, this message translates to:
+  /// **'Moy : {value}'**
+  String trendAvgLineLabel(String value);
+
+  /// No description provided for @chartComparisonTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Comparaison ({count} courbes)'**
+  String chartComparisonTitle(int count);
+
+  /// No description provided for @chartAddCurve.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ajouter une courbe'**
+  String get chartAddCurve;
+
+  /// No description provided for @chartCurvesNotLoaded.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} courbe(s) non chargée(s)'**
+  String chartCurvesNotLoaded(int count);
+
+  /// No description provided for @chartNoVisibleCurve.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune courbe visible\nTouchez la légende pour afficher'**
+  String get chartNoVisibleCurve;
+
+  /// No description provided for @chartNoCurveSelected.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune courbe sélectionnée\nAjoutez des trend logs à comparer'**
+  String get chartNoCurveSelected;
+
+  /// No description provided for @chartSelectCurves.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sélectionner les courbes'**
+  String get chartSelectCurves;
+
+  /// No description provided for @chartSelectCurvesHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sélectionnez {min} à {max} trend logs à comparer'**
+  String chartSelectCurvesHint(int min, int max);
+
+  /// No description provided for @chartCurvesCount.
+  ///
+  /// In fr, this message translates to:
+  /// **'{selected}/{max} courbes'**
+  String chartCurvesCount(int selected, int max);
+
+  /// No description provided for @chartNoTrendLogAvailable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun trend log disponible'**
+  String get chartNoTrendLogAvailable;
+
+  /// No description provided for @chartSelectedCurves.
+  ///
+  /// In fr, this message translates to:
+  /// **'Courbes sélectionnées :'**
+  String get chartSelectedCurves;
+
+  /// No description provided for @chartValidateCount.
+  ///
+  /// In fr, this message translates to:
+  /// **'Valider ({count})'**
+  String chartValidateCount(int count);
+
+  /// No description provided for @widgetPromoteSuperFavorite.
+  ///
+  /// In fr, this message translates to:
+  /// **'Promouvoir en super favori'**
+  String get widgetPromoteSuperFavorite;
+
+  /// No description provided for @widgetDemoteToFavorite.
+  ///
+  /// In fr, this message translates to:
+  /// **'Rétrograder en favori'**
+  String get widgetDemoteToFavorite;
+
+  /// No description provided for @widgetNoFolder.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun dossier'**
+  String get widgetNoFolder;
+
+  /// No description provided for @widgetCreateFolder.
+  ///
+  /// In fr, this message translates to:
+  /// **'Créer un dossier'**
+  String get widgetCreateFolder;
+
+  /// No description provided for @widgetNewFolderEllipsis.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nouveau dossier...'**
+  String get widgetNewFolderEllipsis;
+
+  /// No description provided for @widgetEditFolder.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modifier le dossier'**
+  String get widgetEditFolder;
+
+  /// No description provided for @widgetFolderName.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nom du dossier'**
+  String get widgetFolderName;
+
+  /// No description provided for @widgetColor.
+  ///
+  /// In fr, this message translates to:
+  /// **'Couleur'**
+  String get widgetColor;
+
+  /// No description provided for @widgetIcon.
+  ///
+  /// In fr, this message translates to:
+  /// **'Icône'**
+  String get widgetIcon;
+
+  /// No description provided for @widgetConnecting.
+  ///
+  /// In fr, this message translates to:
+  /// **'Connexion en cours'**
+  String get widgetConnecting;
+
+  /// No description provided for @widgetStepAuth.
+  ///
+  /// In fr, this message translates to:
+  /// **'Auth'**
+  String get widgetStepAuth;
+
+  /// No description provided for @widgetPumpLabel.
+  ///
+  /// In fr, this message translates to:
+  /// **'POMPE'**
+  String get widgetPumpLabel;
+
+  /// No description provided for @synopticsTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synoptiques'**
+  String get synopticsTitle;
+
+  /// No description provided for @synopticCreate.
+  ///
+  /// In fr, this message translates to:
+  /// **'Créer un synoptique'**
+  String get synopticCreate;
+
+  /// No description provided for @synopticEmptyTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun synoptique'**
+  String get synopticEmptyTitle;
+
+  /// No description provided for @synopticEmptyHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Créez votre premier synoptique pour visualiser\nvos points sur un schéma graphique'**
+  String get synopticEmptyHint;
+
+  /// No description provided for @synopticDeleteTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer le synoptique ?'**
+  String get synopticDeleteTitle;
+
+  /// No description provided for @synopticDeleteMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Êtes-vous sûr de vouloir supprimer \"{name}\" ?\nCette action est irréversible.'**
+  String synopticDeleteMessage(String name);
+
+  /// No description provided for @synopticBindingsCount.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =0{0 liaison} =1{1 liaison} other{{count} liaisons}}'**
+  String synopticBindingsCount(int count);
+
+  /// No description provided for @synopticBindingsUnknown.
+  ///
+  /// In fr, this message translates to:
+  /// **'-- liaisons'**
+  String get synopticBindingsUnknown;
+
+  /// No description provided for @synopticGlobal.
+  ///
+  /// In fr, this message translates to:
+  /// **'Global'**
+  String get synopticGlobal;
+
+  /// No description provided for @synopticEditBindings.
+  ///
+  /// In fr, this message translates to:
+  /// **'Éditer les liaisons'**
+  String get synopticEditBindings;
+
+  /// No description provided for @synopticNew.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nouveau synoptique'**
+  String get synopticNew;
+
+  /// No description provided for @synopticSvgModel.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modèle SVG'**
+  String get synopticSvgModel;
+
+  /// No description provided for @synopticConfigurableElementsCount.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count} éléments configurables'**
+  String synopticConfigurableElementsCount(int count);
+
+  /// No description provided for @synopticNameLabel.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nom du synoptique'**
+  String get synopticNameLabel;
+
+  /// No description provided for @synopticNameHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ex: Circuit Chauffage RDC'**
+  String get synopticNameHint;
+
+  /// No description provided for @synopticDescriptionOptional.
+  ///
+  /// In fr, this message translates to:
+  /// **'Description (optionnel)'**
+  String get synopticDescriptionOptional;
+
+  /// No description provided for @synopticDefaultName.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synoptique'**
+  String get synopticDefaultName;
+
+  /// No description provided for @synopticResetZoom.
+  ///
+  /// In fr, this message translates to:
+  /// **'Réinitialiser le zoom'**
+  String get synopticResetZoom;
+
+  /// No description provided for @synopticNotFound.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synoptique non trouvé'**
+  String get synopticNotFound;
+
+  /// No description provided for @synopticUpdateError.
+  ///
+  /// In fr, this message translates to:
+  /// **'Erreur de mise à jour: {error}'**
+  String synopticUpdateError(String error);
+
+  /// No description provided for @synopticActivePointsCount.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =0{0 point actif} =1{1 point actif} other{{count} points actifs}}'**
+  String synopticActivePointsCount(int count);
+
+  /// No description provided for @synopticPinchToZoom.
+  ///
+  /// In fr, this message translates to:
+  /// **'Pincez pour zoomer'**
+  String get synopticPinchToZoom;
+
+  /// No description provided for @synopticSvgElement.
+  ///
+  /// In fr, this message translates to:
+  /// **'Élément SVG'**
+  String get synopticSvgElement;
+
+  /// No description provided for @synopticBindingType.
+  ///
+  /// In fr, this message translates to:
+  /// **'Type de liaison'**
+  String get synopticBindingType;
+
+  /// No description provided for @synopticCurrentValue.
+  ///
+  /// In fr, this message translates to:
+  /// **'Valeur actuelle'**
+  String get synopticCurrentValue;
+
+  /// No description provided for @synopticViewPoint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voir le point'**
+  String get synopticViewPoint;
+
+  /// No description provided for @synopticNumericValue.
+  ///
+  /// In fr, this message translates to:
+  /// **'Valeur numérique'**
+  String get synopticNumericValue;
+
+  /// No description provided for @synopticColorIndicator.
+  ///
+  /// In fr, this message translates to:
+  /// **'Indicateur couleur'**
+  String get synopticColorIndicator;
+
+  /// No description provided for @synopticAnimation.
+  ///
+  /// In fr, this message translates to:
+  /// **'Animation'**
+  String get synopticAnimation;
+
+  /// No description provided for @synopticEditTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Éditer: {name}'**
+  String synopticEditTitle(String name);
+
+  /// No description provided for @synopticHelp.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aide'**
+  String get synopticHelp;
+
+  /// No description provided for @synopticPreview.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aperçu du synoptique'**
+  String get synopticPreview;
+
+  /// No description provided for @synopticConfigurableElements.
+  ///
+  /// In fr, this message translates to:
+  /// **'Éléments configurables'**
+  String get synopticConfigurableElements;
+
+  /// No description provided for @synopticNoConfigurableElements.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun élément configurable détecté'**
+  String get synopticNoConfigurableElements;
+
+  /// No description provided for @synopticHowToConfigure.
+  ///
+  /// In fr, this message translates to:
+  /// **'Comment configurer'**
+  String get synopticHowToConfigure;
+
+  /// No description provided for @synopticHelpSteps.
+  ///
+  /// In fr, this message translates to:
+  /// **'1. Sélectionnez un élément dans la liste\n2. Choisissez le point BACnet à associer\n3. Configurez le type de liaison:\n   • Valeur: affiche la valeur du point\n   • Couleur: change la couleur selon l\'état\n   • Animation: active/désactive une animation\n4. Personnalisez le format si nécessaire'**
+  String get synopticHelpSteps;
+
+  /// No description provided for @synopticStateIndicator.
+  ///
+  /// In fr, this message translates to:
+  /// **'Indicateur d\'état'**
+  String get synopticStateIndicator;
+
+  /// No description provided for @synopticElement.
+  ///
+  /// In fr, this message translates to:
+  /// **'Élément'**
+  String get synopticElement;
+
+  /// No description provided for @synopticConfigureBinding.
+  ///
+  /// In fr, this message translates to:
+  /// **'Configurer la liaison'**
+  String get synopticConfigureBinding;
+
+  /// No description provided for @synopticDeleteBinding.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer la liaison'**
+  String get synopticDeleteBinding;
+
+  /// No description provided for @synopticColor.
+  ///
+  /// In fr, this message translates to:
+  /// **'Couleur'**
+  String get synopticColor;
+
+  /// No description provided for @synopticDisplayFormat.
+  ///
+  /// In fr, this message translates to:
+  /// **'Format d\'affichage'**
+  String get synopticDisplayFormat;
+
+  /// No description provided for @synopticFormatHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ex: {placeholder}°C ou {placeholder}%'**
+  String synopticFormatHint(String placeholder);
+
+  /// No description provided for @synopticFormatHelper.
+  ///
+  /// In fr, this message translates to:
+  /// **'Utilisez {placeholder} pour la valeur du point'**
+  String synopticFormatHelper(String placeholder);
+
+  /// No description provided for @synopticColors.
+  ///
+  /// In fr, this message translates to:
+  /// **'Couleurs'**
+  String get synopticColors;
+
+  /// No description provided for @synopticAnimationConfig.
+  ///
+  /// In fr, this message translates to:
+  /// **'Configuration Animation'**
+  String get synopticAnimationConfig;
+
+  /// No description provided for @synopticAnimationOnOff.
+  ///
+  /// In fr, this message translates to:
+  /// **'Animation ON/OFF'**
+  String get synopticAnimationOnOff;
+
+  /// No description provided for @synopticAnimationExplanation.
+  ///
+  /// In fr, this message translates to:
+  /// **'L\'animation sera visible quand la valeur du point est > seuil (actif), et masquée sinon.'**
+  String get synopticAnimationExplanation;
+
+  /// No description provided for @synopticThreshold.
+  ///
+  /// In fr, this message translates to:
+  /// **'Seuil ON/OFF'**
+  String get synopticThreshold;
+
+  /// No description provided for @synopticThresholdHelper.
+  ///
+  /// In fr, this message translates to:
+  /// **'Valeur > seuil = ON, sinon OFF (pour booléen: 0.5)'**
+  String get synopticThresholdHelper;
+
+  /// No description provided for @synopticBacnetPoint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Point BACnet'**
+  String get synopticBacnetPoint;
+
+  /// No description provided for @synopticNoPointFound.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun point trouvé'**
+  String get synopticNoPointFound;
+
+  /// No description provided for @synopticDeleteBindingTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer la liaison ?'**
+  String get synopticDeleteBindingTitle;
+
+  /// No description provided for @synopticIrreversible.
+  ///
+  /// In fr, this message translates to:
+  /// **'Cette action est irréversible.'**
+  String get synopticIrreversible;
+
+  /// No description provided for @envysionConnectionNotFound.
+  ///
+  /// In fr, this message translates to:
+  /// **'Connexion introuvable'**
+  String get envysionConnectionNotFound;
+
+  /// No description provided for @envysionAuthFailed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Authentification échouée (401)'**
+  String get envysionAuthFailed;
+
+  /// No description provided for @envysionPageNotFound.
+  ///
+  /// In fr, this message translates to:
+  /// **'Page non trouvée (404)'**
+  String get envysionPageNotFound;
+
+  /// No description provided for @dashboardNotFound.
+  ///
+  /// In fr, this message translates to:
+  /// **'Tableau de bord introuvable'**
+  String get dashboardNotFound;
+
+  /// No description provided for @dashboardDeleteWidgetConfirm.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer le widget ?'**
+  String get dashboardDeleteWidgetConfirm;
+
+  /// No description provided for @dashboardDeleteWidgetMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ce widget sera supprimé du tableau de bord.'**
+  String get dashboardDeleteWidgetMessage;
+
+  /// No description provided for @dashboardEditTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modifier le titre'**
+  String get dashboardEditTitle;
+
+  /// No description provided for @dashboardTitleLabel.
+  ///
+  /// In fr, this message translates to:
+  /// **'Titre'**
+  String get dashboardTitleLabel;
+
+  /// No description provided for @dashboardTitleHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Laisser vide pour le titre par défaut'**
+  String get dashboardTitleHint;
+
+  /// No description provided for @dashboardSettingsTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Paramètres du tableau de bord'**
+  String get dashboardSettingsTitle;
+
+  /// No description provided for @dashboardColumnsWithColon.
+  ///
+  /// In fr, this message translates to:
+  /// **'Colonnes : '**
+  String get dashboardColumnsWithColon;
+
+  /// No description provided for @dashboardRowsWithColon.
+  ///
+  /// In fr, this message translates to:
+  /// **'Lignes : '**
+  String get dashboardRowsWithColon;
+
+  /// No description provided for @dashboardDeletePermanentMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ce tableau de bord et tous ses widgets seront supprimés définitivement.'**
+  String get dashboardDeletePermanentMessage;
+
+  /// No description provided for @dashboardSearchHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Rechercher...'**
+  String get dashboardSearchHint;
+
+  /// No description provided for @dashboardNewShort.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nouveau'**
+  String get dashboardNewShort;
+
+  /// No description provided for @dashboardEmptyHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Créez votre premier tableau de bord pour visualiser\nplusieurs graphiques sur une seule page.'**
+  String get dashboardEmptyHint;
+
+  /// No description provided for @dashboardGridSize.
+  ///
+  /// In fr, this message translates to:
+  /// **'Grille {columns}x{rows}'**
+  String dashboardGridSize(int columns, int rows);
+
+  /// No description provided for @dashboardNameHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ex : Chauffage, Ventilation...'**
+  String get dashboardNameHint;
+
+  /// No description provided for @dashboardGridLayout.
+  ///
+  /// In fr, this message translates to:
+  /// **'Disposition de la grille'**
+  String get dashboardGridLayout;
+
+  /// No description provided for @dashboardColumns.
+  ///
+  /// In fr, this message translates to:
+  /// **'Colonnes'**
+  String get dashboardColumns;
+
+  /// No description provided for @dashboardRows.
+  ///
+  /// In fr, this message translates to:
+  /// **'Lignes'**
+  String get dashboardRows;
+
+  /// No description provided for @dashboardChartDefault.
+  ///
+  /// In fr, this message translates to:
+  /// **'Graphique'**
+  String get dashboardChartDefault;
+
+  /// No description provided for @dashboardComparisonTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Comparaison ({count} courbes)'**
+  String dashboardComparisonTitle(int count);
+
+  /// No description provided for @dashboardNotConfigured.
+  ///
+  /// In fr, this message translates to:
+  /// **'Non configuré'**
+  String get dashboardNotConfigured;
+
+  /// No description provided for @dashboardConfigure.
+  ///
+  /// In fr, this message translates to:
+  /// **'Configurer'**
+  String get dashboardConfigure;
+
+  /// No description provided for @deviceInfoProtocol.
+  ///
+  /// In fr, this message translates to:
+  /// **'Protocole'**
+  String get deviceInfoProtocol;
+
+  /// No description provided for @deviceInfoUser.
+  ///
+  /// In fr, this message translates to:
+  /// **'Utilisateur'**
+  String get deviceInfoUser;
+
+  /// No description provided for @deviceInfoLastConnection.
+  ///
+  /// In fr, this message translates to:
+  /// **'Dernière connexion'**
+  String get deviceInfoLastConnection;
+
+  /// No description provided for @deviceInfoNetwork.
+  ///
+  /// In fr, this message translates to:
+  /// **'Réseau'**
+  String get deviceInfoNetwork;
+
+  /// No description provided for @deviceInfoInterfacesCount.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =1{1 interface} other{{count} interfaces}}'**
+  String deviceInfoInterfacesCount(int count);
+
+  /// No description provided for @deviceInfoIpAddress.
+  ///
+  /// In fr, this message translates to:
+  /// **'Adresse IP'**
+  String get deviceInfoIpAddress;
+
+  /// No description provided for @deviceInfoSubnetMask.
+  ///
+  /// In fr, this message translates to:
+  /// **'Masque'**
+  String get deviceInfoSubnetMask;
+
+  /// No description provided for @deviceInfoGateway.
+  ///
+  /// In fr, this message translates to:
+  /// **'Passerelle'**
+  String get deviceInfoGateway;
+
+  /// No description provided for @deviceInfoPrimaryDns.
+  ///
+  /// In fr, this message translates to:
+  /// **'DNS primaire'**
+  String get deviceInfoPrimaryDns;
+
+  /// No description provided for @deviceInfoMacAddress.
+  ///
+  /// In fr, this message translates to:
+  /// **'Adresse MAC'**
+  String get deviceInfoMacAddress;
+
+  /// No description provided for @deviceInfoCopied.
+  ///
+  /// In fr, this message translates to:
+  /// **'{label} copié'**
+  String deviceInfoCopied(String label);
+
+  /// No description provided for @deviceInfoBacnetObjects.
+  ///
+  /// In fr, this message translates to:
+  /// **'Objets BACnet'**
+  String get deviceInfoBacnetObjects;
+
+  /// No description provided for @deviceInfoTotalObjects.
+  ///
+  /// In fr, this message translates to:
+  /// **'Total : {count} objets'**
+  String deviceInfoTotalObjects(int count);
+
+  /// No description provided for @deviceInfoNoDataAvailable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune donnée disponible'**
+  String get deviceInfoNoDataAvailable;
+
+  /// No description provided for @deviceInfoTechnical.
+  ///
+  /// In fr, this message translates to:
+  /// **'Informations techniques'**
+  String get deviceInfoTechnical;
+
+  /// No description provided for @deviceInfoHostName.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nom d\'hôte'**
+  String get deviceInfoHostName;
+
+  /// No description provided for @homeAuthenticating.
+  ///
+  /// In fr, this message translates to:
+  /// **'Authentification...'**
+  String get homeAuthenticating;
+
+  /// No description provided for @homeFetchingData.
+  ///
+  /// In fr, this message translates to:
+  /// **'Récupération des données...'**
+  String get homeFetchingData;
+
+  /// No description provided for @homeSynoptic.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synoptique'**
+  String get homeSynoptic;
+
+  /// No description provided for @homeControllerTimeTooltip.
+  ///
+  /// In fr, this message translates to:
+  /// **'Heure automate : {time}'**
+  String homeControllerTimeTooltip(String time);
+
+  /// No description provided for @homeTimeOffsetTooltip.
+  ///
+  /// In fr, this message translates to:
+  /// **'Décalage : {offset}'**
+  String homeTimeOffsetTooltip(String offset);
+
+  /// No description provided for @homeControllerTimeTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Heure de l\'automate'**
+  String get homeControllerTimeTitle;
+
+  /// No description provided for @homeControllerDateTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Date/Heure automate'**
+  String get homeControllerDateTime;
+
+  /// No description provided for @homeLocalTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Heure locale'**
+  String get homeLocalTime;
+
+  /// No description provided for @homeTimeOffset.
+  ///
+  /// In fr, this message translates to:
+  /// **'Décalage'**
+  String get homeTimeOffset;
+
+  /// No description provided for @homeTimeOffsetWarning.
+  ///
+  /// In fr, this message translates to:
+  /// **'L\'heure de l\'automate est décalée. Les plannings peuvent ne pas s\'exécuter aux moments attendus.'**
+  String get homeTimeOffsetWarning;
+
+  /// No description provided for @homeSyncV2Info.
+  ///
+  /// In fr, this message translates to:
+  /// **'API V2 : utilisez l\'interface web EC-NetAX ou configurez le NTP pour synchroniser l\'heure.'**
+  String get homeSyncV2Info;
+
+  /// No description provided for @homeSyncSuccess.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synchronisation réussie avec succès !'**
+  String get homeSyncSuccess;
+
+  /// No description provided for @homeSyncFailed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Échec de la synchronisation.'**
+  String get homeSyncFailed;
+
+  /// No description provided for @homeSyncing.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synchronisation...'**
+  String get homeSyncing;
+
+  /// No description provided for @homeSync.
+  ///
+  /// In fr, this message translates to:
+  /// **'Synchroniser'**
+  String get homeSync;
+
+  /// No description provided for @routerPageNotFound.
+  ///
+  /// In fr, this message translates to:
+  /// **'Page non trouvée : {path}'**
+  String routerPageNotFound(String path);
+
+  /// No description provided for @routerInvalidId.
+  ///
+  /// In fr, this message translates to:
+  /// **'Identifiant invalide : \"{id}\"'**
+  String routerInvalidId(String id);
+
+  /// No description provided for @connectionsCount.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =0{0 connexion} =1{1 connexion} other{{count} connexions}}'**
+  String connectionsCount(int count);
+
+  /// No description provided for @connectionsEmptyFolder.
+  ///
+  /// In fr, this message translates to:
+  /// **'Dossier vide'**
+  String get connectionsEmptyFolder;
+
+  /// No description provided for @connectionsFolderName.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nom du dossier'**
+  String get connectionsFolderName;
+
+  /// No description provided for @connectionsEditFolder.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modifier le dossier'**
+  String get connectionsEditFolder;
+
+  /// No description provided for @connectionsDeleteFolder.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer le dossier'**
+  String get connectionsDeleteFolder;
+
+  /// No description provided for @connectionsDeleteFolderMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voulez-vous supprimer le dossier \"{name}\" ?\n\nLes connexions qu\'il contient seront déplacées à la racine.'**
+  String connectionsDeleteFolderMessage(String name);
+
+  /// No description provided for @connectionsFolderDeleted.
+  ///
+  /// In fr, this message translates to:
+  /// **'Dossier \"{name}\" supprimé'**
+  String connectionsFolderDeleted(String name);
+
+  /// No description provided for @connectionsDeleteConfirm.
+  ///
+  /// In fr, this message translates to:
+  /// **'Voulez-vous supprimer \"{name}\" ?'**
+  String connectionsDeleteConfirm(String name);
+
+  /// No description provided for @connectionsDeleted.
+  ///
+  /// In fr, this message translates to:
+  /// **'Connexion \"{name}\" supprimée'**
+  String connectionsDeleted(String name);
+
+  /// No description provided for @connectionsMoveTo.
+  ///
+  /// In fr, this message translates to:
+  /// **'Déplacer vers'**
+  String get connectionsMoveTo;
+
+  /// No description provided for @connectionsMoved.
+  ///
+  /// In fr, this message translates to:
+  /// **'Connexion déplacée'**
+  String get connectionsMoved;
+
+  /// No description provided for @connectionsAddToStart.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ajoutez une connexion pour commencer'**
+  String get connectionsAddToStart;
+
+  /// No description provided for @connectionsMove.
+  ///
+  /// In fr, this message translates to:
+  /// **'Déplacer'**
+  String get connectionsMove;
+
+  /// No description provided for @connectionsRefreshFolderTooltip.
+  ///
+  /// In fr, this message translates to:
+  /// **'Rafraîchir tous les super favoris du dossier'**
+  String get connectionsRefreshFolderTooltip;
+
+  /// No description provided for @connectionsRefreshValuesTooltip.
+  ///
+  /// In fr, this message translates to:
+  /// **'Rafraîchir les valeurs'**
+  String get connectionsRefreshValuesTooltip;
+
+  /// No description provided for @addConnSelected.
+  ///
+  /// In fr, this message translates to:
+  /// **'{name} sélectionné'**
+  String addConnSelected(String name);
+
+  /// No description provided for @addConnUseSecure.
+  ///
+  /// In fr, this message translates to:
+  /// **'Utiliser une connexion sécurisée'**
+  String get addConnUseSecure;
+
+  /// No description provided for @addConnConnectionType.
+  ///
+  /// In fr, this message translates to:
+  /// **'Type de connexion'**
+  String get addConnConnectionType;
+
+  /// No description provided for @addConnBacnetSuccess.
+  ///
+  /// In fr, this message translates to:
+  /// **'Connexion BACnet réussie ! Device ID : {deviceId}'**
+  String addConnBacnetSuccess(String deviceId);
+
+  /// No description provided for @addConnNotDiscovered.
+  ///
+  /// In fr, this message translates to:
+  /// **'non découvert'**
+  String get addConnNotDiscovered;
+
+  /// No description provided for @addConnBacnetFailed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Échec de la connexion BACnet'**
+  String get addConnBacnetFailed;
+
+  /// No description provided for @addConnUpdated.
+  ///
+  /// In fr, this message translates to:
+  /// **'Connexion modifiée'**
+  String get addConnUpdated;
+
+  /// No description provided for @addConnSaved.
+  ///
+  /// In fr, this message translates to:
+  /// **'Connexion enregistrée'**
+  String get addConnSaved;
+
+  /// No description provided for @discoverMdnsError.
+  ///
+  /// In fr, this message translates to:
+  /// **'Erreur mDNS'**
+  String get discoverMdnsError;
+
+  /// No description provided for @discoverSearchingEclypse.
+  ///
+  /// In fr, this message translates to:
+  /// **'Recherche des automates ECLYPSE sur le réseau...'**
+  String get discoverSearchingEclypse;
+
+  /// No description provided for @discoverNoEclypseFoundMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun ECLYPSE n\'a été trouvé sur le réseau.\nVérifiez que vous êtes connecté au même réseau que l\'automate.'**
+  String get discoverNoEclypseFoundMessage;
+
+  /// No description provided for @discoverProbing.
+  ///
+  /// In fr, this message translates to:
+  /// **'Détection API…'**
+  String get discoverProbing;
+
+  /// No description provided for @discoverApiAdvertised.
+  ///
+  /// In fr, this message translates to:
+  /// **'API {version} annoncée'**
+  String discoverApiAdvertised(String version);
+
+  /// No description provided for @discoverApiUnknown.
+  ///
+  /// In fr, this message translates to:
+  /// **'API détectée à la connexion'**
+  String get discoverApiUnknown;
+
+  /// No description provided for @discoverUnreachable.
+  ///
+  /// In fr, this message translates to:
+  /// **'Injoignable'**
+  String get discoverUnreachable;
+
+  /// No description provided for @discoverModel.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modèle : {model}'**
+  String discoverModel(String model);
+
+  /// No description provided for @discoverFirmware.
+  ///
+  /// In fr, this message translates to:
+  /// **'Firmware : {version}'**
+  String discoverFirmware(String version);
+
+  /// No description provided for @discoverFirmwareAfterLogin.
+  ///
+  /// In fr, this message translates to:
+  /// **'Firmware visible après connexion'**
+  String get discoverFirmwareAfterLogin;
+
+  /// No description provided for @discoverCreateConnection.
+  ///
+  /// In fr, this message translates to:
+  /// **'Créer la connexion'**
+  String get discoverCreateConnection;
+
+  /// No description provided for @discoverDeviceIdConflictWithId.
+  ///
+  /// In fr, this message translates to:
+  /// **'Conflit Device ID {deviceId}'**
+  String discoverDeviceIdConflictWithId(String deviceId);
+
+  /// No description provided for @alarmsSortNewest.
+  ///
+  /// In fr, this message translates to:
+  /// **'Plus récentes'**
+  String get alarmsSortNewest;
+
+  /// No description provided for @alarmsSortOldest.
+  ///
+  /// In fr, this message translates to:
+  /// **'Plus anciennes'**
+  String get alarmsSortOldest;
+
+  /// No description provided for @bacnetTypeAnalogInput.
+  ///
+  /// In fr, this message translates to:
+  /// **'Entrée Analogique'**
+  String get bacnetTypeAnalogInput;
+
+  /// No description provided for @bacnetTypeAnalogOutput.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sortie Analogique'**
+  String get bacnetTypeAnalogOutput;
+
+  /// No description provided for @bacnetTypeAnalogValue.
+  ///
+  /// In fr, this message translates to:
+  /// **'Valeur Analogique'**
+  String get bacnetTypeAnalogValue;
+
+  /// No description provided for @bacnetTypeBinaryInput.
+  ///
+  /// In fr, this message translates to:
+  /// **'Entrée Binaire'**
+  String get bacnetTypeBinaryInput;
+
+  /// No description provided for @bacnetTypeBinaryOutput.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sortie Binaire'**
+  String get bacnetTypeBinaryOutput;
+
+  /// No description provided for @bacnetTypeBinaryValue.
+  ///
+  /// In fr, this message translates to:
+  /// **'Valeur Binaire'**
+  String get bacnetTypeBinaryValue;
+
+  /// No description provided for @bacnetTypeMultiStateInput.
+  ///
+  /// In fr, this message translates to:
+  /// **'Entrée Multi-états'**
+  String get bacnetTypeMultiStateInput;
+
+  /// No description provided for @bacnetTypeMultiStateOutput.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sortie Multi-états'**
+  String get bacnetTypeMultiStateOutput;
+
+  /// No description provided for @bacnetTypeMultiStateValue.
+  ///
+  /// In fr, this message translates to:
+  /// **'Valeur Multi-états'**
+  String get bacnetTypeMultiStateValue;
+
+  /// No description provided for @bacnetTypeSchedule.
+  ///
+  /// In fr, this message translates to:
+  /// **'Horaire'**
+  String get bacnetTypeSchedule;
+
+  /// No description provided for @bacnetTypeCalendar.
+  ///
+  /// In fr, this message translates to:
+  /// **'Calendrier'**
+  String get bacnetTypeCalendar;
+
+  /// No description provided for @bacnetTypeTrendLog.
+  ///
+  /// In fr, this message translates to:
+  /// **'Historique'**
+  String get bacnetTypeTrendLog;
+
+  /// No description provided for @bacnetTypeNotificationClass.
+  ///
+  /// In fr, this message translates to:
+  /// **'Classe de notification'**
+  String get bacnetTypeNotificationClass;
+
+  /// No description provided for @bacnetTypeDevice.
+  ///
+  /// In fr, this message translates to:
+  /// **'Appareil'**
+  String get bacnetTypeDevice;
+
+  /// No description provided for @scheduleDayShortMonday.
+  ///
+  /// In fr, this message translates to:
+  /// **'Lun'**
+  String get scheduleDayShortMonday;
+
+  /// No description provided for @scheduleDayShortTuesday.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mar'**
+  String get scheduleDayShortTuesday;
+
+  /// No description provided for @scheduleDayShortWednesday.
+  ///
+  /// In fr, this message translates to:
+  /// **'Mer'**
+  String get scheduleDayShortWednesday;
+
+  /// No description provided for @scheduleDayShortThursday.
+  ///
+  /// In fr, this message translates to:
+  /// **'Jeu'**
+  String get scheduleDayShortThursday;
+
+  /// No description provided for @scheduleDayShortFriday.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ven'**
+  String get scheduleDayShortFriday;
+
+  /// No description provided for @scheduleDayShortSaturday.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sam'**
+  String get scheduleDayShortSaturday;
+
+  /// No description provided for @scheduleDayShortSunday.
+  ///
+  /// In fr, this message translates to:
+  /// **'Dim'**
+  String get scheduleDayShortSunday;
+
+  /// No description provided for @scheduleNewSlot.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nouveau créneau'**
+  String get scheduleNewSlot;
+
+  /// No description provided for @scheduleEditSlot.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modifier le créneau'**
+  String get scheduleEditSlot;
+
+  /// No description provided for @scheduleNewTransition.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nouvelle transition'**
+  String get scheduleNewTransition;
+
+  /// No description provided for @scheduleAllDay.
+  ///
+  /// In fr, this message translates to:
+  /// **'Toute la journée'**
+  String get scheduleAllDay;
+
+  /// No description provided for @scheduleStartTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Heure de début'**
+  String get scheduleStartTime;
+
+  /// No description provided for @scheduleEndTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Heure de fin'**
+  String get scheduleEndTime;
+
+  /// No description provided for @scheduleTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Heure'**
+  String get scheduleTime;
+
+  /// No description provided for @scheduleEndAfterStartError.
+  ///
+  /// In fr, this message translates to:
+  /// **'L\'heure de fin doit être après l\'heure de début'**
+  String get scheduleEndAfterStartError;
+
+  /// No description provided for @scheduleDuration.
+  ///
+  /// In fr, this message translates to:
+  /// **'Durée: {duration}'**
+  String scheduleDuration(String duration);
+
+  /// No description provided for @scheduleSelectTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sélectionner l\'heure'**
+  String get scheduleSelectTime;
+
+  /// No description provided for @scheduleMidnightEndOfDay.
+  ///
+  /// In fr, this message translates to:
+  /// **'Minuit (fin de journée)'**
+  String get scheduleMidnightEndOfDay;
+
+  /// No description provided for @scheduleCopyDay.
+  ///
+  /// In fr, this message translates to:
+  /// **'Copier ce jour'**
+  String get scheduleCopyDay;
+
+  /// No description provided for @schedulePasteHereFrom.
+  ///
+  /// In fr, this message translates to:
+  /// **'Coller ici (depuis {day})'**
+  String schedulePasteHereFrom(String day);
+
+  /// No description provided for @schedulePasteFrom.
+  ///
+  /// In fr, this message translates to:
+  /// **'Coller depuis {day}'**
+  String schedulePasteFrom(String day);
+
+  /// No description provided for @schedulePasteToWorkDays.
+  ///
+  /// In fr, this message translates to:
+  /// **'Coller sur jours ouvrés'**
+  String get schedulePasteToWorkDays;
+
+  /// No description provided for @scheduleWorkDaysRange.
+  ///
+  /// In fr, this message translates to:
+  /// **'Lun-Ven'**
+  String get scheduleWorkDaysRange;
+
+  /// No description provided for @schedulePasteToAllDays.
+  ///
+  /// In fr, this message translates to:
+  /// **'Coller sur tous les jours'**
+  String get schedulePasteToAllDays;
+
+  /// No description provided for @scheduleClearDay.
+  ///
+  /// In fr, this message translates to:
+  /// **'Effacer ce jour'**
+  String get scheduleClearDay;
+
+  /// No description provided for @scheduleDayCopied.
+  ///
+  /// In fr, this message translates to:
+  /// **'{day} copié'**
+  String scheduleDayCopied(String day);
+
+  /// No description provided for @schedulePastedToWorkDays.
+  ///
+  /// In fr, this message translates to:
+  /// **'Collé sur les jours ouvrés'**
+  String get schedulePastedToWorkDays;
+
+  /// No description provided for @schedulePastedToAllDays.
+  ///
+  /// In fr, this message translates to:
+  /// **'Collé sur tous les jours'**
+  String get schedulePastedToAllDays;
+
+  /// No description provided for @scheduleMoreActions.
+  ///
+  /// In fr, this message translates to:
+  /// **'Plus d\'actions'**
+  String get scheduleMoreActions;
+
+  /// No description provided for @scheduleSaveConfirmTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Sauvegarder le planning ?'**
+  String get scheduleSaveConfirmTitle;
+
+  /// No description provided for @scheduleSaveConfirmMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Les modifications seront envoyées à l\'automate et prendront effet immédiatement.'**
+  String get scheduleSaveConfirmMessage;
+
+  /// No description provided for @scheduleDiscardConfirmTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Annuler les modifications ?'**
+  String get scheduleDiscardConfirmTitle;
+
+  /// No description provided for @scheduleDiscardConfirmMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'Toutes les modifications non sauvegardées seront perdues.'**
+  String get scheduleDiscardConfirmMessage;
+
+  /// No description provided for @scheduleContinueEditing.
+  ///
+  /// In fr, this message translates to:
+  /// **'Continuer l\'édition'**
+  String get scheduleContinueEditing;
+
+  /// No description provided for @scheduleDeleteTransitionTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer cette transition ?'**
+  String get scheduleDeleteTransitionTitle;
+
+  /// No description provided for @scheduleDeleteSlotTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Supprimer ce créneau ?'**
+  String get scheduleDeleteSlotTitle;
+
+  /// No description provided for @scheduleNoTransition.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune transition'**
+  String get scheduleNoTransition;
+
+  /// No description provided for @scheduleNoScheduledTransition.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune transition programmée'**
+  String get scheduleNoScheduledTransition;
+
+  /// No description provided for @scheduleTapPlusToAdd.
+  ///
+  /// In fr, this message translates to:
+  /// **'Appuyez sur + pour ajouter'**
+  String get scheduleTapPlusToAdd;
+
+  /// No description provided for @scheduleAddSlot.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ajouter un créneau'**
+  String get scheduleAddSlot;
+
+  /// No description provided for @scheduleFullDay.
+  ///
+  /// In fr, this message translates to:
+  /// **'Journée'**
+  String get scheduleFullDay;
+
+  /// No description provided for @scheduleEditDayTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modifier - {day}'**
+  String scheduleEditDayTitle(String day);
+
+  /// No description provided for @scheduleAddDayTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ajouter - {day}'**
+  String scheduleAddDayTitle(String day);
+
+  /// No description provided for @connectionsSearchHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Rechercher une connexion (nom, adresse, modèle)…'**
+  String get connectionsSearchHint;
+
+  /// No description provided for @connectionsNoMatch.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune connexion ne correspond à la recherche'**
+  String get connectionsNoMatch;
+
+  /// No description provided for @homeModulesTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Modules'**
+  String get homeModulesTitle;
+
+  /// No description provided for @homeFavoritesDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Vos points suivis, regroupés par dossier'**
+  String get homeFavoritesDesc;
+
+  /// No description provided for @homePointsDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Entrées, sorties et variables de l\'automate'**
+  String get homePointsDesc;
+
+  /// No description provided for @homeDashboardDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Courbes, comparaisons et statistiques'**
+  String get homeDashboardDesc;
+
+  /// No description provided for @homeSchedulesDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Programmes horaires et calendriers'**
+  String get homeSchedulesDesc;
+
+  /// No description provided for @homeAlarmsDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Événements et défauts en cours'**
+  String get homeAlarmsDesc;
+
+  /// No description provided for @homeOverridesDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Points forcés et dérogations actives'**
+  String get homeOverridesDesc;
+
+  /// No description provided for @homeSynopticDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Vues graphiques de l\'installation'**
+  String get homeSynopticDesc;
+
+  /// No description provided for @homeEnvysionDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Ouvrir le synoptique dans le navigateur'**
+  String get homeEnvysionDesc;
+
+  /// No description provided for @homeDeviceInfoDesc.
+  ///
+  /// In fr, this message translates to:
+  /// **'Identité, réseau et inventaire des objets'**
+  String get homeDeviceInfoDesc;
+
+  /// No description provided for @homeNoAlarm.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucune alarme'**
+  String get homeNoAlarm;
+
+  /// No description provided for @homeNoOverride.
+  ///
+  /// In fr, this message translates to:
+  /// **'Aucun forçage'**
+  String get homeNoOverride;
+
+  /// No description provided for @homeFromCache.
+  ///
+  /// In fr, this message translates to:
+  /// **'Données en cache'**
+  String get homeFromCache;
+
+  /// No description provided for @frmSectionAddress.
+  ///
+  /// In fr, this message translates to:
+  /// **'Adresse de l\'automate'**
+  String get frmSectionAddress;
+
+  /// No description provided for @frmSectionAuth.
+  ///
+  /// In fr, this message translates to:
+  /// **'Authentification'**
+  String get frmSectionAuth;
+
+  /// No description provided for @frmSectionBacnet.
+  ///
+  /// In fr, this message translates to:
+  /// **'Identification BACnet'**
+  String get frmSectionBacnet;
 }
 
 class _AppLocalizationsDelegate

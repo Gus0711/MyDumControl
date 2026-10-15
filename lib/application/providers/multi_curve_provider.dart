@@ -1,14 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../domain/models/multi_curve_chart.dart';
 import '../../domain/models/trend_log.dart';
 import '../../domain/models/bacnet_object.dart';
 import 'active_connection_provider.dart';
 import 'trend_log_provider.dart';
-import 'bacnet_provider.dart';
 import 'points_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// État du viewer multi-courbes
 class MultiCurveViewerState {
@@ -22,6 +19,9 @@ class MultiCurveViewerState {
   final Map<int, String> curveNames;
   final Map<int, String?> curveUnits;
 
+  /// Load error per trend log instance (curves missing from [data])
+  final Map<int, String> curveErrors;
+
   const MultiCurveViewerState({
     this.isLoading = false,
     this.error,
@@ -32,6 +32,7 @@ class MultiCurveViewerState {
     this.curveVisibility = const {},
     this.curveNames = const {},
     this.curveUnits = const {},
+    this.curveErrors = const {},
   });
 
   MultiCurveViewerState copyWith({
@@ -44,6 +45,7 @@ class MultiCurveViewerState {
     Map<int, bool>? curveVisibility,
     Map<int, String>? curveNames,
     Map<int, String?>? curveUnits,
+    Map<int, String>? curveErrors,
   }) {
     return MultiCurveViewerState(
       isLoading: isLoading ?? this.isLoading,
@@ -56,6 +58,7 @@ class MultiCurveViewerState {
       curveVisibility: curveVisibility ?? this.curveVisibility,
       curveNames: curveNames ?? this.curveNames,
       curveUnits: curveUnits ?? this.curveUnits,
+      curveErrors: curveErrors ?? this.curveErrors,
     );
   }
 
@@ -74,26 +77,63 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
   final Ref _ref;
   final String chartId;
 
-  // Cache des données brutes par instance de trend log
+  /// Max number of trend log buffers downloaded at the same time
+  static const _maxConcurrentLoads = 3;
+
+  // Cache des données (filtrées sur la période) par instance de trend log
   final Map<int, TrendLogData> _cachedTrendLogData = {};
+
+  // Private loaders, one per curve: the multi-curve chart does not share
+  // period/state with the single trend log screens (no side effects), and
+  // the buffers are released with this notifier.
+  final Map<int, TrendLogViewerNotifier> _loaders = {};
 
   // Type de connexion utilisé lors du dernier chargement
   bool? _lastConnectionWasBacnet;
   int? _lastConnectionId;
 
+  // Incremented on every loadData: older loads are ignored on completion
+  int _requestId = 0;
+
   MultiCurveViewerNotifier(this._ref, this.chartId)
       : super(const MultiCurveViewerState());
 
+  TrendLogViewerNotifier _loaderFor(int instance) =>
+      _loaders.putIfAbsent(instance, () => TrendLogViewerNotifier(_ref, instance));
+
+  void _disposeLoader(int instance) {
+    _loaders.remove(instance)?.dispose();
+  }
+
+  @override
+  void dispose() {
+    for (final loader in _loaders.values) {
+      loader.dispose();
+    }
+    _loaders.clear();
+    super.dispose();
+  }
+
   /// Initialise avec une liste d'instances de trend log
   Future<void> initialize(List<int> trendLogInstances,
+          {Map<int, String>? names, Map<int, String?>? units}) =>
+      reconfigure(trendLogInstances, names: names, units: units);
+
+  /// Replaces the whole curve configuration (instances, names, units):
+  /// cancels any running load, clears cached curve data and errors, then
+  /// reloads. The caller's maps are copied, never mutated.
+  Future<void> reconfigure(List<int> trendLogInstances,
       {Map<int, String>? names, Map<int, String?>? units}) async {
     if (trendLogInstances.isEmpty) return;
+
+    // Results of a load started for the previous configuration are ignored
+    _requestId++;
 
     // Limiter à 8 courbes max
     final instances = trendLogInstances.take(8).toList();
 
-    // Générer les noms par défaut si non fournis
-    final curveNames = names ?? {};
+    // Générer les noms par défaut si non fournis (copie : ne pas muter la map de l'appelant)
+    final curveNames = Map<int, String>.of(names ?? const {});
     for (int i = 0; i < instances.length; i++) {
       curveNames.putIfAbsent(instances[i], () => 'Courbe ${i + 1}');
     }
@@ -104,10 +144,17 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
       visibility[instance] = true;
     }
 
-    state = state.copyWith(
+    // Oublier les courbes précédentes (réutilisation du même chartId)
+    _cachedTrendLogData.clear();
+    for (final instance in _loaders.keys.toList()) {
+      if (!instances.contains(instance)) _disposeLoader(instance);
+    }
+
+    state = MultiCurveViewerState(
+      selectedPeriod: state.selectedPeriod,
       selectedTrendLogInstances: instances,
       curveNames: curveNames,
-      curveUnits: units ?? {},
+      curveUnits: Map<int, String?>.of(units ?? const {}),
       curveVisibility: visibility,
     );
 
@@ -118,12 +165,12 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
   Future<void> addCurve(int trendLogInstance,
       {String? name, String? units}) async {
     if (!state.canAddCurve) {
-      _logger.w('addCurve: maximum 8 curves reached');
+      logger.w('addCurve: maximum 8 curves reached');
       return;
     }
 
     if (state.selectedTrendLogInstances.contains(trendLogInstance)) {
-      _logger.w('addCurve: instance $trendLogInstance already exists');
+      logger.w('addCurve: instance $trendLogInstance already exists');
       return;
     }
 
@@ -145,14 +192,17 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
     );
 
     // Charger les données pour la nouvelle courbe
-    await _loadSingleCurveData(trendLogInstance);
+    final requestId = _requestId;
+    final error = await _loadSingleCurveData(trendLogInstance);
+    if (!mounted || requestId != _requestId) return;
+    _setCurveError(trendLogInstance, error);
     _rebuildMultiCurveData();
   }
 
   /// Supprime une courbe du graphique
   void removeCurve(int trendLogInstance) {
     if (!state.canRemoveCurve) {
-      _logger.w('removeCurve: minimum 2 curves required');
+      logger.w('removeCurve: minimum 2 curves required');
       return;
     }
 
@@ -169,13 +219,18 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
     final newVisibility = Map<int, bool>.from(state.curveVisibility);
     newVisibility.remove(trendLogInstance);
 
+    final newErrors = Map<int, String>.from(state.curveErrors);
+    newErrors.remove(trendLogInstance);
+
     _cachedTrendLogData.remove(trendLogInstance);
+    _disposeLoader(trendLogInstance);
 
     state = state.copyWith(
       selectedTrendLogInstances: newInstances,
       curveNames: newNames,
       curveUnits: newUnits,
       curveVisibility: newVisibility,
+      curveErrors: newErrors,
     );
 
     _rebuildMultiCurveData();
@@ -198,15 +253,20 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
   }
 
   /// Change la période sélectionnée
+  /// Each curve is re-filtered on the new period, and re-downloaded when its
+  /// cached buffer does not cover it (longer period, or "Tout").
   Future<void> setPeriod(TrendPeriod period) async {
     if (period == state.selectedPeriod) return;
 
     state = state.copyWith(selectedPeriod: period);
-    await loadData(forceRefresh: true);
+    await loadData(reloadCurves: true);
   }
 
   /// Charge les données pour toutes les courbes
-  Future<void> loadData({bool forceRefresh = false}) async {
+  /// [forceRefresh]: re-download every buffer from the controller.
+  /// [reloadCurves]: ask every curve loader again (period change), which
+  /// only downloads when its cache does not cover the period.
+  Future<void> loadData({bool forceRefresh = false, bool reloadCurves = false}) async {
     if (state.selectedTrendLogInstances.isEmpty) return;
 
     final connectionState = _ref.read(activeConnectionProvider);
@@ -217,7 +277,7 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
     if (_lastConnectionWasBacnet != null &&
         (_lastConnectionWasBacnet != currentIsBacnet ||
             _lastConnectionId != currentConnectionId)) {
-      _logger.i('loadData: connection changed, invalidating cache');
+      logger.i('loadData: connection changed, invalidating cache');
       _cachedTrendLogData.clear();
       forceRefresh = true;
     }
@@ -225,11 +285,16 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
     _lastConnectionWasBacnet = currentIsBacnet;
     _lastConnectionId = currentConnectionId;
 
-    // Si pas de force refresh et données en cache, utiliser le cache
-    if (!forceRefresh && _cachedTrendLogData.isNotEmpty) {
+    // Si pas de force refresh et toutes les courbes en cache, utiliser le cache
+    final allCached = state.selectedTrendLogInstances.every(_cachedTrendLogData.containsKey);
+    if (!forceRefresh && !reloadCurves && allCached) {
       _rebuildMultiCurveData();
       return;
     }
+
+    final requestId = ++_requestId;
+    final instances = List<int>.from(state.selectedTrendLogInstances);
+    final total = instances.length;
 
     state = state.copyWith(
       isLoading: true,
@@ -238,25 +303,41 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
     );
 
     try {
-      // Charger les données pour chaque courbe
-      int loaded = 0;
-      for (final instance in state.selectedTrendLogInstances) {
-        loaded++;
-        state = state.copyWith(
-          loadingMessage:
-              'Chargement courbe $loaded/${state.selectedTrendLogInstances.length}...',
-        );
-        await _loadSingleCurveData(instance);
+      // Charger les courbes en parallèle (concurrence limitée)
+      final errors = <int, String>{};
+      var done = 0;
+      var next = 0;
+
+      Future<void> worker() async {
+        while (next < instances.length) {
+          final instance = instances[next++];
+          final error = await _loadSingleCurveData(instance, forceRefresh: forceRefresh);
+          if (!mounted || requestId != _requestId) return;
+          if (error != null) errors[instance] = error;
+          done++;
+          state = state.copyWith(
+            isLoading: true,
+            loadingMessage: 'Chargement courbe $done/$total...',
+          );
+        }
       }
 
+      await Future.wait([
+        for (var i = 0; i < _maxConcurrentLoads && i < total; i++) worker(),
+      ]);
+      if (!mounted || requestId != _requestId) return;
+
+      state = state.copyWith(curveErrors: errors);
       _rebuildMultiCurveData();
 
       state = state.copyWith(
         isLoading: false,
+        error: errors.isEmpty ? null : _errorSummary(errors),
         loadingMessage: null,
       );
     } catch (e) {
-      _logger.e('loadData error: $e');
+      logger.e('loadData error: $e');
+      if (!mounted || requestId != _requestId) return;
       state = state.copyWith(
         isLoading: false,
         error: 'Erreur: $e',
@@ -265,117 +346,77 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
     }
   }
 
-  /// Charge les données d'une seule courbe en utilisant le trendLogViewerProvider existant
-  Future<void> _loadSingleCurveData(int trendLogInstance) async {
-    _logger.i('_loadSingleCurveData: loading instance $trendLogInstance via trendLogViewerProvider');
+  String _errorSummary(Map<int, String> errors) {
+    final names = errors.keys.map((i) => state.curveNames[i] ?? 'TL $i').join(', ');
+    return '${errors.length} courbe(s) non chargée(s) : $names';
+  }
+
+  void _setCurveError(int instance, String? error) {
+    final newErrors = Map<int, String>.from(state.curveErrors);
+    if (error == null) {
+      newErrors.remove(instance);
+    } else {
+      newErrors[instance] = error;
+    }
+    state = state.copyWith(
+      curveErrors: newErrors,
+      error: newErrors.isEmpty ? null : _errorSummary(newErrors),
+    );
+  }
+
+  /// Charge les données d'une seule courbe via son loader privé
+  /// Returns an error message, or null on success.
+  Future<String?> _loadSingleCurveData(int trendLogInstance, {bool forceRefresh = false}) async {
+    final period = state.selectedPeriod;
+    logger.i('_loadSingleCurveData: loading instance $trendLogInstance (period=$period, forceRefresh=$forceRefresh)');
 
     try {
-      // Utiliser le provider existant qui fonctionne bien
-      final notifier = _ref.read(trendLogViewerProvider(trendLogInstance).notifier);
+      final loader = _loaderFor(trendLogInstance);
 
-      // Charger les données avec la période sélectionnée
-      await notifier.loadData(period: state.selectedPeriod, forceRefresh: false);
+      await loader.loadData(
+        period: period,
+        forceRefresh: forceRefresh,
+        allData: period == TrendPeriod.all,
+      );
 
-      // Récupérer l'état après chargement
-      final viewerState = _ref.read(trendLogViewerProvider(trendLogInstance));
+      final viewerState = loader.currentState;
 
-      _logger.i('_loadSingleCurveData: instance $trendLogInstance -> viewerState.data = ${viewerState.data != null ? "${viewerState.data!.records.length} records" : "null"}');
-
-      if (viewerState.data != null) {
-        final data = viewerState.data!;
-
-        // Log des types de records
-        final numericCount = data.records.where((r) => r.isValueRecord && r.numericValue != null).length;
-        _logger.i('_loadSingleCurveData: instance $trendLogInstance -> $numericCount records with numeric values');
-
-        _cachedTrendLogData[trendLogInstance] = data;
-      } else if (viewerState.error != null) {
-        _logger.w('_loadSingleCurveData: instance $trendLogInstance -> error: ${viewerState.error}');
+      if (viewerState.error != null ||
+          viewerState.data == null ||
+          viewerState.data!.records.isEmpty) {
+        _cachedTrendLogData.remove(trendLogInstance);
+        final error = viewerState.error ?? 'Aucune donnée';
+        logger.w('_loadSingleCurveData: instance $trendLogInstance -> error: $error');
+        return error;
       }
+
+      _cachedTrendLogData[trendLogInstance] = viewerState.data!;
+      return null;
     } catch (e, stack) {
-      _logger.e('_loadSingleCurveData error for instance $trendLogInstance: $e');
-      _logger.e('Stack: $stack');
+      logger.e('_loadSingleCurveData error for instance $trendLogInstance: $e\n$stack');
+      _cachedTrendLogData.remove(trendLogInstance);
+      return 'Erreur: $e';
     }
-  }
-
-  /// Charge depuis BACnet
-  Future<TrendLogData?> _loadFromBacnet(int trendLogInstance) async {
-    final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
-    final bacnetService = _ref.read(bacnetServiceProvider);
-
-    if (bacnetConnection == null) {
-      _logger.w('_loadFromBacnet: bacnetConnection is null');
-      return null;
-    }
-
-    final maxRecords = _getMaxRecordsForPeriod(state.selectedPeriod);
-
-    final records = await bacnetService.readTrendLogBuffer(
-      host: bacnetConnection.host,
-      port: bacnetConnection.port,
-      trendLogInstance: trendLogInstance,
-      maxRecords: maxRecords,
-    );
-
-    if (records.isEmpty) return null;
-
-    final trendRecords = records
-        .map((r) => TrendLogRecord(
-              timestamp: r.timestamp,
-              value: r.value,
-              type: TrendRecordType.value,
-              status: r.statusFlags != null ? 'flags: ${r.statusFlags}' : null,
-            ))
-        .toList();
-
-    return TrendLogData.fromRecords(trendRecords);
-  }
-
-  /// Charge depuis l'API
-  Future<TrendLogData?> _loadFromApi(int trendLogInstance) async {
-    final connectionState = _ref.read(activeConnectionProvider);
-    final client = connectionState.client;
-
-    if (client == null) {
-      _logger.w('_loadFromApi: client is null');
-      return null;
-    }
-
-    // Charger toutes les données (allData=true pour récupérer l'historique complet)
-    // Le filtrage par période sera fait après
-    final allData = state.selectedPeriod == TrendPeriod.all ||
-                    state.selectedPeriod == TrendPeriod.month;
-
-    final buffer = await client.getTrendLogBuffer(
-      trendLogInstance,
-      allData: allData,
-    );
-
-    if (buffer == null || buffer.isEmpty) return null;
-
-    return TrendLogBufferParser.parseV1(buffer);
-  }
-
-  /// Filtre les données par période
-  TrendLogData _filterByPeriod(TrendLogData data, TrendPeriod period) {
-    if (period == TrendPeriod.all || period == TrendPeriod.custom) {
-      return data;
-    }
-
-    final now = DateTime.now();
-    final cutoff = now.subtract(period.duration);
-
-    return data.filterByTimeRange(cutoff, now);
   }
 
   /// Reconstruit le MultiCurveData à partir des données en cache
   void _rebuildMultiCurveData() {
-    _logger.i('_rebuildMultiCurveData: cache size = ${_cachedTrendLogData.length}');
-    _logger.i('_rebuildMultiCurveData: selectedInstances = ${state.selectedTrendLogInstances}');
+    if (!mounted) return;
 
     if (_cachedTrendLogData.isEmpty) {
-      _logger.w('_rebuildMultiCurveData: cache is empty!');
-      state = state.copyWith(data: null);
+      logger.w('_rebuildMultiCurveData: cache is empty!');
+      // copyWith cannot reset data to null: rebuild the state explicitly
+      state = MultiCurveViewerState(
+        isLoading: state.isLoading,
+        error: state.error,
+        selectedPeriod: state.selectedPeriod,
+        loadingMessage: state.loadingMessage,
+        selectedTrendLogInstances: state.selectedTrendLogInstances,
+        curveVisibility: state.curveVisibility,
+        curveNames: state.curveNames,
+        curveUnits: state.curveUnits,
+        curveErrors: state.curveErrors,
+      );
       return;
     }
 
@@ -390,12 +431,7 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
     int colorIndex = 0;
     for (final instance in state.selectedTrendLogInstances) {
       final cachedData = _cachedTrendLogData[instance];
-      _logger.d('_rebuildMultiCurveData: instance $instance -> cachedData = ${cachedData != null ? "${cachedData.records.length} records" : "null"}');
       if (cachedData != null) {
-        // Compter les records avec valeurs numériques
-        final numericRecords = cachedData.records.where((r) => r.isValueRecord && r.numericValue != null).length;
-        _logger.d('_rebuildMultiCurveData: instance $instance -> $numericRecords numeric records');
-
         dataList.add((
           instance: instance,
           name: state.curveNames[instance] ?? 'Courbe ${colorIndex + 1}',
@@ -407,37 +443,17 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
       }
     }
 
-    _logger.i('_rebuildMultiCurveData: dataList has ${dataList.length} items');
-
     final multiCurveData = MultiCurveData.fromTrendLogDataList(
       dataList: dataList,
       visibility: state.curveVisibility,
     );
 
-    _logger.i('_rebuildMultiCurveData: multiCurveData = ${multiCurveData != null ? "${multiCurveData.curves.length} curves" : "null"}');
+    logger.i('_rebuildMultiCurveData: ${dataList.length} curves');
 
-    state = state.copyWith(data: multiCurveData);
+    state = state.copyWith(data: multiCurveData, error: state.error, loadingMessage: state.loadingMessage);
   }
 
-  /// Calcule le nombre max de records selon la période
-  int _getMaxRecordsForPeriod(TrendPeriod period) {
-    // Avec intervalle de 15 min: ~4 records/heure
-    switch (period) {
-      case TrendPeriod.hour:
-        return 10; // ~2.5 heures de données
-      case TrendPeriod.day:
-        return 100; // ~25 heures
-      case TrendPeriod.week:
-        return 700; // ~7 jours
-      case TrendPeriod.month:
-        return 3000; // ~30 jours
-      case TrendPeriod.all:
-      case TrendPeriod.custom:
-        return 10000; // Max
-    }
-  }
-
-  /// Rafraîchit toutes les données
+  /// Rafraîchit toutes les données (re-télécharge tous les buffers)
   Future<void> refresh() async {
     await loadData(forceRefresh: true);
   }
@@ -452,10 +468,14 @@ class MultiCurveViewerNotifier extends StateNotifier<MultiCurveViewerState> {
 }
 
 /// Provider family pour les viewers multi-courbes
-/// Chaque chartId a son propre état
-final multiCurveViewerProvider = StateNotifierProvider.family<
+/// Chaque chartId a son propre état ; autoDispose avec keep-alive limité
+/// (les buffers sont libérés quand le graphique n'est plus affiché).
+final multiCurveViewerProvider = StateNotifierProvider.autoDispose.family<
     MultiCurveViewerNotifier, MultiCurveViewerState, String>(
-  (ref, chartId) => MultiCurveViewerNotifier(ref, chartId),
+  (ref, chartId) {
+    keepAliveForAWhile(ref);
+    return MultiCurveViewerNotifier(ref, chartId);
+  },
 );
 
 /// Représente un trend log disponible

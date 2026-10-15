@@ -2,14 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../data/database/app_database.dart';
 import '../../data/database/tables/synoptic_bindings_table.dart';
 import 'database_provider.dart';
 import 'active_connection_provider.dart';
+import 'bacnet_provider.dart';
+import 'bacnet_type_codes.dart';
 import 'points_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Bibliothèque des SVG disponibles dans les assets
 class SvgAssetInfo {
@@ -45,9 +45,7 @@ const List<SvgAssetInfo> builtInSvgAssets = [
 /// Provider pour la liste des synoptiques disponibles pour la connexion active
 final synopticsProvider = StreamProvider<List<Synoptic>>((ref) {
   final database = ref.watch(databaseProvider);
-  final activeConnection = ref.watch(activeConnectionProvider);
-
-  final connectionId = activeConnection.connection?.id;
+  final connectionId = ref.watch(activeConnectionProvider.select((s) => s.connection?.id));
   return database.watchSynopticsForConnection(connectionId);
 });
 
@@ -226,10 +224,16 @@ class SynopticLiveState {
 }
 
 /// Notifier pour gérer l'état temps réel d'un synoptique
+/// - les liaisons sont suivies en direct depuis la DB (une liaison ajoutée
+///   dans l'éditeur apparaît sans redémarrer) ;
+/// - les valeurs sont relues sur l'automate actif (API batch ou BACnet) ;
+/// - le timer n'existe que tant que le notifier est monté (autoDispose).
 class SynopticLiveNotifier extends StateNotifier<SynopticLiveState> {
   final Ref _ref;
   final int _synopticId;
   Timer? _refreshTimer;
+  StreamSubscription<List<SynopticBinding>>? _bindingsSub;
+  bool _isRefreshing = false;
   static const _refreshInterval = Duration(seconds: 5);
 
   SynopticLiveNotifier(this._ref, this._synopticId)
@@ -237,84 +241,143 @@ class SynopticLiveNotifier extends StateNotifier<SynopticLiveState> {
     _init();
   }
 
-  Future<void> _init() async {
-    await loadBindings();
-    await refreshValues();
+  void _init() {
+    final database = _ref.read(databaseProvider);
+    _bindingsSub = database.watchBindingsForSynoptic(_synopticId).listen(
+      _onBindings,
+      onError: (Object e) {
+        logger.e('Error watching synoptic bindings: $e');
+        if (mounted) state = state.copyWith(error: e.toString());
+      },
+    );
+  }
+
+  void _onBindings(List<SynopticBinding> bindingsList) {
+    if (!mounted) return;
+    state = state.copyWith(bindings: {
+      for (final b in bindingsList) b.svgElementId: b,
+    });
+    refreshValues(showLoading: state.pointValues.isEmpty);
     _startAutoRefresh();
   }
 
   void _startAutoRefresh() {
-    _refreshTimer?.cancel();
+    if (!mounted || _refreshTimer != null) return;
     _refreshTimer = Timer.periodic(_refreshInterval, (_) => refreshValues());
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _refreshTimer = null;
+    _bindingsSub?.cancel();
     super.dispose();
   }
 
-  /// Charge les liaisons depuis la DB
+  /// Recharge les liaisons depuis la DB (le stream le fait déjà en continu)
   Future<void> loadBindings() async {
     final database = _ref.read(databaseProvider);
     final bindingsList = await database.getBindingsForSynoptic(_synopticId);
-
-    final bindingsMap = <String, SynopticBinding>{};
-    for (final b in bindingsList) {
-      bindingsMap[b.svgElementId] = b;
-    }
-
-    state = state.copyWith(bindings: bindingsMap);
+    if (!mounted) return;
+    state = state.copyWith(bindings: {
+      for (final b in bindingsList) b.svgElementId: b,
+    });
   }
 
-  /// Rafraîchit les valeurs des points depuis l'API
-  Future<void> refreshValues() async {
-    if (state.bindings.isEmpty) return;
+  /// Rafraîchit les valeurs des points depuis l'automate actif.
+  /// Les points introuvables sont ignorés (affichés "--"), sans bloquer les
+  /// autres. [showLoading] : n'afficher l'indicateur que sur une action
+  /// utilisateur ou le premier chargement (pas à chaque tick du timer).
+  Future<void> refreshValues({bool showLoading = false}) async {
+    if (!mounted || state.bindings.isEmpty || _isRefreshing) return;
+    _isRefreshing = true;
 
-    state = state.copyWith(isLoading: true, error: null);
+    if (showLoading) state = state.copyWith(isLoading: true);
 
-    try {
-      // Récupérer les pointRefs uniques
-      final pointRefs = state.bindings.values.map((b) => b.pointRef).toSet();
+    final pointRefs = state.bindings.values.map((b) => b.pointRef).toSet().toList();
+    String? error;
+    final newValues = <String, dynamic>{};
 
-      // Utiliser le provider des points pour récupérer les valeurs
-      final pointsState = _ref.read(pointsProvider);
-      final newValues = <String, dynamic>{};
-
-      for (final ref in pointRefs) {
-        // Chercher le point dans les points chargés
-        final point = pointsState.points.firstWhere(
-          (p) => p.objectId == ref,
-          orElse: () => pointsState.points.firstWhere(
-            (p) => p.objectId.endsWith(':${ref.split(':').last}') && p.objectId.startsWith(ref.split(':').first),
-            orElse: () => throw Exception('Point not found: $ref'),
-          ),
-        );
-        newValues[ref] = point.presentValue;
-      }
-
-      state = state.copyWith(
-        pointValues: newValues,
-        isLoading: false,
-      );
-    } catch (e) {
-      _logger.e('Error refreshing synoptic values: $e');
-      state = state.copyWith(
-        isLoading: false,
-        error: e.toString(),
-      );
+    // 1) Valeurs déjà chargées par l'écran Points (repli si lecture impossible)
+    final cachedPoints = _ref.read(pointsProvider).points;
+    final cachedById = {for (final p in cachedPoints) p.objectId: p};
+    for (final ref in pointRefs) {
+      final point = cachedById[ref];
+      if (point != null) newValues[ref] = point.presentValue;
     }
+
+    // 2) Lecture réelle sur l'automate
+    try {
+      newValues.addAll(await _readLiveValues(pointRefs));
+    } catch (e) {
+      logger.e('Error refreshing synoptic values: $e');
+      error = e.toString();
+    } finally {
+      _isRefreshing = false;
+    }
+
+    if (!mounted) return;
+    state = state.copyWith(
+      pointValues: newValues,
+      isLoading: false,
+      error: error,
+    );
+  }
+
+  /// Lit les presentValue des points via la connexion active.
+  /// Retourne pointRef -> valeur pour les points trouvés.
+  Future<Map<String, dynamic>> _readLiveValues(List<String> pointRefs) async {
+    final connection = _ref.read(activeConnectionProvider);
+    if (!connection.isConnected) return {};
+
+    // Connexion BACnet native
+    if (connection.isBacnetConnection) {
+      final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
+      if (bacnetConnection == null) return {};
+
+      final parsed = pointRefs.map(parseBacnetPointRef).whereType<ParsedBacnetPointRef>().toList();
+      if (parsed.isEmpty) return {};
+
+      final results = await _ref.read(bacnetServiceProvider).refreshMultiplePointValues(
+            host: bacnetConnection.host,
+            port: bacnetConnection.port,
+            points: [
+              for (final p in parsed)
+                (
+                  objectType: p.typeCode,
+                  objectInstance: p.instance,
+                  isCommandable: p.type.isCommandable,
+                  isInput: p.type.isInput,
+                ),
+            ],
+          );
+
+      return {
+        for (final p in parsed)
+          if (results['${p.typeCode}:${p.instance}'] != null)
+            p.pointRef: results['${p.typeCode}:${p.instance}']!.presentValue,
+      };
+    }
+
+    // Connexion API Distech (batch V1/V2)
+    final client = connection.client;
+    if (client == null) return {};
+    final results = await client.readMultiplePoints(pointRefs);
+    return {
+      for (final entry in results.entries) entry.key: entry.value.presentValue,
+    };
   }
 
   /// Force un rafraîchissement immédiat
   Future<void> forceRefresh() async {
-    await refreshValues();
+    await refreshValues(showLoading: true);
   }
 }
 
 /// Provider famille pour l'état temps réel d'un synoptique
+/// autoDispose : le timer s'arrête dès que le viewer est fermé.
 final synopticLiveProvider =
-    StateNotifierProvider.family<SynopticLiveNotifier, SynopticLiveState, int>(
+    StateNotifierProvider.autoDispose.family<SynopticLiveNotifier, SynopticLiveState, int>(
   (ref, synopticId) => SynopticLiveNotifier(ref, synopticId),
 );
 
@@ -343,11 +406,11 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
         connectionId: Value(connectionId),
       ));
 
-      _logger.i('Created synoptic: $name (id: $id)');
+      logger.i('Created synoptic: $name (id: $id)');
       state = const AsyncValue.data(null);
       return id;
     } catch (e, st) {
-      _logger.e('Error creating synoptic: $e');
+      logger.e('Error creating synoptic: $e');
       state = AsyncValue.error(e, st);
       return null;
     }
@@ -372,11 +435,11 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
         connectionId: connectionId,
       );
 
-      _logger.i('Updated synoptic: $synopticId');
+      logger.i('Updated synoptic: $synopticId');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('Error updating synoptic: $e');
+      logger.e('Error updating synoptic: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
@@ -391,11 +454,11 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
 
       await database.deleteSynoptic(synopticId);
 
-      _logger.i('Deleted synoptic: $synopticId');
+      logger.i('Deleted synoptic: $synopticId');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('Error deleting synoptic: $e');
+      logger.e('Error deleting synoptic: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
@@ -424,11 +487,12 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
         pointName: Value(pointName),
       ));
 
-      _logger.i('Upserted binding: $svgElementId -> $pointRef');
+      _ref.invalidate(bindingsCountProvider(synopticId));
+      logger.i('Upserted binding: $svgElementId -> $pointRef');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('Error upserting binding: $e');
+      logger.e('Error upserting binding: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
@@ -443,11 +507,12 @@ class SynopticsNotifier extends StateNotifier<AsyncValue<void>> {
 
       await database.deleteBindingByElement(synopticId, svgElementId);
 
-      _logger.i('Deleted binding: $svgElementId');
+      _ref.invalidate(bindingsCountProvider(synopticId));
+      logger.i('Deleted binding: $svgElementId');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('Error deleting binding: $e');
+      logger.e('Error deleting binding: $e');
       state = AsyncValue.error(e, st);
       return false;
     }

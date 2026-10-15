@@ -1,5 +1,9 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
+import '../../data/services/bacnet/bacnet_network.dart';
+
 /// Représente une interface réseau disponible pour la communication BACnet
 class NetworkInterfaceChoice {
   final String name;
@@ -24,6 +28,17 @@ class NetworkInterfaceChoice {
   }) async {
     final result = <NetworkInterfaceChoice>[];
 
+    // Real broadcast / prefix per address (netmask from `ip` on Linux,
+    // /24 assumption elsewhere)
+    final realByAddress = <String, LocalIpv4Interface>{};
+    try {
+      for (final i in await BacnetNetwork.listIpv4Interfaces()) {
+        realByAddress[i.address] = i;
+      }
+    } catch (_) {
+      // Fall back to /24 below
+    }
+
     try {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
@@ -38,8 +53,9 @@ class NetworkInterfaceChoice {
           final parts = addr.address.split('.');
           if (parts.length != 4) continue;
 
-          // Calculer l'adresse broadcast (simplification /24)
-          final broadcastAddress = '${parts[0]}.${parts[1]}.${parts[2]}.255';
+          // Adresse broadcast réelle si connue, sinon simplification /24
+          final real = realByAddress[addr.address];
+          final broadcastAddress = real?.broadcast ?? '${parts[0]}.${parts[1]}.${parts[2]}.255';
 
           // Détecter si c'est une interface WiFi
           final nameLower = iface.name.toLowerCase();
@@ -52,6 +68,7 @@ class NetworkInterfaceChoice {
             name: iface.name,
             address: addr.address,
             broadcastAddress: broadcastAddress,
+            subnetMask: real != null ? prefixToSubnetMask(real.prefixLength) : null,
             isWireless: isWireless,
             isLoopback: addr.isLoopback,
           ));
@@ -60,9 +77,17 @@ class NetworkInterfaceChoice {
     } catch (e) {
       // En cas d'erreur, retourner une liste vide
       // L'appelant utilisera le fallback sur toutes les interfaces
+      debugPrint('NetworkInterfaceChoice.listAvailable failed: $e');
     }
 
     return result;
+  }
+
+  /// Dotted subnet mask of a /[prefixLength] network (e.g. 23 -> 255.255.254.0)
+  static String prefixToSubnetMask(int prefixLength) {
+    final p = prefixLength.clamp(0, 32);
+    final mask = p == 0 ? 0 : (0xFFFFFFFF << (32 - p)) & 0xFFFFFFFF;
+    return '${(mask >> 24) & 0xFF}.${(mask >> 16) & 0xFF}.${(mask >> 8) & 0xFF}.${mask & 0xFF}';
   }
 
   /// Icône suggérée pour cette interface

@@ -14,7 +14,6 @@ dependencies:
 
   # State Management
   flutter_riverpod: ^2.5.1
-  riverpod_annotation: ^2.3.5
 
   # Navigation
   go_router: ^14.2.0
@@ -47,11 +46,9 @@ dependencies:
   url_launcher: ^6.3.1
 
   # Utils
-  freezed_annotation: ^2.4.1
-  json_annotation: ^4.9.0
   equatable: ^2.0.5
   dartz: ^0.10.1
-  intl: 0.20.2
+  intl: ^0.20.3
   logger: ^2.3.0
   uuid: ^4.4.0
   crypto: ^3.0.3
@@ -66,9 +63,6 @@ dev_dependencies:
 
   # Code generation
   build_runner: ^2.4.9
-  riverpod_generator: ^2.4.0
-  freezed: ^2.5.2
-  json_serializable: ^6.8.0
   drift_dev: ^2.18.0
 
   # Testing
@@ -85,6 +79,25 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/synoptics/
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Italic.ttf
+          style: italic
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+        - asset: assets/fonts/JetBrainsMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/JetBrainsMono-SemiBold.ttf
+          weight: 600
 
 # Configuration flutter_launcher_icons
 flutter_launcher_icons:

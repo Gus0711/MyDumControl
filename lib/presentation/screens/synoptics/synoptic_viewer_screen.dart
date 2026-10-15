@@ -5,8 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../../application/providers/synoptics_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../data/database/app_database.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../data/database/tables/synoptic_bindings_table.dart';
+import '../../widgets/gradient_app_bar.dart';
 import '../../widgets/synoptic_painters/circuit_regule_painter.dart';
+import '../../widgets/ui/ui.dart';
+import '../../../core/theme/app_colors.dart';
 
 /// Écran de visualisation d'un synoptique avec données temps réel
 class SynopticViewerScreen extends ConsumerStatefulWidget {
@@ -29,16 +33,17 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final synopticAsync = ref.watch(synopticByIdProvider(widget.synopticId));
     final bindingsAsync = ref.watch(synopticBindingsProvider(widget.synopticId));
     final liveState = ref.watch(synopticLiveProvider(widget.synopticId));
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GradientAppBar(
         title: synopticAsync.when(
-          data: (synoptic) => Text(synoptic?.name ?? 'Synoptique'),
-          loading: () => const Text('Chargement...'),
-          error: (_, __) => const Text('Erreur'),
+          data: (synoptic) => synoptic?.name ?? l10n.synopticDefaultName,
+          loading: () => l10n.loading,
+          error: (_, _) => l10n.error,
         ),
         actions: [
           // Indicateur de chargement
@@ -49,28 +54,28 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
                 child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 ),
               ),
             ),
           // Bouton refresh
           IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Rafraîchir',
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: l10n.refresh,
             onPressed: () {
               ref.read(synopticLiveProvider(widget.synopticId).notifier).forceRefresh();
             },
           ),
           // Bouton éditer
           IconButton(
-            icon: const Icon(Icons.edit),
-            tooltip: 'Éditer les liaisons',
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: l10n.synopticEditBindings,
             onPressed: () => context.push(Routes.synopticEditPath(widget.synopticId)),
           ),
           // Bouton réinitialiser le zoom
           IconButton(
-            icon: const Icon(Icons.fit_screen),
-            tooltip: 'Réinitialiser le zoom',
+            icon: const Icon(Icons.fit_screen_rounded),
+            tooltip: l10n.synopticResetZoom,
             onPressed: () {
               _transformController.value = Matrix4.identity();
             },
@@ -80,28 +85,20 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
       body: synopticAsync.when(
         data: (synoptic) {
           if (synoptic == null) {
-            return const Center(child: Text('Synoptique non trouvé'));
+            return DcEmptyState(icon: Icons.schema_outlined, title: l10n.synopticNotFound);
           }
 
           return Column(
             children: [
               // Erreur éventuelle
               if (liveState.error != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(8),
-                  color: Colors.orange.shade100,
-                  child: Row(
-                    children: [
-                      Icon(Icons.warning, color: Colors.orange.shade700, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Erreur de mise à jour: ${liveState.error}',
-                          style: TextStyle(color: Colors.orange.shade900, fontSize: 12),
-                        ),
-                      ),
-                    ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: DcBanner(
+                    tone: context.dc.warning,
+                    icon: Icons.warning_amber_rounded,
+                    message: l10n.synopticUpdateError('${liveState.error}'),
+                    dense: true,
                   ),
                 ),
 
@@ -121,7 +118,10 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
                         liveState,
                       ),
                       loading: () => const CircularProgressIndicator(),
-                      error: (e, _) => Text('Erreur: $e'),
+                      error: (e, _) => Text(
+                        l10n.errorWithMessage(e.toString()),
+                        style: TextStyle(color: context.dc.danger.fg),
+                      ),
                     ),
                   ),
                 ),
@@ -132,8 +132,12 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Erreur: $error')),
+        loading: () => const DcLoading(),
+        error: (error, _) => DcEmptyState.error(
+          context,
+          title: l10n.error,
+          message: error.toString(),
+        ),
       ),
     );
   }
@@ -217,34 +221,37 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
   }
 
   Widget _buildInfoBar(BuildContext context, SynopticLiveState liveState) {
+    final l10n = AppLocalizations.of(context)!;
     final bindingsCount = liveState.bindings.length;
     final pointsCount = liveState.pointValues.length;
 
+    final dc = context.dc;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+        color: dc.surface,
+        border: Border(top: BorderSide(color: dc.border)),
       ),
       child: Row(
         children: [
-          Icon(Icons.link, size: 16, color: Colors.grey.shade600),
-          const SizedBox(width: 4),
-          Text(
-            '$bindingsCount liaison${bindingsCount > 1 ? 's' : ''}',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-          ),
-          const SizedBox(width: 16),
-          Icon(Icons.sensors, size: 16, color: Colors.grey.shade600),
-          const SizedBox(width: 4),
-          Text(
-            '$pointsCount point${pointsCount > 1 ? 's' : ''} actif${pointsCount > 1 ? 's' : ''}',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          DcTag(l10n.synopticBindingsCount(bindingsCount), icon: Icons.link_rounded, dense: true),
+          const SizedBox(width: 8),
+          DcTag(
+            l10n.synopticActivePointsCount(pointsCount),
+            icon: Icons.sensors_rounded,
+            tone: pointsCount > 0 ? dc.success : dc.neutral,
+            dense: true,
           ),
           const Spacer(),
-          Text(
-            'Pincez pour zoomer',
-            style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+          Icon(Icons.pinch_rounded, size: 14, color: dc.textMuted),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              l10n.synopticPinchToZoom,
+              overflow: TextOverflow.ellipsis,
+              style: context.text.bodySmall?.copyWith(color: dc.textMuted),
+            ),
           ),
         ],
       ),
@@ -255,21 +262,19 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
     final liveState = ref.read(synopticLiveProvider(widget.synopticId));
     final value = liveState.pointValues[binding.pointRef];
     final config = BindingConfig.fromJson(binding.configJson);
+    final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
       builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(
-                  _getBindingIcon(binding.bindingType),
-                  color: Theme.of(context).primaryColor,
-                ),
+                DcIconBox(icon: _getBindingIcon(binding.bindingType), size: 42),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -277,13 +282,14 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
                     children: [
                       Text(
                         binding.pointName ?? binding.pointRef,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        style: context.text.titleMedium,
                       ),
                       Text(
                         binding.pointRef,
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                        style: AppTextStyles.monospacedValue.copyWith(
+                          color: context.dc.textMuted,
+                          fontSize: 11.5,
+                        ),
                       ),
                     ],
                   ),
@@ -291,22 +297,37 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
               ],
             ),
             const Divider(height: 32),
-            _buildDetailRow('Élément SVG', binding.svgElementId),
-            _buildDetailRow('Type de liaison', _getBindingTypeName(binding.bindingType)),
-            _buildDetailRow('Valeur actuelle', config.formatValue(value)),
+            DcInfoRow(label: l10n.synopticSvgElement, value: binding.svgElementId, mono: true, labelWidth: 140),
+            DcInfoRow(
+              label: l10n.synopticBindingType,
+              value: _getBindingTypeName(l10n, binding.bindingType),
+              labelWidth: 140,
+            ),
+            DcInfoRow(
+              label: l10n.synopticCurrentValue,
+              value: config.formatValue(value),
+              mono: true,
+              valueColor: context.dc.accentTone.fg,
+              labelWidth: 140,
+            ),
             if (binding.bindingType == BindingType.color)
-              _buildDetailRow('État', config.isOn(value) ? 'ON' : 'OFF'),
+              DcInfoRow(
+                label: l10n.state,
+                value: config.isOn(value) ? 'ON' : 'OFF',
+                valueColor: config.isOn(value) ? context.dc.success.fg : context.dc.textSecondary,
+                labelWidth: 140,
+              ),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
+              child: FilledButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
                   // Naviguer vers le détail du point
                   context.push(Routes.pointDetailPath(binding.pointRef));
                 },
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('Voir le point'),
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: Text(l10n.synopticViewPoint),
               ),
             ),
           ],
@@ -315,49 +336,25 @@ class _SynopticViewerScreenState extends ConsumerState<SynopticViewerScreen> {
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   IconData _getBindingIcon(BindingType type) {
     switch (type) {
       case BindingType.value:
-        return Icons.numbers;
+        return Icons.pin_outlined;
       case BindingType.color:
-        return Icons.palette;
+        return Icons.palette_outlined;
       case BindingType.animation:
-        return Icons.animation;
+        return Icons.animation_rounded;
     }
   }
 
-  String _getBindingTypeName(BindingType type) {
+  String _getBindingTypeName(AppLocalizations l10n, BindingType type) {
     switch (type) {
       case BindingType.value:
-        return 'Valeur numérique';
+        return l10n.synopticNumericValue;
       case BindingType.color:
-        return 'Indicateur couleur';
+        return l10n.synopticColorIndicator;
       case BindingType.animation:
-        return 'Animation';
+        return l10n.synopticAnimation;
     }
   }
 }
@@ -439,18 +436,18 @@ class _SvgWithOverlaysState extends State<_SvgWithOverlays>
               child: GestureDetector(
                 onTap: () => widget.onElementTap(binding),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(4),
+                    color: AppColors.brandNavy.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(DcRadius.sm),
+                    border: Border.all(color: AppColors.brandSky.withValues(alpha: 0.5)),
                   ),
                   child: Text(
                     displayValue,
-                    style: const TextStyle(
-                      color: Colors.greenAccent,
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                    style: AppTextStyles.monospacedValue.copyWith(
+                      color: const Color(0xFF8FD3FF),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -529,17 +526,15 @@ class _SvgWithOverlaysState extends State<_SvgWithOverlays>
                 child: AnimatedBuilder(
                   animation: _animController,
                   builder: (context, child) {
+                    final tone = isActive ? context.dc.success : context.dc.neutral;
                     return Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                       decoration: BoxDecoration(
                         color: isActive
-                            ? Colors.green.withValues(alpha: 0.2 + 0.3 * _animController.value)
-                            : Colors.grey.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: isActive ? Colors.green : Colors.grey,
-                          width: 2,
-                        ),
+                            ? AppColors.success.withValues(alpha: 0.15 + 0.2 * _animController.value)
+                            : tone.bg,
+                        borderRadius: BorderRadius.circular(DcRadius.sm),
+                        border: Border.all(color: isActive ? AppColors.success : tone.border, width: 1.5),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -547,25 +542,25 @@ class _SvgWithOverlaysState extends State<_SvgWithOverlays>
                           if (isActive)
                             RotationTransition(
                               turns: _animController,
-                              child: const Icon(
-                                Icons.settings,
+                              child: Icon(
+                                Icons.settings_rounded,
                                 size: 16,
-                                color: Colors.green,
+                                color: tone.fg,
                               ),
                             )
                           else
-                            const Icon(
-                              Icons.settings,
+                            Icon(
+                              Icons.settings_rounded,
                               size: 16,
-                              color: Colors.grey,
+                              color: tone.fg,
                             ),
                           const SizedBox(width: 4),
                           Text(
                             isActive ? 'ON' : 'OFF',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: isActive ? Colors.green : Colors.grey,
+                            style: AppTextStyles.monospacedValue.copyWith(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: tone.fg,
                             ),
                           ),
                         ],
@@ -588,7 +583,7 @@ class _SvgWithOverlaysState extends State<_SvgWithOverlays>
       final cleanHex = hex.replaceAll('#', '');
       return Color(int.parse('FF$cleanHex', radix: 16));
     } catch (_) {
-      return Colors.grey;
+      return AppColors.disconnected;
     }
   }
 

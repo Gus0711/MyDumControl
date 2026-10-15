@@ -3,9 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:myglobaldc/l10n/app_localizations.dart';
 import '../../../application/providers/active_connection_provider.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../data/database/app_database.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../domain/models/display_preferences.dart';
+import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/point_widgets.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Écran d'informations détaillées sur l'appareil connecté
 class DeviceInfoScreen extends ConsumerWidget {
@@ -23,9 +27,11 @@ class DeviceInfoScreen extends ConsumerWidget {
     return Scaffold(
       appBar: GradientAppBar(
         title: l10n.deviceInfo,
+        subtitle: device?.objectName ?? connection?.name,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: l10n.refresh,
             onPressed: connectionState.isLoading
                 ? null
                 : () => ref.read(activeConnectionProvider.notifier).refresh(),
@@ -33,328 +39,307 @@ class DeviceInfoScreen extends ConsumerWidget {
         ],
       ),
       body: connectionState.isLoading && device == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const DcLoading()
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.only(bottom: 32),
               children: [
-                // Carte principale de l'appareil
-                _buildDeviceCard(context, device, connection),
-                const SizedBox(height: 16),
+                DcContent(
+                  maxWidth: 1100,
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      const spacing = 16.0;
+                      final twoColumns = constraints.maxWidth >= 820;
+                      final half = twoColumns ? (constraints.maxWidth - spacing) / 2 : constraints.maxWidth;
 
-                // Informations de connexion
-                _buildConnectionCard(context, l10n, connection),
-                const SizedBox(height: 16),
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Carte principale de l'appareil
+                          _buildDeviceCard(context, l10n, connectionState),
+                          const SizedBox(height: spacing),
 
-                // Informations réseau (API V1 uniquement)
-                if (networkInfo != null) ...[
-                  _buildNetworkCard(context, networkInfo),
-                  const SizedBox(height: 16),
-                ],
+                          // Inventaire des objets BACnet
+                          _buildObjectsSummaryCard(context, l10n, summary, connectionState.isLoadingSummary),
+                          const SizedBox(height: spacing),
 
-                // Résumé des objets BACnet
-                _buildObjectsSummaryCard(context, l10n, summary, connectionState.isLoadingSummary),
-                const SizedBox(height: 16),
+                          Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              // Informations de connexion
+                              if (connection != null)
+                                SizedBox(width: half, child: _buildConnectionCard(context, l10n, connection)),
+                              // Informations techniques
+                              if (device != null)
+                                SizedBox(width: half, child: _buildTechnicalCard(context, l10n, device)),
+                            ],
+                          ),
 
-                // Informations techniques
-                if (device != null) _buildTechnicalCard(context, device),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildDeviceCard(BuildContext context, dynamic device, dynamic connection) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.settings_remote,
-                size: 40,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              device?.objectName ?? connection?.name ?? 'ECLYPSE Controller',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            if (device?.modelName != null) ...[
-              const SizedBox(height: 4),
-              Builder(
-                builder: (context) {
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
-                  return Text(
-                    device!.modelName!,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                        ),
-                  );
-                },
-              ),
-            ],
-            if (connection?.apiVersion != null) ...[
-              const SizedBox(height: 12),
-              Chip(
-                label: Text('API ${connection!.apiVersion}'),
-                backgroundColor: Colors.blue.shade100,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildConnectionCard(BuildContext context, AppLocalizations l10n, dynamic connection) {
-    if (connection == null) return const SizedBox.shrink();
-
-    final protocol = connection.useHttps ? 'HTTPS' : 'HTTP';
-    final url = '${connection.host}:${connection.port}';
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.link, color: AppColors.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Connexion',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildInfoRow(context, 'Protocole', protocol),
-            _buildInfoRow(context, 'Hôte', url),
-            _buildInfoRow(context, 'Utilisateur', connection.username),
-            if (connection.lastConnectedAt != null)
-              _buildInfoRow(
-                context,
-                'Dernière connexion',
-                _formatDateTime(connection.lastConnectedAt),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNetworkCard(BuildContext context, NetworkInfo networkInfo) {
-    final activeInterfaces = networkInfo.activeInterfaces;
-    final hasMultipleInterfaces = activeInterfaces.length > 1;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.lan, color: AppColors.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Réseau',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ),
-                if (activeInterfaces.isNotEmpty)
-                  Builder(
-                    builder: (context) {
-                      final isDark = Theme.of(context).brightness == Brightness.dark;
-                      return Text(
-                        '${activeInterfaces.length} interface${activeInterfaces.length > 1 ? 's' : ''}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                        ),
+                          // Informations réseau (API V1 uniquement)
+                          if (networkInfo != null) ...[
+                            const SizedBox(height: spacing),
+                            _buildNetworkCard(context, l10n, networkInfo, twoColumns),
+                          ],
+                        ],
                       );
                     },
                   ),
+                ),
               ],
             ),
-            const SizedBox(height: 16),
+    );
+  }
 
-            // Afficher chaque interface
-            for (int i = 0; i < networkInfo.interfaces.length; i++) ...[
-              if (i > 0) const Divider(height: 24),
-              _buildInterfaceSection(context, networkInfo.interfaces[i], hasMultipleInterfaces),
-            ],
-          ],
-        ),
+  Widget _buildDeviceCard(BuildContext context, AppLocalizations l10n, ActiveConnectionState state) {
+    final dc = context.dc;
+    final device = state.deviceInfo;
+    final connection = state.connection;
+    final isBacnet = state.isBacnetConnection;
+    final description = (device?.description?.trim().isNotEmpty ?? false) ? device!.description!.trim() : null;
+    final location = (device?.location?.trim().isNotEmpty ?? false) ? device!.location!.trim() : null;
+
+    return DcCard(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DcIconBox(
+            icon: isBacnet ? Icons.lan_outlined : Icons.memory_rounded,
+            tone: isBacnet ? dc.violet : dc.accentTone,
+            size: 64,
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  device?.objectName ?? connection?.name ?? 'ECLYPSE Controller',
+                  style: context.text.headlineSmall,
+                ),
+                if (device?.modelName != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    [device!.modelName!, ?device.vendorName].join(' · '),
+                    style: context.text.bodyLarge?.copyWith(color: dc.textSecondary),
+                  ),
+                ],
+                if (description != null || location != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      if (location != null) ...[
+                        Icon(Icons.place_outlined, size: 15, color: dc.textMuted),
+                        const SizedBox(width: 4),
+                      ],
+                      Flexible(
+                        child: Text(
+                          [?description, ?location].join(' — '),
+                          style: context.text.bodyMedium?.copyWith(color: dc.textMuted),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (connection != null)
+                      DcTag('${connection.host}:${connection.port}', icon: Icons.lan_rounded, mono: true),
+                    if (isBacnet)
+                      DcTag(
+                        state.bacnetDeviceId != null ? 'BACnet · ${state.bacnetDeviceId}' : 'BACnet/IP',
+                        tone: dc.violet,
+                      )
+                    else if (connection?.apiVersion != null)
+                      DcTag('API ${connection!.apiVersion}', tone: dc.accentTone),
+                    if (device?.softwareVersion != null) DcTag('FW ${device!.softwareVersion}', mono: true),
+                    if (device?.deviceInstance != null)
+                      DcTag('${l10n.deviceId} ${device!.deviceInstance}', mono: true),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildInterfaceSection(BuildContext context, NetworkInterfaceInfo iface, bool showTitle) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isDisabled = !iface.enabled;
-    final textColor = isDisabled ? Colors.grey.shade400 : null;
+  Widget _buildConnectionCard(BuildContext context, AppLocalizations l10n, Connection connection) {
+    final isBacnet = connection.connectionType == 'bacnet';
+    final protocol = isBacnet ? 'BACnet/IP' : (connection.useHttps ? 'HTTPS' : 'HTTP');
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return _Panel(
+      title: l10n.connection,
+      icon: Icons.link_rounded,
       children: [
-        // Titre de l'interface (si plusieurs interfaces)
-        if (showTitle)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              children: [
-                Icon(
-                  iface.isWireless ? Icons.wifi : Icons.settings_ethernet,
-                  size: 18,
-                  color: isDisabled ? Colors.grey.shade400 : AppColors.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  iface.displayName,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: textColor,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (iface.dhcpEnabled)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'DHCP',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.green.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                if (isDisabled)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'Désactivé',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                if (iface.isWireless && iface.wifiMode != null)
-                  Container(
-                    margin: const EdgeInsets.only(left: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      iface.wifiMode!,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.blue.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+        DcInfoRow(label: l10n.deviceInfoProtocol, value: protocol, labelWidth: 140),
+        DcInfoRow(label: l10n.host, value: '${connection.host}:${connection.port}', mono: true, labelWidth: 140),
+        if (!isBacnet) DcInfoRow(label: l10n.deviceInfoUser, value: connection.username, labelWidth: 140),
+        if (connection.lastConnectedAt != null)
+          DcInfoRow(
+            label: l10n.deviceInfoLastConnection,
+            value: _formatDateTime(connection.lastConnectedAt!),
+            mono: true,
+            labelWidth: 140,
           ),
-
-        // SSID pour Wi-Fi
-        if (iface.isWireless && iface.ssid != null)
-          _buildNetworkInfoRow(context, 'SSID', iface.ssid!, disabled: isDisabled),
-
-        // Infos IP
-        if (iface.ipAddress != null)
-          _buildNetworkInfoRow(context, 'Adresse IP', iface.ipAddress!, disabled: isDisabled),
-        if (iface.subnetMask != null)
-          _buildNetworkInfoRow(context, 'Masque', iface.subnetMask!, disabled: isDisabled),
-        if (iface.gateway != null && iface.gateway!.isNotEmpty)
-          _buildNetworkInfoRow(context, 'Passerelle', iface.gateway!, disabled: isDisabled),
-        if (iface.dnsPrimary != null && iface.dnsPrimary!.isNotEmpty)
-          _buildNetworkInfoRow(context, 'DNS primaire', iface.dnsPrimary!, disabled: isDisabled),
-        if (iface.macAddress != null)
-          _buildNetworkInfoRow(context, 'Adresse MAC', iface.macAddress!, isMac: true, disabled: isDisabled),
       ],
     );
   }
 
-  Widget _buildNetworkInfoRow(BuildContext context, String label, String value, {bool isMac = false, bool disabled = false}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = disabled ? Colors.grey.shade400 : null;
+  Widget _buildTechnicalCard(BuildContext context, AppLocalizations l10n, DeviceInfo device) {
+    return _Panel(
+      title: l10n.deviceInfoTechnical,
+      icon: Icons.memory_rounded,
+      children: [
+        if (device.modelName != null) DcInfoRow(label: l10n.model, value: device.modelName!, labelWidth: 140),
+        if (device.modelType != null) DcInfoRow(label: l10n.type, value: device.modelType!, labelWidth: 140),
+        if (device.vendorName != null) DcInfoRow(label: l10n.vendor, value: device.vendorName!, labelWidth: 140),
+        if (device.softwareVersion != null)
+          DcInfoRow(label: l10n.version, value: device.softwareVersion!, mono: true, labelWidth: 140),
+        if (device.deviceInstance != null)
+          DcInfoRow(label: l10n.deviceId, value: '${device.deviceInstance}', mono: true, labelWidth: 140),
+        if (device.hostName != null)
+          DcInfoRow(label: l10n.deviceInfoHostName, value: device.hostName!, mono: true, labelWidth: 140),
+        if (device.hostId != null) DcInfoRow(label: 'Host ID', value: device.hostId!, mono: true, labelWidth: 140),
+      ],
+    );
+  }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+  Widget _buildNetworkCard(BuildContext context, AppLocalizations l10n, NetworkInfo networkInfo, bool twoColumns) {
+    final activeInterfaces = networkInfo.activeInterfaces;
+    final hasMultipleInterfaces = activeInterfaces.length > 1;
+    final dc = context.dc;
+
+    return _Panel(
+      title: l10n.deviceInfoNetwork,
+      icon: Icons.lan_rounded,
+      trailing: activeInterfaces.isNotEmpty
+          ? Text(
+              l10n.deviceInfoInterfacesCount(activeInterfaces.length),
+              style: context.text.labelMedium?.copyWith(color: dc.textMuted),
+            )
+          : null,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = twoColumns && networkInfo.interfaces.length > 1 ? 2 : 1;
+            const spacing = 12.0;
+            final width = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final iface in networkInfo.interfaces)
+                  SizedBox(
+                    width: width,
+                    child: _buildInterfaceSection(context, iface, hasMultipleInterfaces),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInterfaceSection(BuildContext context, NetworkInterfaceInfo iface, bool showTitle) {
+    final dc = context.dc;
+    final isDisabled = !iface.enabled;
+    final l10n = AppLocalizations.of(context)!;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: dc.surfaceSunken,
+        borderRadius: BorderRadius.circular(DcRadius.md),
+        border: Border.all(color: dc.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: disabled ? Colors.grey.shade400 : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                fontWeight: FontWeight.w500,
+          // Titre de l'interface (si plusieurs interfaces)
+          if (showTitle)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 6, right: 8),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Icon(
+                    iface.isWireless ? Icons.wifi_rounded : Icons.settings_ethernet_rounded,
+                    size: 18,
+                    color: isDisabled ? dc.textMuted : dc.accentTone.fg,
+                  ),
+                  Text(
+                    iface.displayName,
+                    style: context.text.titleSmall?.copyWith(
+                      color: isDisabled ? dc.textMuted : dc.textPrimary,
+                    ),
+                  ),
+                  if (iface.dhcpEnabled) DcTag('DHCP', tone: dc.success, dense: true),
+                  if (isDisabled) DcTag(l10n.disabled, dense: true),
+                  if (iface.isWireless && iface.wifiMode != null)
+                    DcTag(iface.wifiMode!, tone: dc.accentTone, dense: true),
+                ],
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                fontFamily: isMac ? 'monospace' : null,
-                color: textColor,
-              ),
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.copy, size: 18, color: disabled ? Colors.grey.shade300 : (isDark ? Colors.grey.shade400 : null)),
-            onPressed: disabled
-                ? null
-                : () {
-                    Clipboard.setData(ClipboardData(text: value));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('$label copié'),
-                        duration: const Duration(seconds: 1),
-                      ),
-                    );
-                  },
-            tooltip: 'Copier',
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          ),
+
+          // SSID pour Wi-Fi
+          if (iface.isWireless && iface.ssid != null)
+            _buildNetworkInfoRow(context, 'SSID', iface.ssid!, mono: false, disabled: isDisabled),
+
+          // Infos IP
+          if (iface.ipAddress != null)
+            _buildNetworkInfoRow(context, l10n.deviceInfoIpAddress, iface.ipAddress!, disabled: isDisabled),
+          if (iface.subnetMask != null)
+            _buildNetworkInfoRow(context, l10n.deviceInfoSubnetMask, iface.subnetMask!, disabled: isDisabled),
+          if (iface.gateway != null && iface.gateway!.isNotEmpty)
+            _buildNetworkInfoRow(context, l10n.deviceInfoGateway, iface.gateway!, disabled: isDisabled),
+          if (iface.dnsPrimary != null && iface.dnsPrimary!.isNotEmpty)
+            _buildNetworkInfoRow(context, l10n.deviceInfoPrimaryDns, iface.dnsPrimary!, disabled: isDisabled),
+          if (iface.macAddress != null)
+            _buildNetworkInfoRow(context, l10n.deviceInfoMacAddress, iface.macAddress!, disabled: isDisabled),
         ],
+      ),
+    );
+  }
+
+  Widget _buildNetworkInfoRow(
+    BuildContext context,
+    String label,
+    String value, {
+    bool mono = true,
+    bool disabled = false,
+  }) {
+    final dc = context.dc;
+    final l10n = AppLocalizations.of(context)!;
+
+    return DcInfoRow(
+      label: label,
+      value: value,
+      mono: mono,
+      labelWidth: 120,
+      valueColor: disabled ? dc.textMuted : null,
+      trailing: IconButton(
+        icon: Icon(Icons.copy_rounded, size: 16, color: dc.textMuted),
+        onPressed: disabled
+            ? null
+            : () {
+                Clipboard.setData(ClipboardData(text: value));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  dcSnackBar(l10n.deviceInfoCopied(label), duration: const Duration(seconds: 1)),
+                );
+              },
+        tooltip: l10n.copy,
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 28, minHeight: 22),
       ),
     );
   }
@@ -362,178 +347,202 @@ class DeviceInfoScreen extends ConsumerWidget {
   Widget _buildObjectsSummaryCard(
     BuildContext context,
     AppLocalizations l10n,
-    dynamic summary,
+    ObjectsSummary? summary,
     bool isLoading,
   ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.dashboard, color: AppColors.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Objets BACnet',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ),
-                if (isLoading)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (summary != null) ...[
-              Row(
-                children: [
-                  Expanded(child: _buildSummaryTile(context, 'Entrées', summary.totalInputs, Icons.input, Colors.blue)),
-                  Expanded(child: _buildSummaryTile(context, 'Sorties', summary.totalOutputs, Icons.output, Colors.orange)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: _buildSummaryTile(context, 'Valeurs', summary.totalValues, Icons.tag, Colors.green)),
-                  Expanded(child: _buildSummaryTile(context, 'Horaires', summary.schedules, Icons.schedule, Colors.purple)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Total: ${summary.total} objets',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
-                  ),
-                ],
-              ),
-            ] else if (!isLoading)
-              const Center(
-                child: Text('Aucune donnée disponible'),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+    final dc = context.dc;
 
-  Widget _buildSummaryTile(BuildContext context, String label, int count, IconData icon, Color color) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  count.toString(),
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                  ),
-                ),
-              ],
+    return _Panel(
+      title: l10n.deviceInfoBacnetObjects,
+      icon: Icons.category_outlined,
+      trailing: isLoading
+          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+          : summary != null
+              ? DcTag(l10n.deviceInfoTotalObjects(summary.total), tone: dc.accentTone)
+              : null,
+      children: [
+        if (summary != null) ...[
+          // Totaux par catégorie
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _CategoryTotal(label: l10n.categoryInputs, count: summary.totalInputs, icon: Icons.login_rounded),
+              _CategoryTotal(label: l10n.categoryOutputs, count: summary.totalOutputs, icon: Icons.logout_rounded),
+              _CategoryTotal(label: l10n.categoryVariables, count: summary.totalValues, icon: Icons.tag_rounded),
+              _CategoryTotal(label: l10n.schedules, count: summary.schedules, icon: Icons.calendar_month_rounded),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Détail par type d'objet
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 10.0;
+              final columns = constraints.maxWidth >= 900
+                  ? 5
+                  : constraints.maxWidth >= 620
+                      ? 3
+                      : 2;
+              final width = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+              final types = <(BacnetObjectType, int)>[
+                (BacnetObjectType.analogInput, summary.analogInputs),
+                (BacnetObjectType.binaryInput, summary.binaryInputs),
+                (BacnetObjectType.multiStateInput, summary.multiStateInputs),
+                (BacnetObjectType.analogOutput, summary.analogOutputs),
+                (BacnetObjectType.binaryOutput, summary.binaryOutputs),
+                (BacnetObjectType.multiStateOutput, summary.multiStateOutputs),
+                (BacnetObjectType.analogValue, summary.analogValues),
+                (BacnetObjectType.binaryValue, summary.binaryValues),
+                (BacnetObjectType.multiStateValue, summary.multiStateValues),
+              ];
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (final (type, count) in types)
+                    SizedBox(width: width, child: _TypeCountTile(type: type, count: count)),
+                ],
+              );
+            },
+          ),
+        ] else if (!isLoading)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text(
+                l10n.deviceInfoNoDataAvailable,
+                style: context.text.bodyMedium?.copyWith(color: dc.textMuted),
+              ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
-  Widget _buildTechnicalCard(BuildContext context, dynamic device) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.info_outline, color: AppColors.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Informations techniques',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (device.modelName != null) _buildInfoRow(context, 'Modèle', device.modelName!),
-            if (device.modelType != null) _buildInfoRow(context, 'Type', device.modelType!),
-            if (device.softwareVersion != null) _buildInfoRow(context, 'Version', device.softwareVersion!),
-            if (device.hostName != null) _buildInfoRow(context, 'Nom d\'hôte', device.hostName!),
-            if (device.hostId != null) _buildInfoRow(context, 'Host ID', device.hostId!),
-          ],
-        ),
-      ),
-    );
-  }
+  String _formatDateTime(DateTime dateTime) => DisplayPreferences.formatDateTime(dateTime);
+}
 
-  Widget _buildInfoRow(BuildContext context, String label, String value) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+/// Panneau titré (icône + titre + action) contenant des lignes d'information.
+class _Panel extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget? trailing;
+  final List<Widget> children;
+
+  const _Panel({required this.title, required this.icon, this.trailing, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    return DcCard(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+          Row(
+            children: [
+              Icon(icon, size: 18, color: dc.accentTone.fg),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: context.text.titleMedium)),
+              ?trailing,
+            ],
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
+          const SizedBox(height: 8),
+          Divider(color: dc.border),
+          const SizedBox(height: 6),
+          ...children,
         ],
       ),
     );
   }
+}
 
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day.toString().padLeft(2, '0')}/'
-        '${dateTime.month.toString().padLeft(2, '0')}/'
-        '${dateTime.year} '
-        '${dateTime.hour.toString().padLeft(2, '0')}:'
-        '${dateTime.minute.toString().padLeft(2, '0')}';
+/// Total d'une catégorie d'objets (entrées, sorties…).
+class _CategoryTotal extends StatelessWidget {
+  final String label;
+  final int count;
+  final IconData icon;
+
+  const _CategoryTotal({required this.label, required this.count, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: dc.surfaceSunken,
+        borderRadius: BorderRadius.circular(DcRadius.md),
+        border: Border.all(color: dc.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: dc.textMuted),
+          const SizedBox(width: 8),
+          Text(
+            '$count',
+            style: context.text.titleMedium?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: context.text.bodySmall?.copyWith(color: dc.textSecondary)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Nombre d'objets d'un type BACnet, avec la pastille du type.
+class _TypeCountTile extends StatelessWidget {
+  final BacnetObjectType type;
+  final int count;
+
+  const _TypeCountTile({required this.type, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final dc = context.dc;
+    final l10n = AppLocalizations.of(context)!;
+    final tone = BacnetTypeUtils.typeTone(context, type);
+    final empty = count == 0;
+
+    return Opacity(
+      opacity: empty ? 0.55 : 1,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: dc.surface,
+          borderRadius: BorderRadius.circular(DcRadius.md),
+          border: Border.all(color: empty ? dc.border : tone.border),
+        ),
+        child: Row(
+          children: [
+            PointTypeBadge(type: type, size: 34),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$count',
+                    style: context.text.titleLarge?.copyWith(
+                      color: empty ? dc.textMuted : tone.fg,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      height: 1.1,
+                    ),
+                  ),
+                  Text(
+                    BacnetTypeUtils.getTypeDisplayName(l10n, type),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodySmall?.copyWith(color: dc.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

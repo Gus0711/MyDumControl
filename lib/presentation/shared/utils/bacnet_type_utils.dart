@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/dc_tokens.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../domain/models/display_preferences.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Utilitaires partagés pour les types BACnet
 /// Élimine la duplication de code entre les différents écrans
@@ -39,71 +43,88 @@ class BacnetTypeUtils {
     }
   }
 
-  /// Retourne la couleur associée à un type BACnet
-  /// Chaque type a une couleur unique pour une meilleure différenciation visuelle :
-  /// - AI (Analog Input)    : Vert - mesures/capteurs analogiques
-  /// - BI (Binary Input)    : Bleu - états binaires en lecture
-  /// - AO (Analog Output)   : Orange - commandes analogiques
-  /// - BO (Binary Output)   : Rouge/Rose - commandes binaires
-  /// - AV (Analog Value)    : Cyan - variables analogiques internes
-  /// - BV (Binary Value)    : Violet - variables binaires internes
-  /// - MSI (MultiState In)  : Indigo - états multiples en lecture
-  /// - MSO (MultiState Out) : Ambre - commandes multi-états
-  /// - MSV (MultiState Val) : Teal - variables multi-états
+  /// Returns the localized display name of a BACnet object type
+  static String getTypeDisplayName(AppLocalizations l10n, BacnetObjectType type) {
+    switch (type) {
+      case BacnetObjectType.analogInput:
+        return l10n.bacnetTypeAnalogInput;
+      case BacnetObjectType.analogOutput:
+        return l10n.bacnetTypeAnalogOutput;
+      case BacnetObjectType.analogValue:
+        return l10n.bacnetTypeAnalogValue;
+      case BacnetObjectType.binaryInput:
+        return l10n.bacnetTypeBinaryInput;
+      case BacnetObjectType.binaryOutput:
+        return l10n.bacnetTypeBinaryOutput;
+      case BacnetObjectType.binaryValue:
+        return l10n.bacnetTypeBinaryValue;
+      case BacnetObjectType.multiStateInput:
+        return l10n.bacnetTypeMultiStateInput;
+      case BacnetObjectType.multiStateOutput:
+        return l10n.bacnetTypeMultiStateOutput;
+      case BacnetObjectType.multiStateValue:
+        return l10n.bacnetTypeMultiStateValue;
+      case BacnetObjectType.schedule:
+        return l10n.bacnetTypeSchedule;
+      case BacnetObjectType.calendar:
+        return l10n.bacnetTypeCalendar;
+      case BacnetObjectType.trendLog:
+        return l10n.bacnetTypeTrendLog;
+      case BacnetObjectType.notificationClass:
+        return l10n.bacnetTypeNotificationClass;
+      case BacnetObjectType.device:
+        return l10n.bacnetTypeDevice;
+    }
+  }
+
+  /// Retourne la couleur associée à un type BACnet (palette de l'app).
+  /// Entrées : teintes froides ; sorties : teintes chaudes ; variables :
+  /// teintes intermédiaires. Pour un texte ou un fond, préférer
+  /// [typeTone], qui s'adapte au thème clair/sombre.
   static Color getTypeColor(BacnetObjectType type) {
     switch (type) {
-      // Inputs - teintes froides (lecture seule)
       case BacnetObjectType.analogInput:
-        return Colors.green;           // AI - Vert
+        return AppColors.analogInput;
       case BacnetObjectType.binaryInput:
-        return Colors.blue;            // BI - Bleu
+        return AppColors.binaryInput;
       case BacnetObjectType.multiStateInput:
-        return Colors.indigo;          // MSI - Indigo
-      // Outputs - teintes chaudes (commandes)
+        return AppColors.multiStateInput;
       case BacnetObjectType.analogOutput:
-        return Colors.orange;          // AO - Orange
+        return AppColors.analogOutput;
       case BacnetObjectType.binaryOutput:
-        return Colors.pink;            // BO - Rose
+        return AppColors.binaryOutput;
       case BacnetObjectType.multiStateOutput:
-        return Colors.amber;           // MSO - Ambre
-      // Values - teintes intermédiaires (variables internes)
+        return AppColors.multiStateOutput;
       case BacnetObjectType.analogValue:
-        return Colors.cyan;            // AV - Cyan
+        return AppColors.analogValue;
       case BacnetObjectType.binaryValue:
-        return Colors.purple;          // BV - Violet
+        return AppColors.binaryValue;
       case BacnetObjectType.multiStateValue:
-        return Colors.teal;            // MSV - Teal
+        return AppColors.multiStateValue;
       default:
-        return Colors.grey;
+        return AppColors.disconnected;
     }
+  }
+
+  /// Ton (texte, fond, bordure) d'un type BACnet, lisible dans le thème courant.
+  static DcTone typeTone(BuildContext context, BacnetObjectType type) =>
+      context.dc.toneOf(getTypeColor(type));
+
+  /// Ton de la valeur d'un point : entrée hors service / forçage (orange),
+  /// binaire actif (vert), inactif ou absent (neutre), autre (accent).
+  static DcTone valueTone(BuildContext context, BacnetObject point) {
+    final dc = context.dc;
+    if (point.outOfService == true) return dc.overrideTone;
+    final value = point.presentValue;
+    if (value == null) return dc.neutral;
+    if (point.type.isBinary) {
+      return isBinaryActive(value) ? dc.success : dc.neutral;
+    }
+    return dc.accentTone;
   }
 
   /// Vérifie si une valeur binaire est active
-  static bool isBinaryActive(dynamic value) {
-    if (value == null) return false;
-    if (value == true) return true;
-    if (value == 1) return true;
-    if (value is String) {
-      final lower = value.toLowerCase();
-      return lower == 'active' || lower == 'true' || lower == '1' || lower == 'on';
-    }
-    return false;
-  }
-
-  /// Vérifie si un type BACnet est un type "point" (pas device, schedule, etc.)
-  static bool isPointType(BacnetObjectType type) {
-    return const [
-      BacnetObjectType.analogInput,
-      BacnetObjectType.analogOutput,
-      BacnetObjectType.analogValue,
-      BacnetObjectType.binaryInput,
-      BacnetObjectType.binaryOutput,
-      BacnetObjectType.binaryValue,
-      BacnetObjectType.multiStateInput,
-      BacnetObjectType.multiStateOutput,
-      BacnetObjectType.multiStateValue,
-    ].contains(type);
-  }
+  static bool isBinaryActive(dynamic value) => BacnetObject.isBinaryValueActive(value);
 
   /// Formate une valeur pour l'affichage
   static String formatValue(BacnetObject point) {
@@ -125,11 +146,7 @@ class BacnetTypeUtils {
     }
 
     if (value is num) {
-      final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
-      if (point.units != null && point.units!.isNotEmpty) {
-        return '$formatted ${point.units}';
-      }
-      return formatted;
+      return DisplayPreferences.formatAnalog(value, point.units);
     }
 
     return value.toString();
@@ -185,11 +202,7 @@ class BacnetTypeUtils {
     }
 
     if (value is num) {
-      final formatted = value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
-      if (point.units != null && point.units!.isNotEmpty) {
-        return '$formatted ${point.units}';
-      }
-      return formatted;
+      return DisplayPreferences.formatAnalog(value, point.units);
     }
 
     return value.toString();
@@ -221,16 +234,17 @@ class BacnetTypeUtils {
   }
 
   /// Retourne la couleur de la valeur d'un point
+  /// Préférer [valueTone] (adapté au thème).
   static Color getValueColor(BacnetObject point) {
-    if (point.outOfService == true) return Colors.orange;
+    if (point.outOfService == true) return AppColors.overrideActive;
 
     final value = point.presentValue;
-    if (value == null) return Colors.grey;
+    if (value == null) return AppColors.disconnected;
 
     if (point.type.isBinary) {
-      return isBinaryActive(value) ? Colors.green : Colors.grey;
+      return isBinaryActive(value) ? AppColors.success : AppColors.disconnected;
     }
 
-    return Colors.blue;
+    return AppColors.brandSky;
   }
 }

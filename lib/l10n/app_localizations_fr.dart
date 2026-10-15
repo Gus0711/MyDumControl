@@ -153,6 +153,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get retry => 'Réessayer';
 
   @override
+  String get bacnetReadingDeviceName => 'Lecture du nom…';
+
+  @override
+  String get bacnetDeviceNameUnavailable =>
+      'Nom non lu (l\'appareil ne répond pas)';
+
+  @override
   String get noData => 'Aucune donnée';
 
   @override
@@ -457,6 +464,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get state => 'État';
 
   @override
+  String scheduleStateN(int value) {
+    return 'État $value';
+  }
+
+  @override
   String get enterState => 'Entrez un état';
 
   @override
@@ -618,6 +630,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get scheduleNotFound => 'Schedule non trouvé';
+
+  @override
+  String get weeklyScheduleUnreadable =>
+      'Programme hebdomadaire illisible : modification désactivée pour ne pas écraser l\'automate';
 
   @override
   String get errorLoadingSchedule => 'Erreur lors du chargement';
@@ -811,7 +827,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get addFavoritesHint =>
-      'Ajoutez des points aux favoris en cliquant\\nsur l\'étoile dans la liste des points';
+      'Ajoutez des points aux favoris en cliquant\nsur l\'étoile dans la liste des points';
 
   @override
   String get viewPoints => 'Voir les points';
@@ -872,7 +888,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String deleteFolderMessage(Object name) {
-    return 'Le dossier \"$name\" sera supprimé.\\n\\nLes favoris qu\'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".';
+    return 'Le dossier \"$name\" sera supprimé.\n\nLes favoris qu\'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".';
   }
 
   @override
@@ -923,13 +939,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get subTypeAll => 'Tous';
 
   @override
-  String get subTypeAnalog => 'Analog';
+  String get subTypeAnalog => 'Analogiques';
 
   @override
-  String get subTypeBinary => 'Binary';
+  String get subTypeBinary => 'Binaires';
 
   @override
-  String get subTypeMulti => 'Multi';
+  String get subTypeMulti => 'Multi-états';
 
   @override
   String get autoRefreshOff => 'Désactivé';
@@ -1069,46 +1085,46 @@ class AppLocalizationsFr extends AppLocalizations {
   String get useIpScan => 'Scanner plage IP (ECLYPSE)';
 
   @override
-  String get dashboards => 'Dashboards';
+  String get dashboards => 'Tableaux de bord';
 
   @override
-  String get dashboard => 'Dashboard';
+  String get dashboard => 'Tableau de bord';
 
   @override
-  String get noDashboard => 'Aucun dashboard';
+  String get noDashboard => 'Aucun tableau de bord';
 
   @override
   String get createDashboardHint =>
-      'Créez des dashboards pour visualiser\nvos graphiques et courbes d\'historique';
+      'Créez des tableaux de bord pour visualiser\nvos graphiques et courbes d\'historique';
 
   @override
-  String get createDashboard => 'Créer un dashboard';
+  String get createDashboard => 'Créer un tableau de bord';
 
   @override
-  String get newDashboard => 'Nouveau dashboard';
+  String get newDashboard => 'Nouveau tableau de bord';
 
   @override
-  String get editDashboard => 'Modifier le dashboard';
+  String get editDashboard => 'Modifier le tableau de bord';
 
   @override
-  String get deleteDashboard => 'Supprimer le dashboard';
+  String get deleteDashboard => 'Supprimer le tableau de bord';
 
   @override
-  String get dashboardName => 'Nom du dashboard';
+  String get dashboardName => 'Nom du tableau de bord';
 
   @override
   String get dashboardNameRequired => 'Le nom est requis';
 
   @override
-  String get deleteDashboardConfirm => 'Supprimer ce dashboard ?';
+  String get deleteDashboardConfirm => 'Supprimer ce tableau de bord ?';
 
   @override
   String deleteDashboardMessage(Object name) {
-    return 'Le dashboard \"$name\" et tous ses widgets seront supprimés.';
+    return 'Le tableau de bord \"$name\" et tous ses widgets seront supprimés.';
   }
 
   @override
-  String get dashboardDeleted => 'Dashboard supprimé';
+  String get dashboardDeleted => 'Tableau de bord supprimé';
 
   @override
   String widgets(Object count) {
@@ -1284,4 +1300,1167 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get envysionLoadErrorMessage =>
       'Impossible de charger le synoptique Envysion. Vérifiez l\'URL et votre connexion.';
+
+  @override
+  String get certificateChangedTitle => 'Certificat de l\'automate modifié';
+
+  @override
+  String get trustNewCertificate => 'Faire confiance au nouveau certificat';
+
+  @override
+  String trustNewCertificateMessage(String expected, String received) {
+    return 'Le certificat présenté par l\'automate est différent de celui enregistré lors de la première connexion.\n\nCela peut venir d\'un renouvellement du certificat (mise à jour, réinitialisation de l\'automate) ou d\'une interception du trafic. Ne faites confiance au nouveau certificat que si vous êtes sûr qu\'il est légitime.\n\nEmpreinte attendue :\n$expected\n\nNouvelle empreinte :\n$received';
+  }
+
+  @override
+  String get trust => 'Faire confiance';
+
+  @override
+  String get backToConnections => 'Retour aux connexions';
+
+  @override
+  String get certificateFingerprintLabel => 'Empreinte du certificat (SHA-256)';
+
+  @override
+  String get certificateFingerprintDiffers =>
+      'Différente de l\'empreinte enregistrée : le certificat de l\'automate a changé.';
+
+  @override
+  String get certificateFingerprintPinnedInfo =>
+      'Elle sera enregistrée et vérifiée à chaque connexion.';
+
+  @override
+  String get httpCleartextWarning =>
+      'HTTP non chiffré : le mot de passe circule en clair sur le réseau. Préférez HTTPS si l\'automate le permet.';
+
+  @override
+  String get passwordMissingBadge => 'Mot de passe à ressaisir';
+
+  @override
+  String get apiVersionBadgeTooltip =>
+      'Version de l\'API REST Distech utilisée pour cet automate';
+
+  @override
+  String get apiVersionUnknownTooltip =>
+      'Version d\'API pas encore détectée : elle le sera à la prochaine connexion';
+
+  @override
+  String get redetectApiVersion => 'Re-détecter la version API';
+
+  @override
+  String get redetectingApiVersion => 'Détection de la version d\'API…';
+
+  @override
+  String redetectApiVersionDone(String version) {
+    return 'Version d\'API détectée : $version';
+  }
+
+  @override
+  String get redetectApiVersionFailed =>
+      'Automate injoignable : version d\'API non détectée';
+
+  @override
+  String get overrideDuration => 'Durée du forçage';
+
+  @override
+  String get overridePermanent => 'Permanent';
+
+  @override
+  String durationMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String durationHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String get timedOverrideHint =>
+      'Le relâchement automatique est fait par l\'application : elle doit être ouverte à l\'échéance (sinon il a lieu à sa prochaine ouverture).';
+
+  @override
+  String forcedAtTime(String time) {
+    return 'Forcé depuis l\'app à $time';
+  }
+
+  @override
+  String autoReleaseAtTime(String time) {
+    return 'Relâchement automatique à $time';
+  }
+
+  @override
+  String autoReleaseFailed(String error) {
+    return 'Relâchement automatique en échec, nouvel essai en cours : $error';
+  }
+
+  @override
+  String get overrideOriginUnknown =>
+      'Forcé hors de l\'application (heure inconnue)';
+
+  @override
+  String overridesSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points sélectionnés',
+      one: '1 point sélectionné',
+      zero: 'Aucun point sélectionné',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get releaseSelection => 'Relâcher la sélection';
+
+  @override
+  String releaseSelectionMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Relâcher le forçage de $count points ?',
+      one: 'Relâcher le forçage de 1 point ?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String releaseSelectionDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points relâchés',
+      one: '1 point relâché',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String releaseSelectionFailed(int failed, int total) {
+    return '$failed relâchement(s) sur $total en échec';
+  }
+
+  @override
+  String invalidCredentialsMessage(String status) {
+    return 'Identifiants invalides ($status). Vérifiez le nom d\'utilisateur et le mot de passe de la connexion.';
+  }
+
+  @override
+  String get close => 'Fermer';
+
+  @override
+  String get add => 'Ajouter';
+
+  @override
+  String get rename => 'Renommer';
+
+  @override
+  String get create => 'Créer';
+
+  @override
+  String get apply => 'Appliquer';
+
+  @override
+  String get yes => 'Oui';
+
+  @override
+  String get no => 'Non';
+
+  @override
+  String get back => 'Retour';
+
+  @override
+  String get copy => 'Copier';
+
+  @override
+  String get clearAction => 'Effacer';
+
+  @override
+  String get validate => 'Valider';
+
+  @override
+  String get details => 'Détails';
+
+  @override
+  String get unknown => 'Inconnu';
+
+  @override
+  String errorWithMessage(String error) {
+    return 'Erreur : $error';
+  }
+
+  @override
+  String get trendColorBlue => 'Bleu';
+
+  @override
+  String get trendColorGreen => 'Vert';
+
+  @override
+  String get trendColorOrange => 'Orange';
+
+  @override
+  String get trendColorPurple => 'Violet';
+
+  @override
+  String get trendColorRed => 'Rouge';
+
+  @override
+  String get trendColorCyan => 'Cyan';
+
+  @override
+  String get trendColorTeal => 'Sarcelle';
+
+  @override
+  String get trendColorIndigo => 'Indigo';
+
+  @override
+  String get trendPeriodHour => '1h';
+
+  @override
+  String get trendPeriodDay => '24h';
+
+  @override
+  String get trendPeriodWeek => '7j';
+
+  @override
+  String get trendPeriodMonth => '30j';
+
+  @override
+  String get trendPeriodAll => 'Tout';
+
+  @override
+  String get trendPeriodCustom => 'Perso.';
+
+  @override
+  String get trendChangeColor => 'Changer la couleur';
+
+  @override
+  String get trendAnnotations => 'Annotations';
+
+  @override
+  String get trendMinMaxMarkers => 'Marqueurs Min/Max';
+
+  @override
+  String get trendAverageLine => 'Ligne moyenne';
+
+  @override
+  String get trendMinLine => 'Ligne minimum';
+
+  @override
+  String get trendMaxLine => 'Ligne maximum';
+
+  @override
+  String get trendHideAll => 'Tout masquer';
+
+  @override
+  String get trendNoDataForPeriod => 'Aucune donnée pour cette période';
+
+  @override
+  String get trendDateTime => 'Date/Heure';
+
+  @override
+  String get trendHistory => 'Historique';
+
+  @override
+  String get trendFullscreen => 'Plein écran';
+
+  @override
+  String get trendShowChart => 'Voir graphique';
+
+  @override
+  String get trendShowTable => 'Voir tableau';
+
+  @override
+  String get trendExportCsv => 'Exporter CSV';
+
+  @override
+  String trendExportSubject(String name) {
+    return 'Export historique $name';
+  }
+
+  @override
+  String get trendPortraitMode => 'Mode portrait';
+
+  @override
+  String get trendLandscapeMode => 'Mode paysage';
+
+  @override
+  String get trendNoNumericData => 'Aucune donnée numérique';
+
+  @override
+  String get trendNoDataToDisplay => 'Aucune donnée à afficher';
+
+  @override
+  String get trendInvalidData => 'Données invalides';
+
+  @override
+  String trendAvgLineLabel(String value) {
+    return 'Moy : $value';
+  }
+
+  @override
+  String chartComparisonTitle(int count) {
+    return 'Comparaison ($count courbes)';
+  }
+
+  @override
+  String get chartAddCurve => 'Ajouter une courbe';
+
+  @override
+  String chartCurvesNotLoaded(int count) {
+    return '$count courbe(s) non chargée(s)';
+  }
+
+  @override
+  String get chartNoVisibleCurve =>
+      'Aucune courbe visible\nTouchez la légende pour afficher';
+
+  @override
+  String get chartNoCurveSelected =>
+      'Aucune courbe sélectionnée\nAjoutez des trend logs à comparer';
+
+  @override
+  String get chartSelectCurves => 'Sélectionner les courbes';
+
+  @override
+  String chartSelectCurvesHint(int min, int max) {
+    return 'Sélectionnez $min à $max trend logs à comparer';
+  }
+
+  @override
+  String chartCurvesCount(int selected, int max) {
+    return '$selected/$max courbes';
+  }
+
+  @override
+  String get chartNoTrendLogAvailable => 'Aucun trend log disponible';
+
+  @override
+  String get chartSelectedCurves => 'Courbes sélectionnées :';
+
+  @override
+  String chartValidateCount(int count) {
+    return 'Valider ($count)';
+  }
+
+  @override
+  String get widgetPromoteSuperFavorite => 'Promouvoir en super favori';
+
+  @override
+  String get widgetDemoteToFavorite => 'Rétrograder en favori';
+
+  @override
+  String get widgetNoFolder => 'Aucun dossier';
+
+  @override
+  String get widgetCreateFolder => 'Créer un dossier';
+
+  @override
+  String get widgetNewFolderEllipsis => 'Nouveau dossier...';
+
+  @override
+  String get widgetEditFolder => 'Modifier le dossier';
+
+  @override
+  String get widgetFolderName => 'Nom du dossier';
+
+  @override
+  String get widgetColor => 'Couleur';
+
+  @override
+  String get widgetIcon => 'Icône';
+
+  @override
+  String get widgetConnecting => 'Connexion en cours';
+
+  @override
+  String get widgetStepAuth => 'Auth';
+
+  @override
+  String get widgetPumpLabel => 'POMPE';
+
+  @override
+  String get synopticsTitle => 'Synoptiques';
+
+  @override
+  String get synopticCreate => 'Créer un synoptique';
+
+  @override
+  String get synopticEmptyTitle => 'Aucun synoptique';
+
+  @override
+  String get synopticEmptyHint =>
+      'Créez votre premier synoptique pour visualiser\nvos points sur un schéma graphique';
+
+  @override
+  String get synopticDeleteTitle => 'Supprimer le synoptique ?';
+
+  @override
+  String synopticDeleteMessage(String name) {
+    return 'Êtes-vous sûr de vouloir supprimer \"$name\" ?\nCette action est irréversible.';
+  }
+
+  @override
+  String synopticBindingsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count liaisons',
+      one: '1 liaison',
+      zero: '0 liaison',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get synopticBindingsUnknown => '-- liaisons';
+
+  @override
+  String get synopticGlobal => 'Global';
+
+  @override
+  String get synopticEditBindings => 'Éditer les liaisons';
+
+  @override
+  String get synopticNew => 'Nouveau synoptique';
+
+  @override
+  String get synopticSvgModel => 'Modèle SVG';
+
+  @override
+  String synopticConfigurableElementsCount(int count) {
+    return '$count éléments configurables';
+  }
+
+  @override
+  String get synopticNameLabel => 'Nom du synoptique';
+
+  @override
+  String get synopticNameHint => 'Ex: Circuit Chauffage RDC';
+
+  @override
+  String get synopticDescriptionOptional => 'Description (optionnel)';
+
+  @override
+  String get synopticDefaultName => 'Synoptique';
+
+  @override
+  String get synopticResetZoom => 'Réinitialiser le zoom';
+
+  @override
+  String get synopticNotFound => 'Synoptique non trouvé';
+
+  @override
+  String synopticUpdateError(String error) {
+    return 'Erreur de mise à jour: $error';
+  }
+
+  @override
+  String synopticActivePointsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points actifs',
+      one: '1 point actif',
+      zero: '0 point actif',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get synopticPinchToZoom => 'Pincez pour zoomer';
+
+  @override
+  String get synopticSvgElement => 'Élément SVG';
+
+  @override
+  String get synopticBindingType => 'Type de liaison';
+
+  @override
+  String get synopticCurrentValue => 'Valeur actuelle';
+
+  @override
+  String get synopticViewPoint => 'Voir le point';
+
+  @override
+  String get synopticNumericValue => 'Valeur numérique';
+
+  @override
+  String get synopticColorIndicator => 'Indicateur couleur';
+
+  @override
+  String get synopticAnimation => 'Animation';
+
+  @override
+  String synopticEditTitle(String name) {
+    return 'Éditer: $name';
+  }
+
+  @override
+  String get synopticHelp => 'Aide';
+
+  @override
+  String get synopticPreview => 'Aperçu du synoptique';
+
+  @override
+  String get synopticConfigurableElements => 'Éléments configurables';
+
+  @override
+  String get synopticNoConfigurableElements =>
+      'Aucun élément configurable détecté';
+
+  @override
+  String get synopticHowToConfigure => 'Comment configurer';
+
+  @override
+  String get synopticHelpSteps =>
+      '1. Sélectionnez un élément dans la liste\n2. Choisissez le point BACnet à associer\n3. Configurez le type de liaison:\n   • Valeur: affiche la valeur du point\n   • Couleur: change la couleur selon l\'état\n   • Animation: active/désactive une animation\n4. Personnalisez le format si nécessaire';
+
+  @override
+  String get synopticStateIndicator => 'Indicateur d\'état';
+
+  @override
+  String get synopticElement => 'Élément';
+
+  @override
+  String get synopticConfigureBinding => 'Configurer la liaison';
+
+  @override
+  String get synopticDeleteBinding => 'Supprimer la liaison';
+
+  @override
+  String get synopticColor => 'Couleur';
+
+  @override
+  String get synopticDisplayFormat => 'Format d\'affichage';
+
+  @override
+  String synopticFormatHint(String placeholder) {
+    return 'Ex: $placeholder°C ou $placeholder%';
+  }
+
+  @override
+  String synopticFormatHelper(String placeholder) {
+    return 'Utilisez $placeholder pour la valeur du point';
+  }
+
+  @override
+  String get synopticColors => 'Couleurs';
+
+  @override
+  String get synopticAnimationConfig => 'Configuration Animation';
+
+  @override
+  String get synopticAnimationOnOff => 'Animation ON/OFF';
+
+  @override
+  String get synopticAnimationExplanation =>
+      'L\'animation sera visible quand la valeur du point est > seuil (actif), et masquée sinon.';
+
+  @override
+  String get synopticThreshold => 'Seuil ON/OFF';
+
+  @override
+  String get synopticThresholdHelper =>
+      'Valeur > seuil = ON, sinon OFF (pour booléen: 0.5)';
+
+  @override
+  String get synopticBacnetPoint => 'Point BACnet';
+
+  @override
+  String get synopticNoPointFound => 'Aucun point trouvé';
+
+  @override
+  String get synopticDeleteBindingTitle => 'Supprimer la liaison ?';
+
+  @override
+  String get synopticIrreversible => 'Cette action est irréversible.';
+
+  @override
+  String get envysionConnectionNotFound => 'Connexion introuvable';
+
+  @override
+  String get envysionAuthFailed => 'Authentification échouée (401)';
+
+  @override
+  String get envysionPageNotFound => 'Page non trouvée (404)';
+
+  @override
+  String get dashboardNotFound => 'Tableau de bord introuvable';
+
+  @override
+  String get dashboardDeleteWidgetConfirm => 'Supprimer le widget ?';
+
+  @override
+  String get dashboardDeleteWidgetMessage =>
+      'Ce widget sera supprimé du tableau de bord.';
+
+  @override
+  String get dashboardEditTitle => 'Modifier le titre';
+
+  @override
+  String get dashboardTitleLabel => 'Titre';
+
+  @override
+  String get dashboardTitleHint => 'Laisser vide pour le titre par défaut';
+
+  @override
+  String get dashboardSettingsTitle => 'Paramètres du tableau de bord';
+
+  @override
+  String get dashboardColumnsWithColon => 'Colonnes : ';
+
+  @override
+  String get dashboardRowsWithColon => 'Lignes : ';
+
+  @override
+  String get dashboardDeletePermanentMessage =>
+      'Ce tableau de bord et tous ses widgets seront supprimés définitivement.';
+
+  @override
+  String get dashboardSearchHint => 'Rechercher...';
+
+  @override
+  String get dashboardNewShort => 'Nouveau';
+
+  @override
+  String get dashboardEmptyHint =>
+      'Créez votre premier tableau de bord pour visualiser\nplusieurs graphiques sur une seule page.';
+
+  @override
+  String dashboardGridSize(int columns, int rows) {
+    return 'Grille ${columns}x$rows';
+  }
+
+  @override
+  String get dashboardNameHint => 'Ex : Chauffage, Ventilation...';
+
+  @override
+  String get dashboardGridLayout => 'Disposition de la grille';
+
+  @override
+  String get dashboardColumns => 'Colonnes';
+
+  @override
+  String get dashboardRows => 'Lignes';
+
+  @override
+  String get dashboardChartDefault => 'Graphique';
+
+  @override
+  String dashboardComparisonTitle(int count) {
+    return 'Comparaison ($count courbes)';
+  }
+
+  @override
+  String get dashboardNotConfigured => 'Non configuré';
+
+  @override
+  String get dashboardConfigure => 'Configurer';
+
+  @override
+  String get deviceInfoProtocol => 'Protocole';
+
+  @override
+  String get deviceInfoUser => 'Utilisateur';
+
+  @override
+  String get deviceInfoLastConnection => 'Dernière connexion';
+
+  @override
+  String get deviceInfoNetwork => 'Réseau';
+
+  @override
+  String deviceInfoInterfacesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count interfaces',
+      one: '1 interface',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get deviceInfoIpAddress => 'Adresse IP';
+
+  @override
+  String get deviceInfoSubnetMask => 'Masque';
+
+  @override
+  String get deviceInfoGateway => 'Passerelle';
+
+  @override
+  String get deviceInfoPrimaryDns => 'DNS primaire';
+
+  @override
+  String get deviceInfoMacAddress => 'Adresse MAC';
+
+  @override
+  String deviceInfoCopied(String label) {
+    return '$label copié';
+  }
+
+  @override
+  String get deviceInfoBacnetObjects => 'Objets BACnet';
+
+  @override
+  String deviceInfoTotalObjects(int count) {
+    return 'Total : $count objets';
+  }
+
+  @override
+  String get deviceInfoNoDataAvailable => 'Aucune donnée disponible';
+
+  @override
+  String get deviceInfoTechnical => 'Informations techniques';
+
+  @override
+  String get deviceInfoHostName => 'Nom d\'hôte';
+
+  @override
+  String get homeAuthenticating => 'Authentification...';
+
+  @override
+  String get homeFetchingData => 'Récupération des données...';
+
+  @override
+  String get homeSynoptic => 'Synoptique';
+
+  @override
+  String homeControllerTimeTooltip(String time) {
+    return 'Heure automate : $time';
+  }
+
+  @override
+  String homeTimeOffsetTooltip(String offset) {
+    return 'Décalage : $offset';
+  }
+
+  @override
+  String get homeControllerTimeTitle => 'Heure de l\'automate';
+
+  @override
+  String get homeControllerDateTime => 'Date/Heure automate';
+
+  @override
+  String get homeLocalTime => 'Heure locale';
+
+  @override
+  String get homeTimeOffset => 'Décalage';
+
+  @override
+  String get homeTimeOffsetWarning =>
+      'L\'heure de l\'automate est décalée. Les plannings peuvent ne pas s\'exécuter aux moments attendus.';
+
+  @override
+  String get homeSyncV2Info =>
+      'API V2 : utilisez l\'interface web EC-NetAX ou configurez le NTP pour synchroniser l\'heure.';
+
+  @override
+  String get homeSyncSuccess => 'Synchronisation réussie avec succès !';
+
+  @override
+  String get homeSyncFailed => 'Échec de la synchronisation.';
+
+  @override
+  String get homeSyncing => 'Synchronisation...';
+
+  @override
+  String get homeSync => 'Synchroniser';
+
+  @override
+  String routerPageNotFound(String path) {
+    return 'Page non trouvée : $path';
+  }
+
+  @override
+  String routerInvalidId(String id) {
+    return 'Identifiant invalide : \"$id\"';
+  }
+
+  @override
+  String connectionsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count connexions',
+      one: '1 connexion',
+      zero: '0 connexion',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get connectionsEmptyFolder => 'Dossier vide';
+
+  @override
+  String get connectionsFolderName => 'Nom du dossier';
+
+  @override
+  String get connectionsEditFolder => 'Modifier le dossier';
+
+  @override
+  String get connectionsDeleteFolder => 'Supprimer le dossier';
+
+  @override
+  String connectionsDeleteFolderMessage(String name) {
+    return 'Voulez-vous supprimer le dossier \"$name\" ?\n\nLes connexions qu\'il contient seront déplacées à la racine.';
+  }
+
+  @override
+  String connectionsFolderDeleted(String name) {
+    return 'Dossier \"$name\" supprimé';
+  }
+
+  @override
+  String connectionsDeleteConfirm(String name) {
+    return 'Voulez-vous supprimer \"$name\" ?';
+  }
+
+  @override
+  String connectionsDeleted(String name) {
+    return 'Connexion \"$name\" supprimée';
+  }
+
+  @override
+  String get connectionsMoveTo => 'Déplacer vers';
+
+  @override
+  String get connectionsMoved => 'Connexion déplacée';
+
+  @override
+  String get connectionsAddToStart => 'Ajoutez une connexion pour commencer';
+
+  @override
+  String get connectionsMove => 'Déplacer';
+
+  @override
+  String get connectionsRefreshFolderTooltip =>
+      'Rafraîchir tous les super favoris du dossier';
+
+  @override
+  String get connectionsRefreshValuesTooltip => 'Rafraîchir les valeurs';
+
+  @override
+  String addConnSelected(String name) {
+    return '$name sélectionné';
+  }
+
+  @override
+  String get addConnUseSecure => 'Utiliser une connexion sécurisée';
+
+  @override
+  String get addConnConnectionType => 'Type de connexion';
+
+  @override
+  String addConnBacnetSuccess(String deviceId) {
+    return 'Connexion BACnet réussie ! Device ID : $deviceId';
+  }
+
+  @override
+  String get addConnNotDiscovered => 'non découvert';
+
+  @override
+  String get addConnBacnetFailed => 'Échec de la connexion BACnet';
+
+  @override
+  String get addConnUpdated => 'Connexion modifiée';
+
+  @override
+  String get addConnSaved => 'Connexion enregistrée';
+
+  @override
+  String get discoverMdnsError => 'Erreur mDNS';
+
+  @override
+  String get discoverSearchingEclypse =>
+      'Recherche des automates ECLYPSE sur le réseau...';
+
+  @override
+  String get discoverNoEclypseFoundMessage =>
+      'Aucun ECLYPSE n\'a été trouvé sur le réseau.\nVérifiez que vous êtes connecté au même réseau que l\'automate.';
+
+  @override
+  String get discoverProbing => 'Détection API…';
+
+  @override
+  String discoverApiAdvertised(String version) {
+    return 'API $version annoncée';
+  }
+
+  @override
+  String get discoverApiUnknown => 'API détectée à la connexion';
+
+  @override
+  String get discoverUnreachable => 'Injoignable';
+
+  @override
+  String discoverModel(String model) {
+    return 'Modèle : $model';
+  }
+
+  @override
+  String discoverFirmware(String version) {
+    return 'Firmware : $version';
+  }
+
+  @override
+  String get discoverFirmwareAfterLogin => 'Firmware visible après connexion';
+
+  @override
+  String get discoverCreateConnection => 'Créer la connexion';
+
+  @override
+  String discoverDeviceIdConflictWithId(String deviceId) {
+    return 'Conflit Device ID $deviceId';
+  }
+
+  @override
+  String get alarmsSortNewest => 'Plus récentes';
+
+  @override
+  String get alarmsSortOldest => 'Plus anciennes';
+
+  @override
+  String get bacnetTypeAnalogInput => 'Entrée Analogique';
+
+  @override
+  String get bacnetTypeAnalogOutput => 'Sortie Analogique';
+
+  @override
+  String get bacnetTypeAnalogValue => 'Valeur Analogique';
+
+  @override
+  String get bacnetTypeBinaryInput => 'Entrée Binaire';
+
+  @override
+  String get bacnetTypeBinaryOutput => 'Sortie Binaire';
+
+  @override
+  String get bacnetTypeBinaryValue => 'Valeur Binaire';
+
+  @override
+  String get bacnetTypeMultiStateInput => 'Entrée Multi-états';
+
+  @override
+  String get bacnetTypeMultiStateOutput => 'Sortie Multi-états';
+
+  @override
+  String get bacnetTypeMultiStateValue => 'Valeur Multi-états';
+
+  @override
+  String get bacnetTypeSchedule => 'Horaire';
+
+  @override
+  String get bacnetTypeCalendar => 'Calendrier';
+
+  @override
+  String get bacnetTypeTrendLog => 'Historique';
+
+  @override
+  String get bacnetTypeNotificationClass => 'Classe de notification';
+
+  @override
+  String get bacnetTypeDevice => 'Appareil';
+
+  @override
+  String get scheduleDayShortMonday => 'Lun';
+
+  @override
+  String get scheduleDayShortTuesday => 'Mar';
+
+  @override
+  String get scheduleDayShortWednesday => 'Mer';
+
+  @override
+  String get scheduleDayShortThursday => 'Jeu';
+
+  @override
+  String get scheduleDayShortFriday => 'Ven';
+
+  @override
+  String get scheduleDayShortSaturday => 'Sam';
+
+  @override
+  String get scheduleDayShortSunday => 'Dim';
+
+  @override
+  String get scheduleNewSlot => 'Nouveau créneau';
+
+  @override
+  String get scheduleEditSlot => 'Modifier le créneau';
+
+  @override
+  String get scheduleNewTransition => 'Nouvelle transition';
+
+  @override
+  String get scheduleAllDay => 'Toute la journée';
+
+  @override
+  String get scheduleStartTime => 'Heure de début';
+
+  @override
+  String get scheduleEndTime => 'Heure de fin';
+
+  @override
+  String get scheduleTime => 'Heure';
+
+  @override
+  String get scheduleEndAfterStartError =>
+      'L\'heure de fin doit être après l\'heure de début';
+
+  @override
+  String scheduleDuration(String duration) {
+    return 'Durée: $duration';
+  }
+
+  @override
+  String get scheduleSelectTime => 'Sélectionner l\'heure';
+
+  @override
+  String get scheduleMidnightEndOfDay => 'Minuit (fin de journée)';
+
+  @override
+  String get scheduleCopyDay => 'Copier ce jour';
+
+  @override
+  String schedulePasteHereFrom(String day) {
+    return 'Coller ici (depuis $day)';
+  }
+
+  @override
+  String schedulePasteFrom(String day) {
+    return 'Coller depuis $day';
+  }
+
+  @override
+  String get schedulePasteToWorkDays => 'Coller sur jours ouvrés';
+
+  @override
+  String get scheduleWorkDaysRange => 'Lun-Ven';
+
+  @override
+  String get schedulePasteToAllDays => 'Coller sur tous les jours';
+
+  @override
+  String get scheduleClearDay => 'Effacer ce jour';
+
+  @override
+  String scheduleDayCopied(String day) {
+    return '$day copié';
+  }
+
+  @override
+  String get schedulePastedToWorkDays => 'Collé sur les jours ouvrés';
+
+  @override
+  String get schedulePastedToAllDays => 'Collé sur tous les jours';
+
+  @override
+  String get scheduleMoreActions => 'Plus d\'actions';
+
+  @override
+  String get scheduleSaveConfirmTitle => 'Sauvegarder le planning ?';
+
+  @override
+  String get scheduleSaveConfirmMessage =>
+      'Les modifications seront envoyées à l\'automate et prendront effet immédiatement.';
+
+  @override
+  String get scheduleDiscardConfirmTitle => 'Annuler les modifications ?';
+
+  @override
+  String get scheduleDiscardConfirmMessage =>
+      'Toutes les modifications non sauvegardées seront perdues.';
+
+  @override
+  String get scheduleContinueEditing => 'Continuer l\'édition';
+
+  @override
+  String get scheduleDeleteTransitionTitle => 'Supprimer cette transition ?';
+
+  @override
+  String get scheduleDeleteSlotTitle => 'Supprimer ce créneau ?';
+
+  @override
+  String get scheduleNoTransition => 'Aucune transition';
+
+  @override
+  String get scheduleNoScheduledTransition => 'Aucune transition programmée';
+
+  @override
+  String get scheduleTapPlusToAdd => 'Appuyez sur + pour ajouter';
+
+  @override
+  String get scheduleAddSlot => 'Ajouter un créneau';
+
+  @override
+  String get scheduleFullDay => 'Journée';
+
+  @override
+  String scheduleEditDayTitle(String day) {
+    return 'Modifier - $day';
+  }
+
+  @override
+  String scheduleAddDayTitle(String day) {
+    return 'Ajouter - $day';
+  }
+
+  @override
+  String get connectionsSearchHint =>
+      'Rechercher une connexion (nom, adresse, modèle)…';
+
+  @override
+  String get connectionsNoMatch =>
+      'Aucune connexion ne correspond à la recherche';
+
+  @override
+  String get homeModulesTitle => 'Modules';
+
+  @override
+  String get homeFavoritesDesc => 'Vos points suivis, regroupés par dossier';
+
+  @override
+  String get homePointsDesc => 'Entrées, sorties et variables de l\'automate';
+
+  @override
+  String get homeDashboardDesc => 'Courbes, comparaisons et statistiques';
+
+  @override
+  String get homeSchedulesDesc => 'Programmes horaires et calendriers';
+
+  @override
+  String get homeAlarmsDesc => 'Événements et défauts en cours';
+
+  @override
+  String get homeOverridesDesc => 'Points forcés et dérogations actives';
+
+  @override
+  String get homeSynopticDesc => 'Vues graphiques de l\'installation';
+
+  @override
+  String get homeEnvysionDesc => 'Ouvrir le synoptique dans le navigateur';
+
+  @override
+  String get homeDeviceInfoDesc => 'Identité, réseau et inventaire des objets';
+
+  @override
+  String get homeNoAlarm => 'Aucune alarme';
+
+  @override
+  String get homeNoOverride => 'Aucun forçage';
+
+  @override
+  String get homeFromCache => 'Données en cache';
+
+  @override
+  String get frmSectionAddress => 'Adresse de l\'automate';
+
+  @override
+  String get frmSectionAuth => 'Authentification';
+
+  @override
+  String get frmSectionBacnet => 'Identification BACnet';
 }

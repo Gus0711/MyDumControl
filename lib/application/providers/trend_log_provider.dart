@@ -1,14 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../domain/models/trend_log.dart';
+import '../../data/services/api_service.dart';
 import '../../data/services/bacnet_service.dart';
 import 'active_connection_provider.dart';
 import 'cache_provider.dart';
 import 'bacnet_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// Provider pour le mapping trend-log -> point
 /// Clé: "objectType:objectInstance" (ex: "analog-value:454")
@@ -17,31 +18,38 @@ final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 /// Utilise le cache local pour éviter de recharger à chaque navigation
 /// Supporte les connexions API (V1/V2) et BACnet natives
 final trendLogMappingProvider = FutureProvider<Map<String, int>>((ref) async {
-  final connectionState = ref.watch(activeConnectionProvider);
-  final connection = connectionState.connection;
+  // Only watch the fields that matter (not deviceInfo/summary/flags), and do
+  // every watch before the first await.
+  final connectionId = ref.watch(activeConnectionProvider.select((s) => s.connection?.id));
+  final isBacnet = ref.watch(activeConnectionProvider.select((s) => s.isBacnetConnection));
+  final client = ref.watch(activeConnectionProvider.select((s) => s.client));
+  final bacnetConnection = isBacnet ? ref.watch(activeBacnetConnectionProvider) : null;
 
-  _logger.i('trendLogMappingProvider: called, connection=${connection?.name}, isBacnet=${connectionState.isBacnetConnection}');
+  logger.i('trendLogMappingProvider: called, connectionId=$connectionId, isBacnet=$isBacnet');
 
-  if (connection == null) {
-    _logger.w('trendLogMappingProvider: connection is null, returning empty');
+  if (connectionId == null) {
+    logger.w('trendLogMappingProvider: connection is null, returning empty');
     return {};
   }
 
-  final connectionId = connection.id;
+  // True once this evaluation is obsolete (connection changed / disposed)
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+
   final cacheService = ref.read(cacheServiceProvider);
 
   // ÉTAPE 1: Essayer de charger depuis le cache d'abord (seulement si non vide)
   final cachedMapping = await cacheService.getCachedTrendLogMapping(connectionId);
-  _logger.d('trendLogMappingProvider: cached mapping = $cachedMapping');
   if (cachedMapping != null && cachedMapping.isNotEmpty) {
-    _logger.i('trendLogMappingProvider: loaded ${cachedMapping.length} mappings from cache');
+    logger.i('trendLogMappingProvider: loaded ${cachedMapping.length} mappings from cache');
 
-    // Rafraîchir en arrière-plan (sans bloquer)
-    if (connectionState.isBacnetConnection) {
-      final bacnetConnection = ref.watch(activeBacnetConnectionProvider);
+    // Rafraîchir en arrière-plan (sans bloquer), une seule fois par évaluation
+    // (donc par connexion), puis publier le résultat s'il a changé.
+    Future<Map<String, int>?>? refreshFuture;
+    if (isBacnet) {
       final bacnetService = ref.read(bacnetServiceProvider);
       if (bacnetConnection != null && bacnetConnection.deviceId != null) {
-        _refreshBacnetMappingInBackground(
+        refreshFuture = _refreshBacnetMappingInBackground(
           bacnetService,
           bacnetConnection.host,
           bacnetConnection.port,
@@ -50,48 +58,42 @@ final trendLogMappingProvider = FutureProvider<Map<String, int>>((ref) async {
           cacheService,
         );
       }
-    } else if (connectionState.client != null) {
-      _refreshMappingInBackground(connectionState.client!, connectionId, cacheService);
+    } else if (client != null) {
+      refreshFuture = _refreshMappingInBackground(client, connectionId, cacheService);
     }
+
+    refreshFuture?.then((fresh) {
+      if (disposed || fresh == null || mapEquals(fresh, cachedMapping)) return;
+      ref.state = AsyncData(fresh);
+    });
 
     return cachedMapping;
   }
 
   // ÉTAPE 2: Charger depuis l'API ou BACnet
-  if (connectionState.isBacnetConnection) {
+  if (isBacnet) {
     // Connexion BACnet native
-    // IMPORTANT: utiliser watch pour que le provider re-évalue quand la connexion BACnet change
-    final bacnetConnection = ref.watch(activeBacnetConnectionProvider);
     final bacnetService = ref.read(bacnetServiceProvider);
 
-    _logger.i('trendLogMappingProvider: BACnet connection detected');
-    _logger.i('trendLogMappingProvider: bacnetConnection=$bacnetConnection');
+    logger.i('trendLogMappingProvider: BACnet connection detected, bacnetConnection=$bacnetConnection');
 
     if (bacnetConnection == null || bacnetConnection.deviceId == null) {
-      _logger.w('trendLogMappingProvider: bacnetConnection is null or deviceId is null');
+      logger.w('trendLogMappingProvider: bacnetConnection is null or deviceId is null');
       return {};
     }
 
-    _logger.i('trendLogMappingProvider: loading from BACnet... host=${bacnetConnection.host}, port=${bacnetConnection.port}, deviceId=${bacnetConnection.deviceId}');
+    logger.i('trendLogMappingProvider: loading from BACnet... host=${bacnetConnection.host}, port=${bacnetConnection.port}, deviceId=${bacnetConnection.deviceId}');
     final trendLogs = await bacnetService.discoverTrendLogs(
       host: bacnetConnection.host,
       port: bacnetConnection.port,
       deviceId: bacnetConnection.deviceId!,
     );
 
-    _logger.i('trendLogMappingProvider: discoverTrendLogs returned ${trendLogs.length} trend logs');
+    logger.i('trendLogMappingProvider: discoverTrendLogs returned ${trendLogs.length} trend logs');
 
-    // Construire le mapping à partir des TrendLogs découverts
-    final mapping = <String, int>{};
-    for (final tl in trendLogs) {
-      final key = tl.trackedObjectKey;
-      _logger.d('trendLogMappingProvider: TrendLog ${tl.instance} -> trackedKey=$key (type=${tl.trackedObjectType}, instance=${tl.trackedObjectInstance})');
-      if (key != null) {
-        mapping[key] = tl.instance;
-      }
-    }
+    final mapping = _mappingFromBacnetTrendLogs(trendLogs);
 
-    _logger.i('trendLogMappingProvider: loaded ${mapping.length} mappings from BACnet');
+    logger.i('trendLogMappingProvider: loaded ${mapping.length} mappings from BACnet');
 
     // Sauvegarder en cache
     await cacheService.cacheTrendLogMapping(connectionId, mapping);
@@ -99,14 +101,13 @@ final trendLogMappingProvider = FutureProvider<Map<String, int>>((ref) async {
     return mapping;
   } else {
     // Connexion API (V1/V2)
-    final client = connectionState.client;
     if (client == null) {
       return {};
     }
 
-    _logger.i('trendLogMappingProvider: loading from API...');
+    logger.i('trendLogMappingProvider: loading from API...');
     final mapping = await client.getTrendLogMapping();
-    _logger.i('trendLogMappingProvider: loaded ${mapping.length} mappings from API');
+    logger.i('trendLogMappingProvider: loaded ${mapping.length} mappings from API');
 
     // Sauvegarder en cache
     await cacheService.cacheTrendLogMapping(connectionId, mapping);
@@ -115,23 +116,39 @@ final trendLogMappingProvider = FutureProvider<Map<String, int>>((ref) async {
   }
 });
 
+/// Builds the "objectType:instance" -> trend log instance mapping
+Map<String, int> _mappingFromBacnetTrendLogs(List<BacnetTrendLog> trendLogs) {
+  final mapping = <String, int>{};
+  for (final tl in trendLogs) {
+    final key = tl.trackedObjectKey;
+    if (key != null) {
+      mapping[key] = tl.instance;
+    }
+  }
+  return mapping;
+}
+
 /// Rafraîchit le mapping API en arrière-plan
-Future<void> _refreshMappingInBackground(
-  dynamic client,
+/// Returns the fresh mapping, or null on failure.
+Future<Map<String, int>?> _refreshMappingInBackground(
+  ConnectedApiClient client,
   int connectionId,
   dynamic cacheService,
 ) async {
   try {
     final mapping = await client.getTrendLogMapping();
     await cacheService.cacheTrendLogMapping(connectionId, mapping);
-    _logger.i('trendLogMappingProvider: background refresh completed (${mapping.length} entries)');
+    logger.i('trendLogMappingProvider: background refresh completed (${mapping.length} entries)');
+    return mapping;
   } catch (e) {
-    _logger.w('trendLogMappingProvider: background refresh failed: $e');
+    logger.w('trendLogMappingProvider: background refresh failed: $e');
+    return null;
   }
 }
 
 /// Rafraîchit le mapping BACnet en arrière-plan
-Future<void> _refreshBacnetMappingInBackground(
+/// Returns the fresh mapping, or null on failure.
+Future<Map<String, int>?> _refreshBacnetMappingInBackground(
   BacnetService bacnetService,
   String host,
   int port,
@@ -146,18 +163,14 @@ Future<void> _refreshBacnetMappingInBackground(
       deviceId: deviceId,
     );
 
-    final mapping = <String, int>{};
-    for (final tl in trendLogs) {
-      final key = tl.trackedObjectKey;
-      if (key != null) {
-        mapping[key] = tl.instance;
-      }
-    }
+    final mapping = _mappingFromBacnetTrendLogs(trendLogs);
 
     await cacheService.cacheTrendLogMapping(connectionId, mapping);
-    _logger.i('trendLogMappingProvider: BACnet background refresh completed (${mapping.length} entries)');
+    logger.i('trendLogMappingProvider: BACnet background refresh completed (${mapping.length} entries)');
+    return mapping;
   } catch (e) {
-    _logger.w('trendLogMappingProvider: BACnet background refresh failed: $e');
+    logger.w('trendLogMappingProvider: BACnet background refresh failed: $e');
+    return null;
   }
 }
 
@@ -229,14 +242,47 @@ enum TrendPeriod {
   const TrendPeriod(this.label, this.duration);
 }
 
+/// Parses a raw API trend buffer (JSON V2 / V1 /trend, or V1 text).
+/// Top-level so it can run in a background isolate via [compute].
+TrendLogData parseTrendLogBuffer(String bufferData) {
+  try {
+    final jsonData = json.decode(bufferData);
+    return TrendLogBufferParser.parseV2(jsonData);
+  } catch (_) {
+    // Si le parsing JSON échoue, c'est probablement le format texte V1
+    return TrendLogBufferParser.parseV1(bufferData);
+  }
+}
+
+/// Parses trend buffer data as returned by `ApiClient.getTrendLogBufferData`
+/// (already decoded `List`/`Map`, or V1 text `String`).
+/// Top-level so it can run in a background isolate via [compute].
+TrendLogData parseTrendLogBufferData(Object bufferData) {
+  if (bufferData is String) return parseTrendLogBuffer(bufferData);
+  return TrendLogBufferParser.parseV2(bufferData);
+}
+
+/// True if decoded buffer data holds nothing to parse.
+bool isTrendLogBufferDataEmpty(Object? data) {
+  if (data == null) return true;
+  if (data is String) return data.trim().isEmpty;
+  if (data is Iterable) return data.isEmpty;
+  if (data is Map) return data.isEmpty;
+  return false;
+}
+
 /// Notifier pour gérer le chargement des données de trend
 class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
   final Ref _ref;
   final int trendLogInstance;
 
-  // Cache du buffer brut pour éviter de recharger
-  String? _cachedBuffer;
   TrendLogData? _cachedFullData;
+
+  // Coverage of _cachedFullData: was it loaded with allData (API), and with
+  // how many records (BACnet ReadRange). Used to reload when a longer period
+  // is requested than what the cache holds.
+  bool _cachedIsAllData = false;
+  int _cachedMaxRecords = 0;
 
   // Type de connexion utilisé lors du dernier chargement (pour détecter les changements)
   bool? _lastConnectionWasBacnet;
@@ -245,14 +291,39 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
   // Flag pour récupérer tout l'historique (sans limite de temps)
   bool _loadAllData = false;
 
+  // Incremented on every network load: older loads are ignored on completion
+  int _requestId = 0;
+
+  // Single-flight: the network load currently running and what it covers.
+  Future<void>? _inFlight;
+  int? _inFlightConnectionId;
+  bool _inFlightAllData = false;
+  int _inFlightMaxRecords = 0;
+
   TrendLogViewerNotifier(this._ref, this.trendLogInstance)
       : super(const TrendLogViewerState());
+
+  /// Current state, readable by owners of a private notifier instance
+  /// (e.g. the multi-curve viewer).
+  TrendLogViewerState get currentState => state;
+
+  /// True if a load started with [requestId] for [connectionId] is obsolete
+  bool _isStale(int requestId, int? connectionId) {
+    if (!mounted || requestId != _requestId) return true;
+    return _ref.read(activeConnectionProvider).connection?.id != connectionId;
+  }
+
+  /// True if the cached data can serve [period] without a new download
+  bool _cacheCovers(TrendPeriod period, {required bool allData, required bool isBacnet}) {
+    if (_cachedFullData == null) return false;
+    if (isBacnet) return _getMaxRecordsForPeriod(period) <= _cachedMaxRecords;
+    return !allData || _cachedIsAllData;
+  }
 
   /// Charge les données du trend log
   /// Si allData=true, récupère tout l'historique sans limite de temps
   Future<void> loadData({TrendPeriod? period, bool forceRefresh = false, bool allData = false}) async {
     var selectedPeriod = period ?? state.selectedPeriod;
-    _loadAllData = allData; // Stocker pour passage aux méthodes de chargement
     final connectionState = _ref.read(activeConnectionProvider);
 
     // Vérifier si le type de connexion ou la connexion a changé -> invalider le cache
@@ -261,23 +332,73 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
 
     if (_lastConnectionWasBacnet != null &&
         (_lastConnectionWasBacnet != currentIsBacnet || _lastConnectionId != currentConnectionId)) {
-      _logger.i('loadData: connection changed (wasBacnet=$_lastConnectionWasBacnet, isBacnet=$currentIsBacnet, lastId=$_lastConnectionId, currentId=$currentConnectionId), invalidating cache and resetting period');
-      _cachedBuffer = null;
+      logger.i('loadData: connection changed (wasBacnet=$_lastConnectionWasBacnet, isBacnet=$currentIsBacnet, lastId=$_lastConnectionId, currentId=$currentConnectionId), invalidating cache and resetting period');
       _cachedFullData = null;
       // Réinitialiser la période à la valeur par défaut quand on change d'automate
-      selectedPeriod = TrendPeriod.month;
-      state = state.copyWith(selectedPeriod: selectedPeriod);
+      // (sauf si une période est explicitement demandée)
+      if (period == null) {
+        selectedPeriod = TrendPeriod.month;
+        state = state.copyWith(selectedPeriod: selectedPeriod);
+      }
     }
 
     // Mettre à jour le type de connexion
     _lastConnectionWasBacnet = currentIsBacnet;
     _lastConnectionId = currentConnectionId;
 
-    // Si on a déjà les données en cache et qu'on change juste la période
-    if (!forceRefresh && _cachedFullData != null) {
+    // Si on a déjà les données en cache (couvrant la période) et qu'on change juste la période
+    if (!forceRefresh && _cacheCovers(selectedPeriod, allData: allData, isBacnet: currentIsBacnet)) {
       _applyPeriodFilter(selectedPeriod);
       return;
     }
+
+    // Single-flight: a load already running for this connection that covers
+    // the request is reused (only the selected period is updated; the running
+    // load applies state.selectedPeriod when it completes).
+    final inFlight = _inFlight;
+    if (!forceRefresh &&
+        inFlight != null &&
+        _inFlightConnectionId == currentConnectionId &&
+        (currentIsBacnet
+            ? _getMaxRecordsForPeriod(selectedPeriod) <= _inFlightMaxRecords
+            : (!allData || _inFlightAllData))) {
+      state = state.copyWith(
+        isLoading: true,
+        selectedPeriod: selectedPeriod,
+        loadingMessage: state.loadingMessage,
+      );
+      return inFlight;
+    }
+
+    final future = _startLoad(
+      connectionState,
+      selectedPeriod,
+      allData: allData,
+      isBacnet: currentIsBacnet,
+      connectionId: currentConnectionId,
+    );
+    _inFlight = future;
+    _inFlightConnectionId = currentConnectionId;
+    _inFlightAllData = allData;
+    _inFlightMaxRecords = currentIsBacnet ? _getMaxRecordsForPeriod(selectedPeriod) : 0;
+    try {
+      await future;
+    } finally {
+      if (identical(_inFlight, future)) _inFlight = null;
+    }
+  }
+
+  Future<void> _startLoad(
+    ActiveConnectionState connectionState,
+    TrendPeriod selectedPeriod, {
+    required bool allData,
+    required bool isBacnet,
+    required int? connectionId,
+  }) async {
+    final currentIsBacnet = isBacnet;
+    final currentConnectionId = connectionId;
+    final requestId = ++_requestId;
+    _loadAllData = allData; // Stocker pour passage aux méthodes de chargement
 
     state = state.copyWith(
       isLoading: true,
@@ -289,11 +410,12 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     try {
       // Vérifier si c'est une connexion BACnet (connectionState déjà lu au début)
       if (currentIsBacnet) {
-        await _loadDataFromBacnet(selectedPeriod);
+        await _loadDataFromBacnet(selectedPeriod, requestId, currentConnectionId);
       } else {
-        await _loadDataFromApi(connectionState, selectedPeriod);
+        await _loadDataFromApi(connectionState, requestId, currentConnectionId);
       }
     } catch (e) {
+      if (_isStale(requestId, currentConnectionId)) return;
       state = state.copyWith(
         isLoading: false,
         error: 'Erreur: $e',
@@ -303,16 +425,14 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
   }
 
   /// Charge les données depuis une connexion BACnet native
-  Future<void> _loadDataFromBacnet(TrendPeriod selectedPeriod) async {
-    _logger.i('_loadDataFromBacnet: starting for trendLogInstance=$trendLogInstance');
+  Future<void> _loadDataFromBacnet(TrendPeriod selectedPeriod, int requestId, int? connectionId) async {
+    logger.i('_loadDataFromBacnet: starting for trendLogInstance=$trendLogInstance');
 
     final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
     final bacnetService = _ref.read(bacnetServiceProvider);
 
-    _logger.d('_loadDataFromBacnet: bacnetConnection=$bacnetConnection');
-
     if (bacnetConnection == null) {
-      _logger.w('_loadDataFromBacnet: bacnetConnection is null');
+      logger.w('_loadDataFromBacnet: bacnetConnection is null');
       state = state.copyWith(isLoading: false, error: 'Non connecté (BACnet)', loadingMessage: null);
       return;
     }
@@ -322,7 +442,7 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     // Calculer le nombre de records à lire selon la période
     // Avec un intervalle de ~15 min: 4/h, 96/jour
     final maxRecords = _getMaxRecordsForPeriod(selectedPeriod);
-    _logger.i('_loadDataFromBacnet: calling readTrendLogBuffer for instance $trendLogInstance, maxRecords=$maxRecords');
+    logger.i('_loadDataFromBacnet: calling readTrendLogBuffer for instance $trendLogInstance, maxRecords=$maxRecords');
 
     // Lire le buffer via ReadRange
     List<TrendLogRecordData> records;
@@ -333,10 +453,12 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
         trendLogInstance: trendLogInstance,
         maxRecords: maxRecords,
       );
+      if (_isStale(requestId, connectionId)) return;
 
-      _logger.i('_loadDataFromBacnet: received ${records.length} records');
+      logger.i('_loadDataFromBacnet: received ${records.length} records');
     } catch (e, st) {
-      _logger.e('_loadDataFromBacnet: error reading buffer: $e\n$st');
+      logger.e('_loadDataFromBacnet: error reading buffer: $e\n$st');
+      if (_isStale(requestId, connectionId)) return;
       state = state.copyWith(
         isLoading: false,
         error: 'Erreur lecture buffer: $e',
@@ -346,10 +468,10 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     }
 
     if (records.isEmpty) {
-      _logger.w('_loadDataFromBacnet: no records returned');
+      // Final empty state (no error): the UI shows "no data".
+      logger.w('_loadDataFromBacnet: no records returned');
       state = state.copyWith(
         isLoading: false,
-        error: 'Aucune donnée disponible',
         data: TrendLogData.fromRecords([]),
         loadingMessage: null,
       );
@@ -358,10 +480,11 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
 
     state = state.copyWith(loadingMessage: 'Analyse des données...');
 
-    // Debug: afficher les premiers records
-    for (int i = 0; i < 5 && i < records.length; i++) {
-      final r = records[i];
-      _logger.d('Record[$i]: timestamp=${r.timestamp}, value=${r.value} (type=${r.value?.runtimeType}), flags=${r.statusFlags}');
+    if (kDebugMode) {
+      for (int i = 0; i < 5 && i < records.length; i++) {
+        final r = records[i];
+        logger.d('Record[$i]: timestamp=${r.timestamp}, value=${r.value} (type=${r.value?.runtimeType}), flags=${r.statusFlags}');
+      }
     }
 
     // Convertir les records BACnet en TrendLogRecord
@@ -373,74 +496,64 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     )).toList();
 
     final trendData = TrendLogData.fromRecords(trendRecords);
-    _logger.i('TrendLogViewer: parsed ${trendData.records.length} records from BACnet');
-
-    // Debug: afficher les stats
-    final valueRecordsCount = trendData.records.where((r) => r.isValueRecord && r.numericValue != null).length;
-    _logger.i('TrendLogViewer: valueRecords with numeric value: $valueRecordsCount, min=${trendData.minValue}, max=${trendData.maxValue}');
+    logger.i('TrendLogViewer: parsed ${trendData.records.length} records from BACnet, min=${trendData.minValue}, max=${trendData.maxValue}');
 
     // Mettre en cache les données complètes
     _cachedFullData = trendData;
+    _cachedMaxRecords = maxRecords;
+    _cachedIsAllData = false;
 
-    // Appliquer le filtre de période
-    _applyPeriodFilter(selectedPeriod);
+    // Appliquer le filtre de période (la plus récente demandée)
+    _applyPeriodFilter(state.selectedPeriod);
   }
 
   /// Charge les données depuis l'API (V1/V2)
-  Future<void> _loadDataFromApi(dynamic connectionState, TrendPeriod selectedPeriod) async {
+  Future<void> _loadDataFromApi(ActiveConnectionState connectionState, int requestId, int? connectionId) async {
     final client = connectionState.client;
     if (client == null) {
       state = state.copyWith(isLoading: false, error: 'Non connecté', loadingMessage: null);
       return;
     }
 
-    state = state.copyWith(loadingMessage: _loadAllData
+    final allData = _loadAllData;
+    state = state.copyWith(loadingMessage: allData
         ? 'Téléchargement de tout l\'historique...\n(peut prendre plusieurs minutes)'
         : 'Téléchargement de l\'historique...\n(peut prendre quelques minutes)');
 
     // Récupérer le buffer (avec ou sans limite de temps)
-    final bufferData = await client.getTrendLogBuffer(trendLogInstance, allData: _loadAllData);
+    // Already decoded by Dio (no JSON re-encoding of large buffers)
+    final bufferData = await client.getTrendLogBufferData(trendLogInstance, allData: allData);
+    if (_isStale(requestId, connectionId)) return;
 
-    if (bufferData == null || bufferData.isEmpty) {
+    if (bufferData == null || isTrendLogBufferDataEmpty(bufferData)) {
+      // Final empty state (no error): the UI shows "no data".
       state = state.copyWith(
         isLoading: false,
-        error: 'Aucune donnée disponible',
         data: TrendLogData.fromRecords([]),
         loadingMessage: null,
       );
       return;
     }
 
-    // Mettre en cache
-    _cachedBuffer = bufferData;
-
     state = state.copyWith(loadingMessage: 'Analyse des données...');
 
-    // Parser les données selon le format
-    TrendLogData trendData;
-
-    // Essayer d'abord de parser comme JSON (format V2 ou format /trend de V1)
-    try {
-      final jsonData = json.decode(bufferData);
-      trendData = TrendLogBufferParser.parseV2(jsonData);
-      _logger.i('TrendLogViewer: parsed ${trendData.records.length} records from JSON');
-    } catch (e) {
-      // Si le parsing JSON échoue, c'est probablement le format texte V1
-      _logger.d('TrendLogViewer: JSON parse failed, trying V1 text format: $e');
-      trendData = TrendLogBufferParser.parseV1(bufferData);
-      _logger.i('TrendLogViewer: parsed ${trendData.records.length} records from V1 text format');
-    }
+    // Parser les données (JSON V2 / V1 /trend, ou texte V1) hors du thread UI
+    final trendData = await compute(parseTrendLogBufferData, bufferData);
+    if (_isStale(requestId, connectionId)) return;
+    logger.i('TrendLogViewer: parsed ${trendData.records.length} records from API buffer');
 
     // Mettre en cache les données complètes
     _cachedFullData = trendData;
+    _cachedIsAllData = allData;
+    _cachedMaxRecords = 0;
 
-    // Appliquer le filtre de période
-    _applyPeriodFilter(selectedPeriod);
+    // Appliquer le filtre de période (la plus récente demandée)
+    _applyPeriodFilter(state.selectedPeriod);
   }
 
   /// Applique le filtre de période sur les données cachées
   void _applyPeriodFilter(TrendPeriod period) {
-    if (_cachedFullData == null) return;
+    if (_cachedFullData == null || !mounted) return;
 
     TrendLogData filteredData = _cachedFullData!;
 
@@ -449,36 +562,18 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
       final now = DateTime.now();
       final start = now.subtract(period.duration);
 
-      // Debug: afficher les plages de temps
-      _logger.d('_applyPeriodFilter: period=$period');
-      _logger.d('_applyPeriodFilter: now=$now (${now.timeZoneName})');
-      _logger.d('_applyPeriodFilter: start=$start');
-
-      // Afficher les timestamps min/max des données
-      if (_cachedFullData!.records.isNotEmpty) {
-        final sortedRecords = List.from(_cachedFullData!.records)
-          ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-        final dataStart = sortedRecords.first.timestamp;
-        final dataEnd = sortedRecords.last.timestamp;
-        _logger.d('_applyPeriodFilter: data range: $dataStart -> $dataEnd');
-
-        // Convertir en UTC pour comparaison cohérente
-        final startUtc = start.toUtc();
-        final nowUtc = now.toUtc();
-        _logger.d('_applyPeriodFilter: filter range (UTC): $startUtc -> $nowUtc');
-        _logger.d('_applyPeriodFilter: data range (UTC): ${dataStart.toUtc()} -> ${dataEnd.toUtc()}');
-      }
-
       final filtered = _cachedFullData!.filterByTimeRange(start, now);
 
       // Si le filtre ne retourne aucune donnée avec des valeurs, utiliser toutes les données
       final hasNumericValues = filtered.records.any((r) => r.isValueRecord && r.numericValue != null);
-      _logger.d('_applyPeriodFilter: filtered ${filtered.records.length} records, hasNumericValues=$hasNumericValues');
+      if (kDebugMode) {
+        logger.d('_applyPeriodFilter: period=$period, start=$start, filtered ${filtered.records.length} records, hasNumericValues=$hasNumericValues');
+      }
 
       if (hasNumericValues) {
         filteredData = filtered;
       } else {
-        _logger.w('_applyPeriodFilter: no data in period $period, using all data');
+        logger.w('_applyPeriodFilter: no data in period $period, using all data');
         // Garder toutes les données mais changer la période en "all"
         filteredData = _cachedFullData!;
       }
@@ -492,31 +587,17 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
     );
   }
 
-  /// Change la période (utilise le cache, on récupère toujours 30 jours de données)
-  /// Exception : "Tout" force un rechargement sans limite de temps
+  /// Change la période. Utilise le cache s'il couvre la période demandée
+  /// (API : 30 jours ; BACnet : selon le nombre de records lus), sinon recharge.
+  /// "Tout" recharge sans limite de temps si le cache ne contient pas tout.
   void setPeriod(TrendPeriod period) {
-    // Si on passe sur "Tout", recharger sans limite de temps
-    if (period == TrendPeriod.all) {
-      _cachedBuffer = null;
-      _cachedFullData = null;
-      loadData(period: period, allData: true);
-      return;
-    }
-
-    if (_cachedFullData != null) {
-      // Utiliser le cache - on a déjà 30 jours de données
-      _applyPeriodFilter(period);
-    } else {
-      // Pas de cache, charger les données
-      loadData(period: period);
-    }
+    loadData(period: period, allData: period == TrendPeriod.all);
   }
 
-  /// Force le rechargement des données
+  /// Force le rechargement des données (conserve le mode "Tout")
   Future<void> refresh() async {
-    _cachedBuffer = null;
     _cachedFullData = null;
-    await loadData(forceRefresh: true);
+    await loadData(forceRefresh: true, allData: state.selectedPeriod == TrendPeriod.all);
   }
 
   /// Calcule le nombre de records à lire selon la période
@@ -539,8 +620,30 @@ class TrendLogViewerNotifier extends StateNotifier<TrendLogViewerState> {
   }
 }
 
+/// How long an unused viewer keeps its data before being disposed
+/// (navigating back and forth does not re-download the buffer).
+const _viewerKeepAliveDuration = Duration(minutes: 2);
+
+/// Keeps an autoDispose provider alive for [_viewerKeepAliveDuration] after
+/// its last listener is removed, so buffers are eventually freed.
+void keepAliveForAWhile(Ref ref) {
+  final link = ref.keepAlive();
+  Timer? timer;
+  ref.onCancel(() {
+    timer?.cancel();
+    timer = Timer(_viewerKeepAliveDuration, link.close);
+  });
+  ref.onResume(() => timer?.cancel());
+  ref.onDispose(() => timer?.cancel());
+}
+
 /// Provider family pour le viewer de trend log
-final trendLogViewerProvider = StateNotifierProvider.family<
+/// autoDispose with a limited keep-alive: buffers are released when no
+/// screen/widget uses this trend log anymore.
+final trendLogViewerProvider = StateNotifierProvider.autoDispose.family<
     TrendLogViewerNotifier, TrendLogViewerState, int>(
-  (ref, trendLogInstance) => TrendLogViewerNotifier(ref, trendLogInstance),
+  (ref, trendLogInstance) {
+    keepAliveForAWhile(ref);
+    return TrendLogViewerNotifier(ref, trendLogInstance);
+  },
 );

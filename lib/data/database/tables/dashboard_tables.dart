@@ -30,6 +30,7 @@ class DashboardWidgetTypeConverter extends TypeConverter<DashboardWidgetType, St
 }
 
 /// Table des configurations de dashboard
+@TableIndex(name: 'idx_dashboards_connection_id', columns: {#connectionId})
 class Dashboards extends Table {
   /// Identifiant unique
   IntColumn get id => integer().autoIncrement()();
@@ -57,6 +58,7 @@ class Dashboards extends Table {
 }
 
 /// Table des widgets du dashboard
+@TableIndex(name: 'idx_dashboard_widgets_dashboard_id', columns: {#dashboardId})
 class DashboardWidgets extends Table {
   /// Identifiant unique
   IntColumn get id => integer().autoIncrement()();

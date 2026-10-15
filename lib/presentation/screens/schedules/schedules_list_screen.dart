@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../application/providers/schedule_provider.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../domain/models/schedule.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Écran de liste des schedules (plannings)
 class SchedulesListScreen extends ConsumerWidget {
@@ -21,66 +23,30 @@ class SchedulesListScreen extends ConsumerWidget {
         title: l10n.plannings,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: () => ref.invalidate(schedulesListProvider),
             tooltip: l10n.refresh,
           ),
         ],
       ),
       body: schedulesAsync.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
-              const SizedBox(height: 16),
-              Text(
-                l10n.loadingError,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                error.toString(),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => ref.invalidate(schedulesListProvider),
-                icon: const Icon(Icons.refresh),
-                label: Text(l10n.retry),
-              ),
-            ],
+        loading: () => const DcLoading(),
+        error: (error, stack) => DcEmptyState.error(
+          context,
+          title: l10n.loadingError,
+          message: error.toString(),
+          action: FilledButton.icon(
+            onPressed: () => ref.invalidate(schedulesListProvider),
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(l10n.retry),
           ),
         ),
         data: (schedules) {
           if (schedules.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.noPlanning,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.noScheduleConfigured,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                  ),
-                ],
-              ),
+            return DcEmptyState(
+              icon: Icons.calendar_month_rounded,
+              title: l10n.noPlanning,
+              message: l10n.noScheduleConfigured,
             );
           }
 
@@ -89,12 +55,43 @@ class SchedulesListScreen extends ConsumerWidget {
               ref.invalidate(schedulesListProvider);
               await ref.read(schedulesListProvider.future);
             },
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: schedules.length,
-              itemBuilder: (context, index) {
-                final schedule = schedules[index];
-                return _ScheduleListTile(schedule: schedule);
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth.clamp(0.0, DcSpace.contentMaxWidth) - 32;
+                final columns = width >= 1000 ? 3 : (width >= 640 ? 2 : 1);
+                const spacing = 12.0;
+                final itemWidth = (width - spacing * (columns - 1)) / columns;
+
+                return ListView(
+                  padding: const EdgeInsets.only(bottom: 32),
+                  children: [
+                    DcContent(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          DcSectionHeader(
+                            l10n.plannings,
+                            count: schedules.length,
+                            icon: Icons.calendar_month_rounded,
+                            padding: const EdgeInsets.fromLTRB(4, 20, 0, 10),
+                          ),
+                          Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              for (final schedule in schedules)
+                                SizedBox(
+                                  width: itemWidth,
+                                  child: _ScheduleListTile(schedule: schedule),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
               },
             ),
           );
@@ -104,7 +101,7 @@ class SchedulesListScreen extends ConsumerWidget {
   }
 }
 
-/// Tuile pour un schedule dans la liste
+/// Carte d'un schedule dans la liste
 class _ScheduleListTile extends StatelessWidget {
   final ScheduleSummary schedule;
 
@@ -113,84 +110,72 @@ class _ScheduleListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final dc = context.dc;
+    final isBoolean = schedule.valueType == ScheduleValueType.boolean;
+    final hasDescription = schedule.description != null && schedule.description!.isNotEmpty;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(8),
+    return DcCard(
+      padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+      onTap: () {
+        context.push(
+          Routes.scheduleDetail.replaceFirst(':instance', schedule.instance.toString()),
+        );
+      },
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DcIconBox(
+            icon: Icons.calendar_month_rounded,
+            tone: dc.toneOf(AppColors.multiStateValue),
+            size: 42,
           ),
-          child: Icon(
-            Icons.calendar_month,
-            color: colorScheme.onPrimaryContainer,
-          ),
-        ),
-        title: Text(
-          schedule.objectName,
-          style: theme.textTheme.titleMedium,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (schedule.description != null && schedule.description!.isNotEmpty)
-              Text(
-                schedule.description!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.outline,
-                ),
-              ),
-            const SizedBox(height: 4),
-            Row(
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.tag,
-                  size: 14,
-                  color: colorScheme.outline,
-                ),
-                const SizedBox(width: 4),
                 Text(
-                  l10n.instanceLabel(schedule.instance.toString()),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.outline,
-                  ),
+                  schedule.objectName,
+                  style: context.text.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(width: 12),
-                Icon(
-                  schedule.valueType == ScheduleValueType.boolean
-                      ? Icons.toggle_on_outlined
-                      : Icons.format_list_numbered,
-                  size: 14,
-                  color: colorScheme.outline,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  schedule.valueType == ScheduleValueType.boolean
-                      ? l10n.onOff
-                      : l10n.multiState,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.outline,
+                if (hasDescription) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    schedule.description!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodySmall?.copyWith(color: dc.textSecondary),
                   ),
+                ],
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    DcTag(
+                      l10n.instanceLabel(schedule.instance.toString()),
+                      icon: Icons.tag_rounded,
+                      mono: true,
+                      dense: true,
+                    ),
+                    DcTag(
+                      isBoolean ? l10n.onOff : l10n.multiState,
+                      icon: isBoolean ? Icons.toggle_on_outlined : Icons.format_list_numbered_rounded,
+                      tone: isBoolean ? dc.success : dc.violet,
+                      dense: true,
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          context.push(
-            Routes.scheduleDetail.replaceFirst(':instance', schedule.instance.toString()),
-          );
-        },
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Icon(Icons.chevron_right_rounded, color: dc.textMuted),
+          ),
+        ],
       ),
     );
   }

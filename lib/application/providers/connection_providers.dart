@@ -1,8 +1,51 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../core/utils/logger.dart';
+import 'package:uuid/uuid.dart';
 import '../../data/database/app_database.dart';
 import 'database_provider.dart';
+
+/// Generates a unique secure-storage key for a connection password.
+String generatePasswordKey() => 'conn_pwd_${const Uuid().v4()}';
+
+/// True if a connection edit points it to another device, so the cached data
+/// (points, device info, trend mapping, summary) must be invalidated.
+bool connectionTargetChanged(
+  Connection existing, {
+  required String host,
+  required int port,
+  required String connectionType,
+  required int? bacnetDeviceId,
+}) {
+  return existing.host != host ||
+      existing.port != port ||
+      existing.connectionType != connectionType ||
+      existing.bacnetDeviceId != bacnetDeviceId;
+}
+
+/// True if the pinned TLS certificate must be forgotten after an edit: it
+/// belongs to another endpoint (host, port or scheme changed).
+bool certificateEndpointChanged(
+  Connection existing, {
+  required String host,
+  required int port,
+  required bool useHttps,
+}) {
+  return existing.host != host || existing.port != port || existing.useHttps != useHttps;
+}
+
+/// Certificate fingerprint to store after an edit. The one seen by a
+/// successful connection test on the edited endpoint ([testedFingerprint])
+/// always wins; otherwise the pinned one is kept, unless the endpoint changed.
+String? fingerprintAfterEdit(
+  Connection existing, {
+  required bool endpointChanged,
+  String? testedFingerprint,
+}) {
+  if (testedFingerprint != null) return testedFingerprint;
+  return endpointChanged ? null : existing.certificateFingerprint;
+}
 
 /// Provider pour le stockage sécurisé des mots de passe
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
@@ -15,6 +58,14 @@ final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
 final connectionsStreamProvider = StreamProvider<List<Connection>>((ref) {
   final database = ref.watch(databaseProvider);
   return database.watchAllConnections();
+});
+
+/// True if a password is stored for the connection (keyed by its
+/// passwordKey). Used to flag connections imported without their secret.
+final connectionHasPasswordProvider =
+    FutureProvider.autoDispose.family<bool, String>((ref, passwordKey) async {
+  final password = await ref.watch(secureStorageProvider).read(key: passwordKey);
+  return password != null;
 });
 
 /// Provider pour les opérations sur les connexions
@@ -47,9 +98,10 @@ class ConnectionRepository {
     String connectionType = 'distech_api',
     int? bacnetDeviceId,
     String? designerUrl,
+    String? certificateFingerprint,
   }) async {
     // Générer une clé unique pour le mot de passe
-    final passwordKey = 'conn_pwd_${DateTime.now().millisecondsSinceEpoch}';
+    final passwordKey = generatePasswordKey();
 
     // Stocker le mot de passe de manière sécurisée (même vide pour BACnet)
     await secureStorage.write(key: passwordKey, value: password);
@@ -67,6 +119,7 @@ class ConnectionRepository {
         connectionType: Value(connectionType),
         bacnetDeviceId: Value(bacnetDeviceId),
         designerUrl: Value(designerUrl),
+        certificateFingerprint: Value(certificateFingerprint),
       ),
     );
 
@@ -86,14 +139,38 @@ class ConnectionRepository {
     String? connectionType,
     int? bacnetDeviceId,
     String? designerUrl,
+    String? certificateFingerprint,
   }) async {
     final existing = await database.getConnectionById(id);
     if (existing == null) return;
+
+    // Pinned certificate (TOFU): forgotten when the endpoint changes, unless
+    // the caller provides the one seen by a connection test on the new one.
+    final endpointChanged = certificateEndpointChanged(
+      existing,
+      host: host,
+      port: port,
+      useHttps: useHttps,
+    );
+    final newFingerprint = fingerprintAfterEdit(
+      existing,
+      endpointChanged: endpointChanged,
+      testedFingerprint: certificateFingerprint,
+    );
 
     // Si un nouveau mot de passe est fourni, le mettre à jour
     if (password != null && password.isNotEmpty) {
       await secureStorage.write(key: existing.passwordKey, value: password);
     }
+
+    final newType = connectionType ?? existing.connectionType;
+    final targetChanged = connectionTargetChanged(
+      existing,
+      host: host,
+      port: port,
+      connectionType: newType,
+      bacnetDeviceId: bacnetDeviceId,
+    );
 
     // Mettre à jour les autres champs
     await database.updateConnection(
@@ -104,12 +181,18 @@ class ConnectionRepository {
         useHttps: useHttps,
         username: username,
         apiVersion: Value(apiVersion ?? existing.apiVersion),
-        connectionType: connectionType ?? existing.connectionType,
+        connectionType: newType,
         bacnetDeviceId: Value(bacnetDeviceId),
         designerUrl: Value(designerUrl),
+        certificateFingerprint: Value(useHttps ? newFingerprint : null),
         updatedAt: DateTime.now(),
       ),
     );
+
+    // The connection now targets another device: drop the old device's cache
+    if (targetChanged) {
+      await database.clearAllCache(id);
+    }
   }
 
   /// Supprime une connexion
@@ -117,11 +200,22 @@ class ConnectionRepository {
     final existing = await database.getConnectionById(id);
     if (existing == null) return;
 
-    // Supprimer le mot de passe du stockage sécurisé
-    await secureStorage.delete(key: existing.passwordKey);
+    // Supprimer la connexion et toutes ses données liées (transaction)
+    await database.deleteConnectionCascade(id);
 
-    // Supprimer la connexion de la base de données
-    await database.deleteConnectionById(id);
+    // Puis le mot de passe, seulement une fois la suppression DB réussie
+    try {
+      await secureStorage.delete(key: existing.passwordKey);
+    } catch (e) {
+      logger.w('deleteConnection: failed to delete password secret: $e');
+    }
+  }
+
+  /// True if a password is stored for this connection. False for connections
+  /// restored from an export: the user must enter the password again.
+  Future<bool> hasPassword(Connection connection) async {
+    final password = await secureStorage.read(key: connection.passwordKey);
+    return password != null;
   }
 
   /// Récupère le mot de passe d'une connexion

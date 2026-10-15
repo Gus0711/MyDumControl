@@ -4,6 +4,7 @@ import 'favorite_folders_table.dart';
 
 /// Table de liaison entre favoris et dossiers (many-to-many)
 /// Permet à un favori d'appartenir à plusieurs dossiers
+@TableIndex(name: 'idx_favorite_folder_assignments_folder_id', columns: {#folderId})
 class FavoriteFolderAssignments extends Table {
   /// Identifiant unique
   IntColumn get id => integer().autoIncrement()();

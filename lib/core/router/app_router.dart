@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:myglobaldc/l10n/app_localizations.dart';
 import 'routes.dart';
 import 'page_transitions.dart';
 import '../../presentation/screens/splash/splash_screen.dart';
@@ -33,7 +35,7 @@ class AppRouter {
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: Routes.splash,
-    debugLogDiagnostics: true,
+    debugLogDiagnostics: kDebugMode,
     routes: [
       // Splash screen
       GoRoute(
@@ -147,7 +149,8 @@ class AppRouter {
             name: 'scheduleDetail',
             pageBuilder: (context, state) {
               final instanceStr = state.pathParameters['instance']!;
-              final instance = int.tryParse(instanceStr) ?? 0;
+              final instance = int.tryParse(instanceStr);
+              if (instance == null) return _invalidRoutePage(state, instanceStr);
               return PageTransitions.scaleTransition(
                 context: context,
                 state: state,
@@ -190,23 +193,14 @@ class AppRouter {
           child: const SynopticsListScreen(),
         ),
         routes: [
-          // Créer un synoptique
-          GoRoute(
-            path: 'create',
-            name: 'synopticCreate',
-            pageBuilder: (context, state) => PageTransitions.fadeTransition(
-              context: context,
-              state: state,
-              child: const SynopticsListScreen(),
-            ),
-          ),
           // Visualiser un synoptique
           GoRoute(
             path: ':id',
             name: 'synopticView',
             pageBuilder: (context, state) {
               final idStr = state.pathParameters['id']!;
-              final id = int.tryParse(idStr) ?? 0;
+              final id = int.tryParse(idStr);
+              if (id == null) return _invalidRoutePage(state, idStr);
               return PageTransitions.scaleTransition(
                 context: context,
                 state: state,
@@ -220,7 +214,8 @@ class AppRouter {
                 name: 'synopticEdit',
                 pageBuilder: (context, state) {
                   final idStr = state.pathParameters['id']!;
-                  final id = int.tryParse(idStr) ?? 0;
+                  final id = int.tryParse(idStr);
+                  if (id == null) return _invalidRoutePage(state, idStr);
                   return PageTransitions.fadeTransition(
                     context: context,
                     state: state,
@@ -239,7 +234,8 @@ class AppRouter {
         name: 'envysionViewer',
         pageBuilder: (context, state) {
           final connectionIdStr = state.pathParameters['connectionId']!;
-          final connectionId = int.tryParse(connectionIdStr) ?? 0;
+          final connectionId = int.tryParse(connectionIdStr);
+          if (connectionId == null) return _invalidRoutePage(state, connectionIdStr);
           return PageTransitions.slideTransition(
             context: context,
             state: state,
@@ -264,7 +260,8 @@ class AppRouter {
             name: 'dashboardView',
             pageBuilder: (context, state) {
               final idStr = state.pathParameters['id']!;
-              final id = int.tryParse(idStr) ?? 0;
+              final id = int.tryParse(idStr);
+              if (id == null) return _invalidRoutePage(state, idStr);
               return PageTransitions.scaleTransition(
                 context: context,
                 state: state,
@@ -297,22 +294,42 @@ class AppRouter {
         ),
       ),
     ],
-    errorBuilder: (context, state) => Scaffold(
+    errorBuilder: (context, state) =>
+        _RouteErrorScreen(message: (l10n) => l10n.routerPageNotFound(state.uri.path)),
+  );
+
+  /// Page shown when a route parameter is not a valid integer id
+  static Page<void> _invalidRoutePage(GoRouterState state, String rawId) => MaterialPage<void>(
+        key: state.pageKey,
+        child: _RouteErrorScreen(message: (l10n) => l10n.routerInvalidId(rawId)),
+      );
+}
+
+/// Error screen for unknown routes or invalid route parameters
+class _RouteErrorScreen extends StatelessWidget {
+  final String Function(AppLocalizations l10n) message;
+
+  const _RouteErrorScreen({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text('Page non trouvée: ${state.uri.path}'),
+            Text(message(l10n), textAlign: TextAlign.center),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => context.go(Routes.connections),
-              child: const Text('Retour aux connexions'),
+              child: Text(l10n.backToConnections),
             ),
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }

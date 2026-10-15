@@ -1,12 +1,10 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../data/database/app_database.dart';
 import '../../data/database/tables/dashboard_tables.dart';
 import 'active_connection_provider.dart';
 import 'database_provider.dart';
-
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 // =============================================================================
 // Providers pour les dashboards
@@ -15,18 +13,11 @@ final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 /// Stream des dashboards pour la connexion active
 final dashboardsProvider = StreamProvider<List<Dashboard>>((ref) {
   final database = ref.watch(databaseProvider);
-  final activeConnection = ref.watch(activeConnectionProvider);
-  final connectionId = activeConnection.connection?.id;
+  final connectionId = ref.watch(activeConnectionProvider.select((s) => s.connection?.id));
 
-  _logger.d('dashboardsProvider: watching dashboards for connectionId=$connectionId');
+  logger.d('dashboardsProvider: watching dashboards for connectionId=$connectionId');
 
   return database.watchDashboardsForConnection(connectionId);
-});
-
-/// Récupère un dashboard par son ID
-final dashboardByIdProvider = FutureProvider.family<Dashboard?, int>((ref, id) {
-  final database = ref.watch(databaseProvider);
-  return database.getDashboardById(id);
 });
 
 /// Stream d'un dashboard par ID
@@ -96,7 +87,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
         rows: rows,
       );
 
-      _logger.i('createDashboard: created dashboard $id');
+      logger.i('createDashboard: created dashboard $id');
 
       state = state.copyWith(
         isLoading: false,
@@ -105,7 +96,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
 
       return id;
     } catch (e) {
-      _logger.e('createDashboard error: $e');
+      logger.e('createDashboard error: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erreur: $e',
@@ -131,7 +122,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
         rows: rows,
       );
 
-      _logger.i('updateDashboard: updated dashboard $id = $success');
+      logger.i('updateDashboard: updated dashboard $id = $success');
 
       state = state.copyWith(
         isLoading: false,
@@ -140,7 +131,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
 
       return success;
     } catch (e) {
-      _logger.e('updateDashboard error: $e');
+      logger.e('updateDashboard error: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erreur: $e',
@@ -156,7 +147,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
     try {
       final deleted = await _database.deleteDashboard(id);
 
-      _logger.i('deleteDashboard: deleted dashboard $id = $deleted');
+      logger.i('deleteDashboard: deleted dashboard $id = $deleted');
 
       state = state.copyWith(
         isLoading: false,
@@ -165,7 +156,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
 
       return deleted > 0;
     } catch (e) {
-      _logger.e('deleteDashboard error: $e');
+      logger.e('deleteDashboard error: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erreur: $e',
@@ -178,9 +169,9 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
   Future<void> reorderDashboards(List<int> dashboardIds) async {
     try {
       await _database.reorderDashboards(dashboardIds);
-      _logger.i('reorderDashboards: reordered ${dashboardIds.length} dashboards');
+      logger.i('reorderDashboards: reordered ${dashboardIds.length} dashboards');
     } catch (e) {
-      _logger.e('reorderDashboards error: $e');
+      logger.e('reorderDashboards error: $e');
     }
   }
 
@@ -203,7 +194,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
         configJson: configJson,
       );
 
-      _logger.i('addWidget: added widget $id at position $position');
+      logger.i('addWidget: added widget $id at position $position');
 
       state = state.copyWith(
         isLoading: false,
@@ -212,7 +203,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
 
       return id;
     } catch (e) {
-      _logger.e('addWidget error: $e');
+      logger.e('addWidget error: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erreur: $e',
@@ -240,7 +231,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
         position: position,
       );
 
-      _logger.i('updateWidget: updated widget $widgetId = $success');
+      logger.i('updateWidget: updated widget $widgetId = $success');
 
       state = state.copyWith(
         isLoading: false,
@@ -249,7 +240,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
 
       return success;
     } catch (e) {
-      _logger.e('updateWidget error: $e');
+      logger.e('updateWidget error: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erreur: $e',
@@ -265,7 +256,7 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
     try {
       final deleted = await _database.deleteDashboardWidget(widgetId);
 
-      _logger.i('deleteWidget: deleted widget $widgetId = $deleted');
+      logger.i('deleteWidget: deleted widget $widgetId = $deleted');
 
       state = state.copyWith(
         isLoading: false,
@@ -274,23 +265,11 @@ class DashboardNotifier extends StateNotifier<DashboardNotifierState> {
 
       return deleted > 0;
     } catch (e) {
-      _logger.e('deleteWidget error: $e');
+      logger.e('deleteWidget error: $e');
       state = state.copyWith(
         isLoading: false,
         error: 'Erreur: $e',
       );
-      return false;
-    }
-  }
-
-  /// Supprime un widget par position
-  Future<bool> deleteWidgetByPosition(int dashboardId, int position) async {
-    try {
-      final deleted = await _database.deleteDashboardWidgetByPosition(dashboardId, position);
-      _logger.i('deleteWidgetByPosition: deleted widget at position $position = $deleted');
-      return deleted > 0;
-    } catch (e) {
-      _logger.e('deleteWidgetByPosition error: $e');
       return false;
     }
   }
@@ -337,7 +316,7 @@ class SingleChartWidgetConfig {
 
   factory SingleChartWidgetConfig.fromJson(Map<String, dynamic> json) {
     return SingleChartWidgetConfig(
-      trendLogInstance: json['trendLogInstance'] as int,
+      trendLogInstance: (json['trendLogInstance'] as num).toInt(),
       title: json['title'] as String?,
       pointName: json['pointName'] as String?,
       units: json['units'] as String?,
@@ -382,14 +361,15 @@ class MultiCurveWidgetConfig {
   factory MultiCurveWidgetConfig.fromJson(Map<String, dynamic> json) {
     return MultiCurveWidgetConfig(
       trendLogInstances: (json['trendLogInstances'] as List<dynamic>)
-          .map((e) => e as int)
+          .whereType<num>()
+          .map((e) => e.toInt())
           .toList(),
       title: json['title'] as String?,
       curveNames: (json['curveNames'] as Map<String, dynamic>?)
-              ?.map((k, v) => MapEntry(k, v as String)) ??
+              ?.map((k, v) => MapEntry(k, v?.toString() ?? '')) ??
           {},
       curveUnits: (json['curveUnits'] as Map<String, dynamic>?)
-              ?.map((k, v) => MapEntry(k, v as String?)) ??
+              ?.map((k, v) => MapEntry(k, v?.toString())) ??
           {},
     );
   }
@@ -403,13 +383,18 @@ class MultiCurveWidgetConfig {
     }
   }
 
-  /// Convertit les maps avec clés String vers int
-  Map<int, String> get curveNamesAsInt {
-    return curveNames.map((k, v) => MapEntry(int.parse(k), v));
-  }
+  /// Convertit les maps avec clés String vers int (clés invalides ignorées)
+  Map<int, String> get curveNamesAsInt => _intKeyed(curveNames);
 
-  Map<int, String?> get curveUnitsAsInt {
-    return curveUnits.map((k, v) => MapEntry(int.parse(k), v));
+  Map<int, String?> get curveUnitsAsInt => _intKeyed(curveUnits);
+
+  static Map<int, V> _intKeyed<V>(Map<String, V> source) {
+    final result = <int, V>{};
+    source.forEach((k, v) {
+      final key = int.tryParse(k) ?? double.tryParse(k)?.toInt();
+      if (key != null) result[key] = v;
+    });
+    return result;
   }
 
   /// Titre affiché (title personnalisé ou auto-généré)
@@ -451,7 +436,7 @@ class StatsWidgetConfig {
 
   factory StatsWidgetConfig.fromJson(Map<String, dynamic> json) {
     return StatsWidgetConfig(
-      trendLogInstance: json['trendLogInstance'] as int,
+      trendLogInstance: (json['trendLogInstance'] as num).toInt(),
       title: json['title'] as String?,
       pointName: json['pointName'] as String?,
       units: json['units'] as String?,

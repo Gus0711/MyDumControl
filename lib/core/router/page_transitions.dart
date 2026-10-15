@@ -26,7 +26,7 @@ class PageTransitions {
 
         // Slide depuis la droite
         final slideAnimation = Tween<Offset>(
-          begin: const Offset(0.15, 0),
+          begin: const Offset(0.06, 0),
           end: Offset.zero,
         ).animate(curvedAnimation);
 
@@ -64,12 +64,12 @@ class PageTransitions {
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curvedAnimation = CurvedAnimation(
           parent: animation,
-          curve: Curves.easeOutBack,
+          curve: Curves.easeOutCubic,
           reverseCurve: Curves.easeIn,
         );
 
         final scaleAnimation = Tween<double>(
-          begin: 0.92,
+          begin: 0.96,
           end: 1.0,
         ).animate(curvedAnimation);
 

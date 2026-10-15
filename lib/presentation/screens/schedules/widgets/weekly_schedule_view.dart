@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../../domain/models/schedule.dart';
 import 'schedule_colors.dart';
+import '../../../widgets/ui/ui.dart';
+import '../../../../l10n/app_localizations.dart';
+import '../../../shared/utils/schedule_l10n.dart';
 
 /// Vue hebdomadaire du planning avec timeline visuelle
 class WeeklyScheduleView extends StatefulWidget {
@@ -94,7 +97,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               child: Text(
                 '${hour.toString().padLeft(2, '0')}h',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.outline,
+                  color: context.dc.textMuted,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -139,10 +142,10 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               width: dayLabelWidth,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
-                day.shortName,
+                weekDayShortName(AppLocalizations.of(context)!, day),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  color: isWeekend ? colorScheme.outline : null,
+                  color: isWeekend ? context.dc.textMuted : null,
                 ),
               ),
             ),
@@ -173,6 +176,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
     ThemeData theme,
     ColorScheme colorScheme,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final daySchedule = widget.schedule.weeklySchedule.getDay(day);
     final transitions = daySchedule.sortedTransitions;
 
@@ -190,10 +194,10 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
         children: [
           Row(
             children: [
-              Icon(Icons.calendar_today, size: 18, color: colorScheme.primary),
+              Icon(Icons.calendar_today_rounded, size: 18, color: context.dc.accent),
               const SizedBox(width: 8),
               Text(
-                day.displayName,
+                weekDayName(l10n, day),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -202,7 +206,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               TextButton.icon(
                 onPressed: () => setState(() => _selectedDay = null),
                 icon: const Icon(Icons.close, size: 18),
-                label: const Text('Fermer'),
+                label: Text(l10n.close),
               ),
             ],
           ),
@@ -212,9 +216,9 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                'Aucune transition programmée',
+                l10n.scheduleNoScheduledTransition,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.outline,
+                  color: context.dc.textMuted,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -249,7 +253,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
     ThemeData theme,
     ColorScheme colorScheme,
   ) {
-    final stateText = widget.schedule.getStateText(transition.value);
+    final stateText = widget.schedule.localizedStateText(AppLocalizations.of(context)!, transition.value);
     final color = _getColorForValue(transition.value, colorScheme);
 
     return Padding(
@@ -263,7 +267,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
               transition.formattedTime,
               style: theme.textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w500,
-                fontFamily: 'monospace',
+                fontFamily: AppTextStyles.monoFamily,
               ),
             ),
           ),
@@ -272,7 +276,7 @@ class _WeeklyScheduleViewState extends State<WeeklyScheduleView> {
           Icon(
             Icons.arrow_forward,
             size: 16,
-            color: colorScheme.outline,
+            color: context.dc.textMuted,
           ),
           const SizedBox(width: 8),
 
@@ -425,6 +429,10 @@ class _DayTimelinePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DayTimelinePainter oldDelegate) {
     return oldDelegate.daySchedule != daySchedule ||
-        oldDelegate.colorScheme != colorScheme;
+        oldDelegate.colorScheme != colorScheme ||
+        oldDelegate.schedule.valueType != schedule.valueType ||
+        oldDelegate.hourWidth != hourWidth ||
+        oldDelegate.startHour != startHour ||
+        oldDelegate.endHour != endHour;
   }
 }

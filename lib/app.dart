@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'application/providers/app_overrides_provider.dart';
 import 'application/providers/settings_provider.dart';
 
 /// Widget racine de l'application
@@ -14,6 +15,9 @@ class MyGlobalDCApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Observer les paramètres pour le thème et la langue
     final settings = ref.watch(settingsProvider);
+
+    // Relâchement automatique des forçages temporisés (toute la durée de vie de l'app)
+    ref.watch(timedOverrideServiceProvider);
 
     return MaterialApp.router(
       title: 'MyGlobalDC',

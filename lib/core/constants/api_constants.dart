@@ -2,9 +2,22 @@
 class ApiConstants {
   ApiConstants._();
 
-  // Timeouts
+  // Timeouts (ConnectedApiClient)
   static const Duration connectTimeout = Duration(seconds: 30);
-  static const Duration receiveTimeout = Duration(seconds: 30);
+  static const Duration receiveTimeout = Duration(seconds: 60);
+  static const Duration sendTimeout = Duration(seconds: 30);
+
+  /// Timeout for large downloads (trend-log buffers, V2 history get-table)
+  static const Duration longReceiveTimeout = Duration(minutes: 5);
+  static const Duration longSendTimeout = Duration(minutes: 1);
+
+  /// Timeout used by the connection test (ApiService.testConnection): kept
+  /// short so that an unreachable host fails fast.
+  static const Duration testConnectionTimeout = Duration(seconds: 10);
+
+  /// Maximum number of HTTP requests in flight towards one controller: the
+  /// ECLYPSE answers 401 to valid credentials when it receives bursts.
+  static const int maxConcurrentRequests = 4;
 
   // Ports par défaut
   static const int defaultHttpsPort = 443;
@@ -27,6 +40,8 @@ class ApiConstants {
   static const String v2Objects = '$v2BacnetLocal/objects';
   static const String v2Alarms = '$v2Services/alarm';
   static const String v2Batch = '$v2BasePath/batch';
+  static const String v2Platform = '$v2Services/platform';
+  static const String v2BacnetHistories = '$v2Services/history/groups/bacnet/histories';
 
   // Types d'objets BACnet
   static const String objectTypeAnalogInput = 'analog-input';

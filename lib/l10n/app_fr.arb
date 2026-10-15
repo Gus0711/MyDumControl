@@ -54,6 +54,8 @@
   "loading": "Chargement...",
   "error": "Erreur",
   "retry": "Réessayer",
+  "bacnetReadingDeviceName": "Lecture du nom…",
+  "bacnetDeviceNameUnavailable": "Nom non lu (l'appareil ne répond pas)",
   "noData": "Aucune donnée",
   "search": "Rechercher",
   "refresh": "Actualiser",
@@ -87,7 +89,6 @@
   "invalidPort": "Port invalide (1-65535)",
   "offline": "Hors ligne",
   "online": "En ligne",
-
   "appearance": "Apparence",
   "connection": "Connexion",
   "display": "Affichage",
@@ -131,7 +132,6 @@
   "ok": "OK",
   "eclypseManagement": "Gestion des automates ECLYPSE",
   "supportsApiBacnet": "Supporte les API V1 et V2 ainsi que le protocole BACnet/IP.",
-
   "invalidPointId": "ID de point invalide",
   "invalidInstance": "Instance invalide",
   "unknownType": "Type inconnu: {type}",
@@ -150,6 +150,14 @@
   "enterValue": "Entrez une valeur",
   "invalidValue": "Valeur invalide",
   "state": "État",
+  "scheduleStateN": "État {value}",
+  "@scheduleStateN": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
   "enterState": "Entrez un état",
   "invalidStateMin1": "État invalide (min: 1)",
   "selectedState": "État sélectionné: {state} ({value})",
@@ -194,7 +202,6 @@
   "descriptionUpdated": "Description mise à jour",
   "descriptionUpdateError": "Erreur lors de la mise à jour",
   "noDescription": "Aucune description",
-
   "loadingEllipsis": "Chargement...",
   "modified": "Modifié",
   "editMode": "Mode édition",
@@ -203,24 +210,22 @@
   "closeEdit": "Fermer l'édition",
   "edit": "Modifier",
   "scheduleNotFound": "Schedule non trouvé",
+  "weeklyScheduleUnreadable": "Programme hebdomadaire illisible : modification désactivée pour ne pas écraser l'automate",
   "errorLoadingSchedule": "Erreur lors du chargement",
   "discardChanges": "Abandonner les modifications",
   "discardChangesMessage": "Vous avez des modifications non sauvegardées. Voulez-vous les abandonner ?",
   "discard": "Abandonner",
   "keep": "Garder",
-
   "loadingPoints": "Chargement des points...",
   "noResultsFor": "Aucun résultat pour \"{query}\"",
   "sort": "Trier",
   "alarmsCount": "{count} alarme(s) active(s)",
   "searchAlarm": "Rechercher une alarme...",
   "searchPoint": "Rechercher un point...",
-
   "statisticsPoints": "Points",
   "statisticsMin": "Min",
   "statisticsMax": "Max",
   "statisticsAvg": "Moy",
-
   "start": "Début",
   "end": "Fin",
   "minus15": "-15",
@@ -229,12 +234,10 @@
   "timeState": "{time} : {state}",
   "currentState": "Actuel: {state}",
   "instanceLabel": "Instance {instance}",
-
   "allEquipmentNormal": "Tous les équipements fonctionnent normalement",
   "agoMinutes": "il y a {count} min",
   "agoHours": "il y a {count} h",
   "agoDays": "il y a {count} jour(s)",
-
   "autoRefreshDisabled": "Auto-refresh désactivé",
   "autoRefreshLabel": "Auto-refresh: {label}",
   "loadingValuesProgress": "Chargement des valeurs en cours...",
@@ -242,7 +245,6 @@
   "noPointSubType": "Aucun point {subType}",
   "noPointInCategory": "Aucun point dans cette catégorie",
   "trendLogAvailable": "Trend log disponible",
-
   "plannings": "Plannings",
   "loadingError": "Erreur de chargement",
   "noPlanning": "Aucun planning",
@@ -250,12 +252,10 @@
   "onOff": "On/Off",
   "multiState": "Multi-états",
   "boolean": "Booléen",
-
   "scheduleInstance": "Schedule {instance}",
   "editModeTapSlot": "Mode édition - Appuyez sur un créneau",
   "editModeTapDay": "Mode édition - Appuyez sur un jour pour modifier",
   "legend": "Légende :",
-
   "selectedCount": "{count} sélectionné(s)",
   "selectAll": "Tout sélectionner",
   "deselectAll": "Tout désélectionner",
@@ -264,7 +264,7 @@
   "notConnected": "Non connecté",
   "connectToViewFavorites": "Connectez-vous à un automate pour voir vos favoris",
   "noFavorite": "Aucun favori",
-  "addFavoritesHint": "Ajoutez des points aux favoris en cliquant\\nsur l'étoile dans la liste des points",
+  "addFavoritesHint": "Ajoutez des points aux favoris en cliquant\nsur l'étoile dans la liste des points",
   "viewPoints": "Voir les points",
   "assignToFolders": "Assigner aux dossiers",
   "deleteFavoritesConfirm": "Supprimer les favoris ?",
@@ -281,39 +281,33 @@
   "emptyFolderHint": "Dossier vide - glissez des favoris ici",
   "noFolder": "Sans dossier",
   "deleteFolderConfirm": "Supprimer le dossier ?",
-  "deleteFolderMessage": "Le dossier \"{name}\" sera supprimé.\\n\\nLes favoris qu'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".",
+  "deleteFolderMessage": "Le dossier \"{name}\" sera supprimé.\n\nLes favoris qu'il contient ne seront pas supprimés, ils seront déplacés dans \"Sans dossier\".",
   "favoriteAddedToFolder": "Favori ajouté au dossier",
   "removedFromFavorites": "{name} retiré des favoris",
   "assignToFoldersDialog": "Assigner aux dossiers",
-
   "categoryInputs": "Entrées",
   "categoryOutputs": "Sorties",
   "categoryVariables": "Valeurs",
   "categoryOthers": "Autres",
   "categoryAll": "Tous",
-
   "sortNameAsc": "Nom (A→Z)",
   "sortNameDesc": "Nom (Z→A)",
   "sortType": "Type",
   "sortValueAsc": "Valeur ↑",
   "sortValueDesc": "Valeur ↓",
   "sortFavoritesFirst": "Favoris d'abord",
-
   "subTypeAll": "Tous",
-  "subTypeAnalog": "Analog",
-  "subTypeBinary": "Binary",
-  "subTypeMulti": "Multi",
-
+  "subTypeAnalog": "Analogiques",
+  "subTypeBinary": "Binaires",
+  "subTypeMulti": "Multi-états",
   "autoRefreshOff": "Désactivé",
   "autoRefreshSeconds": "{count} secondes",
   "autoRefreshMinute": "1 minute",
-
   "noOverride": "Aucun forçage",
   "allPointsNormal": "Tous les points fonctionnent normalement",
   "outOfServiceLabel": "Hors service",
   "forcedLabel": "Forcé",
   "priorityLabel": "Priorité {priority}",
-
   "bacnetLocalNetworkOnly": "Réseau local uniquement",
   "bacnetLocalNetworkInfo": "BACnet/IP fonctionne uniquement sur le réseau local. Assurez-vous que votre appareil est connecté au même réseau que le contrôleur.",
   "bacnetDeviceIdOptional": "Device ID (optionnel en local)",
@@ -331,7 +325,6 @@
   "bacnetPortHelper": "Port BACnet/IP (défaut: 47808)",
   "broadcastDiscovery": "Découverte broadcast",
   "broadcastDiscoverySubtitle": "Rechercher tous les appareils BACnet sur le réseau local",
-
   "discoverEclypse": "Découvrir ECLYPSE",
   "discoverEclypseSubtitle": "Recherche mDNS des automates Distech",
   "eclypseFound": "{count} ECLYPSE trouvé(s)",
@@ -347,20 +340,19 @@
   "scanComplete": "Scan terminé",
   "orManualEntry": "ou saisie manuelle :",
   "useIpScan": "Scanner plage IP (ECLYPSE)",
-
-  "dashboards": "Dashboards",
-  "dashboard": "Dashboard",
-  "noDashboard": "Aucun dashboard",
-  "createDashboardHint": "Créez des dashboards pour visualiser\nvos graphiques et courbes d'historique",
-  "createDashboard": "Créer un dashboard",
-  "newDashboard": "Nouveau dashboard",
-  "editDashboard": "Modifier le dashboard",
-  "deleteDashboard": "Supprimer le dashboard",
-  "dashboardName": "Nom du dashboard",
+  "dashboards": "Tableaux de bord",
+  "dashboard": "Tableau de bord",
+  "noDashboard": "Aucun tableau de bord",
+  "createDashboardHint": "Créez des tableaux de bord pour visualiser\nvos graphiques et courbes d'historique",
+  "createDashboard": "Créer un tableau de bord",
+  "newDashboard": "Nouveau tableau de bord",
+  "editDashboard": "Modifier le tableau de bord",
+  "deleteDashboard": "Supprimer le tableau de bord",
+  "dashboardName": "Nom du tableau de bord",
   "dashboardNameRequired": "Le nom est requis",
-  "deleteDashboardConfirm": "Supprimer ce dashboard ?",
-  "deleteDashboardMessage": "Le dashboard \"{name}\" et tous ses widgets seront supprimés.",
-  "dashboardDeleted": "Dashboard supprimé",
+  "deleteDashboardConfirm": "Supprimer ce tableau de bord ?",
+  "deleteDashboardMessage": "Le tableau de bord \"{name}\" et tous ses widgets seront supprimés.",
+  "dashboardDeleted": "Tableau de bord supprimé",
   "widgets": "{count} widget(s)",
   "addWidget": "Ajouter un widget",
   "configureWidget": "Configurer le widget",
@@ -386,7 +378,6 @@
   "periodWeek": "Semaine",
   "periodMonth": "Mois",
   "periodYear": "Année",
-
   "networkInterface": "Interface réseau",
   "allInterfaces": "Toutes les interfaces",
   "searchingBacnetDevices": "Recherche des appareils BACnet...",
@@ -398,26 +389,32 @@
   "idConflict": "ID conflit",
   "alsoAt": "Aussi à",
   "conflicts": "conflit(s)",
-
   "bacnetPortWarning": "Port {actualPort} utilisé (standard: {standardPort})",
   "@bacnetPortWarning": {
     "placeholders": {
-      "actualPort": {"type": "int"},
-      "standardPort": {"type": "int"}
+      "actualPort": {
+        "type": "int"
+      },
+      "standardPort": {
+        "type": "int"
+      }
     }
   },
   "bacnetPortConflict": "Conflit de port BACnet",
   "bacnetPortConflictDetail": "Le port standard BACnet ({standardPort}) est déjà utilisé par une autre application. L'application utilise le port {actualPort} à la place.",
   "@bacnetPortConflictDetail": {
     "placeholders": {
-      "standardPort": {"type": "int"},
-      "actualPort": {"type": "int"}
+      "standardPort": {
+        "type": "int"
+      },
+      "actualPort": {
+        "type": "int"
+      }
     }
   },
   "bacnetPortConflictSolution": "Solutions :",
   "bacnetPortSolution1": "Fermez YABE ou autres applications BACnet",
   "bacnetPortSolution2": "Relancez cette application",
-
   "envysionDesignerSection": "Synoptique Envysion (optionnel)",
   "designerUrl": "URL du Designer",
   "designerUrlHelper": "Chemin vers le viewer Envysion intégré au contrôleur",
@@ -428,5 +425,662 @@
   "webViewNotSupportedMessage": "L'affichage intégré n'est pas disponible sur {platform}. Voulez-vous ouvrir dans le navigateur externe ?",
   "loadingEnvysion": "Chargement du synoptique...",
   "envysionLoadError": "Erreur de chargement",
-  "envysionLoadErrorMessage": "Impossible de charger le synoptique Envysion. Vérifiez l'URL et votre connexion."
+  "envysionLoadErrorMessage": "Impossible de charger le synoptique Envysion. Vérifiez l'URL et votre connexion.",
+  "certificateChangedTitle": "Certificat de l'automate modifié",
+  "trustNewCertificate": "Faire confiance au nouveau certificat",
+  "trustNewCertificateMessage": "Le certificat présenté par l'automate est différent de celui enregistré lors de la première connexion.\n\nCela peut venir d'un renouvellement du certificat (mise à jour, réinitialisation de l'automate) ou d'une interception du trafic. Ne faites confiance au nouveau certificat que si vous êtes sûr qu'il est légitime.\n\nEmpreinte attendue :\n{expected}\n\nNouvelle empreinte :\n{received}",
+  "@trustNewCertificateMessage": {
+    "placeholders": {
+      "expected": {
+        "type": "String"
+      },
+      "received": {
+        "type": "String"
+      }
+    }
+  },
+  "trust": "Faire confiance",
+  "backToConnections": "Retour aux connexions",
+  "certificateFingerprintLabel": "Empreinte du certificat (SHA-256)",
+  "certificateFingerprintDiffers": "Différente de l'empreinte enregistrée : le certificat de l'automate a changé.",
+  "certificateFingerprintPinnedInfo": "Elle sera enregistrée et vérifiée à chaque connexion.",
+  "httpCleartextWarning": "HTTP non chiffré : le mot de passe circule en clair sur le réseau. Préférez HTTPS si l'automate le permet.",
+  "passwordMissingBadge": "Mot de passe à ressaisir",
+  "apiVersionBadgeTooltip": "Version de l'API REST Distech utilisée pour cet automate",
+  "apiVersionUnknownTooltip": "Version d'API pas encore détectée : elle le sera à la prochaine connexion",
+  "redetectApiVersion": "Re-détecter la version API",
+  "redetectingApiVersion": "Détection de la version d'API…",
+  "redetectApiVersionDone": "Version d'API détectée : {version}",
+  "@redetectApiVersionDone": {"placeholders": {"version": {"type": "String"}}},
+  "redetectApiVersionFailed": "Automate injoignable : version d'API non détectée",
+  "overrideDuration": "Durée du forçage",
+  "overridePermanent": "Permanent",
+  "durationMinutes": "{minutes} min",
+  "@durationMinutes": {"placeholders": {"minutes": {"type": "int"}}},
+  "durationHours": "{hours} h",
+  "@durationHours": {"placeholders": {"hours": {"type": "int"}}},
+  "timedOverrideHint": "Le relâchement automatique est fait par l'application : elle doit être ouverte à l'échéance (sinon il a lieu à sa prochaine ouverture).",
+  "forcedAtTime": "Forcé depuis l'app à {time}",
+  "@forcedAtTime": {"placeholders": {"time": {"type": "String"}}},
+  "autoReleaseAtTime": "Relâchement automatique à {time}",
+  "@autoReleaseAtTime": {"placeholders": {"time": {"type": "String"}}},
+  "autoReleaseFailed": "Relâchement automatique en échec, nouvel essai en cours : {error}",
+  "@autoReleaseFailed": {"placeholders": {"error": {"type": "String"}}},
+  "overrideOriginUnknown": "Forcé hors de l'application (heure inconnue)",
+  "overridesSelected": "{count, plural, =0{Aucun point sélectionné} =1{1 point sélectionné} other{{count} points sélectionnés}}",
+  "@overridesSelected": {"placeholders": {"count": {"type": "int"}}},
+  "releaseSelection": "Relâcher la sélection",
+  "releaseSelectionMessage": "{count, plural, =1{Relâcher le forçage de 1 point ?} other{Relâcher le forçage de {count} points ?}}",
+  "@releaseSelectionMessage": {"placeholders": {"count": {"type": "int"}}},
+  "releaseSelectionDone": "{count, plural, =1{1 point relâché} other{{count} points relâchés}}",
+  "@releaseSelectionDone": {"placeholders": {"count": {"type": "int"}}},
+  "releaseSelectionFailed": "{failed} relâchement(s) sur {total} en échec",
+  "@releaseSelectionFailed": {"placeholders": {"failed": {"type": "int"}, "total": {"type": "int"}}},
+  "invalidCredentialsMessage": "Identifiants invalides ({status}). Vérifiez le nom d'utilisateur et le mot de passe de la connexion.",
+  "@invalidCredentialsMessage": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "close": "Fermer",
+  "add": "Ajouter",
+  "rename": "Renommer",
+  "create": "Créer",
+  "apply": "Appliquer",
+  "yes": "Oui",
+  "no": "Non",
+  "back": "Retour",
+  "copy": "Copier",
+  "clearAction": "Effacer",
+  "validate": "Valider",
+  "details": "Détails",
+  "unknown": "Inconnu",
+  "errorWithMessage": "Erreur : {error}",
+  "@errorWithMessage": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "trendColorBlue": "Bleu",
+  "trendColorGreen": "Vert",
+  "trendColorOrange": "Orange",
+  "trendColorPurple": "Violet",
+  "trendColorRed": "Rouge",
+  "trendColorCyan": "Cyan",
+  "trendColorTeal": "Sarcelle",
+  "trendColorIndigo": "Indigo",
+  "trendPeriodHour": "1h",
+  "trendPeriodDay": "24h",
+  "trendPeriodWeek": "7j",
+  "trendPeriodMonth": "30j",
+  "trendPeriodAll": "Tout",
+  "trendPeriodCustom": "Perso.",
+  "trendChangeColor": "Changer la couleur",
+  "trendAnnotations": "Annotations",
+  "trendMinMaxMarkers": "Marqueurs Min/Max",
+  "trendAverageLine": "Ligne moyenne",
+  "trendMinLine": "Ligne minimum",
+  "trendMaxLine": "Ligne maximum",
+  "trendHideAll": "Tout masquer",
+  "trendNoDataForPeriod": "Aucune donnée pour cette période",
+  "trendDateTime": "Date/Heure",
+  "trendHistory": "Historique",
+  "trendFullscreen": "Plein écran",
+  "trendShowChart": "Voir graphique",
+  "trendShowTable": "Voir tableau",
+  "trendExportCsv": "Exporter CSV",
+  "trendExportSubject": "Export historique {name}",
+  "@trendExportSubject": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "trendPortraitMode": "Mode portrait",
+  "trendLandscapeMode": "Mode paysage",
+  "trendNoNumericData": "Aucune donnée numérique",
+  "trendNoDataToDisplay": "Aucune donnée à afficher",
+  "trendInvalidData": "Données invalides",
+  "trendAvgLineLabel": "Moy : {value}",
+  "@trendAvgLineLabel": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "chartComparisonTitle": "Comparaison ({count} courbes)",
+  "@chartComparisonTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chartAddCurve": "Ajouter une courbe",
+  "chartCurvesNotLoaded": "{count} courbe(s) non chargée(s)",
+  "@chartCurvesNotLoaded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chartNoVisibleCurve": "Aucune courbe visible\nTouchez la légende pour afficher",
+  "chartNoCurveSelected": "Aucune courbe sélectionnée\nAjoutez des trend logs à comparer",
+  "chartSelectCurves": "Sélectionner les courbes",
+  "chartSelectCurvesHint": "Sélectionnez {min} à {max} trend logs à comparer",
+  "@chartSelectCurvesHint": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "chartCurvesCount": "{selected}/{max} courbes",
+  "@chartCurvesCount": {
+    "placeholders": {
+      "selected": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "chartNoTrendLogAvailable": "Aucun trend log disponible",
+  "chartSelectedCurves": "Courbes sélectionnées :",
+  "chartValidateCount": "Valider ({count})",
+  "@chartValidateCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "widgetPromoteSuperFavorite": "Promouvoir en super favori",
+  "widgetDemoteToFavorite": "Rétrograder en favori",
+  "widgetNoFolder": "Aucun dossier",
+  "widgetCreateFolder": "Créer un dossier",
+  "widgetNewFolderEllipsis": "Nouveau dossier...",
+  "widgetEditFolder": "Modifier le dossier",
+  "widgetFolderName": "Nom du dossier",
+  "widgetColor": "Couleur",
+  "widgetIcon": "Icône",
+  "widgetConnecting": "Connexion en cours",
+  "widgetStepAuth": "Auth",
+  "widgetPumpLabel": "POMPE",
+  "synopticsTitle": "Synoptiques",
+  "synopticCreate": "Créer un synoptique",
+  "synopticEmptyTitle": "Aucun synoptique",
+  "synopticEmptyHint": "Créez votre premier synoptique pour visualiser\nvos points sur un schéma graphique",
+  "synopticDeleteTitle": "Supprimer le synoptique ?",
+  "synopticDeleteMessage": "Êtes-vous sûr de vouloir supprimer \"{name}\" ?\nCette action est irréversible.",
+  "@synopticDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "synopticBindingsCount": "{count, plural, =0{0 liaison} =1{1 liaison} other{{count} liaisons}}",
+  "@synopticBindingsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "synopticBindingsUnknown": "-- liaisons",
+  "synopticGlobal": "Global",
+  "synopticEditBindings": "Éditer les liaisons",
+  "synopticNew": "Nouveau synoptique",
+  "synopticSvgModel": "Modèle SVG",
+  "synopticConfigurableElementsCount": "{count} éléments configurables",
+  "@synopticConfigurableElementsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "synopticNameLabel": "Nom du synoptique",
+  "synopticNameHint": "Ex: Circuit Chauffage RDC",
+  "synopticDescriptionOptional": "Description (optionnel)",
+  "synopticDefaultName": "Synoptique",
+  "synopticResetZoom": "Réinitialiser le zoom",
+  "synopticNotFound": "Synoptique non trouvé",
+  "synopticUpdateError": "Erreur de mise à jour: {error}",
+  "@synopticUpdateError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "synopticActivePointsCount": "{count, plural, =0{0 point actif} =1{1 point actif} other{{count} points actifs}}",
+  "@synopticActivePointsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "synopticPinchToZoom": "Pincez pour zoomer",
+  "synopticSvgElement": "Élément SVG",
+  "synopticBindingType": "Type de liaison",
+  "synopticCurrentValue": "Valeur actuelle",
+  "synopticViewPoint": "Voir le point",
+  "synopticNumericValue": "Valeur numérique",
+  "synopticColorIndicator": "Indicateur couleur",
+  "synopticAnimation": "Animation",
+  "synopticEditTitle": "Éditer: {name}",
+  "@synopticEditTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "synopticHelp": "Aide",
+  "synopticPreview": "Aperçu du synoptique",
+  "synopticConfigurableElements": "Éléments configurables",
+  "synopticNoConfigurableElements": "Aucun élément configurable détecté",
+  "synopticHowToConfigure": "Comment configurer",
+  "synopticHelpSteps": "1. Sélectionnez un élément dans la liste\n2. Choisissez le point BACnet à associer\n3. Configurez le type de liaison:\n   • Valeur: affiche la valeur du point\n   • Couleur: change la couleur selon l'état\n   • Animation: active/désactive une animation\n4. Personnalisez le format si nécessaire",
+  "synopticStateIndicator": "Indicateur d'état",
+  "synopticElement": "Élément",
+  "synopticConfigureBinding": "Configurer la liaison",
+  "synopticDeleteBinding": "Supprimer la liaison",
+  "synopticColor": "Couleur",
+  "synopticDisplayFormat": "Format d'affichage",
+  "synopticFormatHint": "Ex: {placeholder}°C ou {placeholder}%",
+  "@synopticFormatHint": {
+    "placeholders": {
+      "placeholder": {
+        "type": "String"
+      }
+    }
+  },
+  "synopticFormatHelper": "Utilisez {placeholder} pour la valeur du point",
+  "@synopticFormatHelper": {
+    "placeholders": {
+      "placeholder": {
+        "type": "String"
+      }
+    }
+  },
+  "synopticColors": "Couleurs",
+  "synopticAnimationConfig": "Configuration Animation",
+  "synopticAnimationOnOff": "Animation ON/OFF",
+  "synopticAnimationExplanation": "L'animation sera visible quand la valeur du point est > seuil (actif), et masquée sinon.",
+  "synopticThreshold": "Seuil ON/OFF",
+  "synopticThresholdHelper": "Valeur > seuil = ON, sinon OFF (pour booléen: 0.5)",
+  "synopticBacnetPoint": "Point BACnet",
+  "synopticNoPointFound": "Aucun point trouvé",
+  "synopticDeleteBindingTitle": "Supprimer la liaison ?",
+  "synopticIrreversible": "Cette action est irréversible.",
+  "envysionConnectionNotFound": "Connexion introuvable",
+  "envysionAuthFailed": "Authentification échouée (401)",
+  "envysionPageNotFound": "Page non trouvée (404)",
+  "dashboardNotFound": "Tableau de bord introuvable",
+  "dashboardDeleteWidgetConfirm": "Supprimer le widget ?",
+  "dashboardDeleteWidgetMessage": "Ce widget sera supprimé du tableau de bord.",
+  "dashboardEditTitle": "Modifier le titre",
+  "dashboardTitleLabel": "Titre",
+  "dashboardTitleHint": "Laisser vide pour le titre par défaut",
+  "dashboardSettingsTitle": "Paramètres du tableau de bord",
+  "dashboardColumnsWithColon": "Colonnes : ",
+  "dashboardRowsWithColon": "Lignes : ",
+  "dashboardDeletePermanentMessage": "Ce tableau de bord et tous ses widgets seront supprimés définitivement.",
+  "dashboardSearchHint": "Rechercher...",
+  "dashboardNewShort": "Nouveau",
+  "dashboardEmptyHint": "Créez votre premier tableau de bord pour visualiser\nplusieurs graphiques sur une seule page.",
+  "dashboardGridSize": "Grille {columns}x{rows}",
+  "@dashboardGridSize": {
+    "placeholders": {
+      "columns": {
+        "type": "int"
+      },
+      "rows": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardNameHint": "Ex : Chauffage, Ventilation...",
+  "dashboardGridLayout": "Disposition de la grille",
+  "dashboardColumns": "Colonnes",
+  "dashboardRows": "Lignes",
+  "dashboardChartDefault": "Graphique",
+  "dashboardComparisonTitle": "Comparaison ({count} courbes)",
+  "@dashboardComparisonTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardNotConfigured": "Non configuré",
+  "dashboardConfigure": "Configurer",
+  "deviceInfoProtocol": "Protocole",
+  "deviceInfoUser": "Utilisateur",
+  "deviceInfoLastConnection": "Dernière connexion",
+  "deviceInfoNetwork": "Réseau",
+  "deviceInfoInterfacesCount": "{count, plural, =1{1 interface} other{{count} interfaces}}",
+  "@deviceInfoInterfacesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "deviceInfoIpAddress": "Adresse IP",
+  "deviceInfoSubnetMask": "Masque",
+  "deviceInfoGateway": "Passerelle",
+  "deviceInfoPrimaryDns": "DNS primaire",
+  "deviceInfoMacAddress": "Adresse MAC",
+  "deviceInfoCopied": "{label} copié",
+  "@deviceInfoCopied": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceInfoBacnetObjects": "Objets BACnet",
+  "deviceInfoTotalObjects": "Total : {count} objets",
+  "@deviceInfoTotalObjects": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "deviceInfoNoDataAvailable": "Aucune donnée disponible",
+  "deviceInfoTechnical": "Informations techniques",
+  "deviceInfoHostName": "Nom d'hôte",
+  "homeAuthenticating": "Authentification...",
+  "homeFetchingData": "Récupération des données...",
+  "homeSynoptic": "Synoptique",
+  "homeControllerTimeTooltip": "Heure automate : {time}",
+  "@homeControllerTimeTooltip": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "homeTimeOffsetTooltip": "Décalage : {offset}",
+  "@homeTimeOffsetTooltip": {
+    "placeholders": {
+      "offset": {
+        "type": "String"
+      }
+    }
+  },
+  "homeControllerTimeTitle": "Heure de l'automate",
+  "homeControllerDateTime": "Date/Heure automate",
+  "homeLocalTime": "Heure locale",
+  "homeTimeOffset": "Décalage",
+  "homeTimeOffsetWarning": "L'heure de l'automate est décalée. Les plannings peuvent ne pas s'exécuter aux moments attendus.",
+  "homeSyncV2Info": "API V2 : utilisez l'interface web EC-NetAX ou configurez le NTP pour synchroniser l'heure.",
+  "homeSyncSuccess": "Synchronisation réussie avec succès !",
+  "homeSyncFailed": "Échec de la synchronisation.",
+  "homeSyncing": "Synchronisation...",
+  "homeSync": "Synchroniser",
+  "routerPageNotFound": "Page non trouvée : {path}",
+  "@routerPageNotFound": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "routerInvalidId": "Identifiant invalide : \"{id}\"",
+  "@routerInvalidId": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "connectionsCount": "{count, plural, =0{0 connexion} =1{1 connexion} other{{count} connexions}}",
+  "@connectionsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "connectionsEmptyFolder": "Dossier vide",
+  "connectionsFolderName": "Nom du dossier",
+  "connectionsEditFolder": "Modifier le dossier",
+  "connectionsDeleteFolder": "Supprimer le dossier",
+  "connectionsDeleteFolderMessage": "Voulez-vous supprimer le dossier \"{name}\" ?\n\nLes connexions qu'il contient seront déplacées à la racine.",
+  "@connectionsDeleteFolderMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "connectionsFolderDeleted": "Dossier \"{name}\" supprimé",
+  "@connectionsFolderDeleted": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "connectionsDeleteConfirm": "Voulez-vous supprimer \"{name}\" ?",
+  "@connectionsDeleteConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "connectionsDeleted": "Connexion \"{name}\" supprimée",
+  "@connectionsDeleted": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "connectionsMoveTo": "Déplacer vers",
+  "connectionsMoved": "Connexion déplacée",
+  "connectionsAddToStart": "Ajoutez une connexion pour commencer",
+  "connectionsMove": "Déplacer",
+  "connectionsRefreshFolderTooltip": "Rafraîchir tous les super favoris du dossier",
+  "connectionsRefreshValuesTooltip": "Rafraîchir les valeurs",
+  "addConnSelected": "{name} sélectionné",
+  "@addConnSelected": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "addConnUseSecure": "Utiliser une connexion sécurisée",
+  "addConnConnectionType": "Type de connexion",
+  "addConnBacnetSuccess": "Connexion BACnet réussie ! Device ID : {deviceId}",
+  "@addConnBacnetSuccess": {
+    "placeholders": {
+      "deviceId": {
+        "type": "String"
+      }
+    }
+  },
+  "addConnNotDiscovered": "non découvert",
+  "addConnBacnetFailed": "Échec de la connexion BACnet",
+  "addConnUpdated": "Connexion modifiée",
+  "addConnSaved": "Connexion enregistrée",
+  "discoverMdnsError": "Erreur mDNS",
+  "discoverSearchingEclypse": "Recherche des automates ECLYPSE sur le réseau...",
+  "discoverNoEclypseFoundMessage": "Aucun ECLYPSE n'a été trouvé sur le réseau.\nVérifiez que vous êtes connecté au même réseau que l'automate.",
+  "discoverProbing": "Détection API…",
+  "discoverApiAdvertised": "API {version} annoncée",
+  "@discoverApiAdvertised": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "discoverApiUnknown": "API détectée à la connexion",
+  "discoverUnreachable": "Injoignable",
+  "discoverModel": "Modèle : {model}",
+  "@discoverModel": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "discoverFirmware": "Firmware : {version}",
+  "@discoverFirmware": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "discoverFirmwareAfterLogin": "Firmware visible après connexion",
+  "discoverCreateConnection": "Créer la connexion",
+  "discoverDeviceIdConflictWithId": "Conflit Device ID {deviceId}",
+  "@discoverDeviceIdConflictWithId": {
+    "placeholders": {
+      "deviceId": {
+        "type": "String"
+      }
+    }
+  },
+  "alarmsSortNewest": "Plus récentes",
+  "alarmsSortOldest": "Plus anciennes",
+  "bacnetTypeAnalogInput": "Entrée Analogique",
+  "bacnetTypeAnalogOutput": "Sortie Analogique",
+  "bacnetTypeAnalogValue": "Valeur Analogique",
+  "bacnetTypeBinaryInput": "Entrée Binaire",
+  "bacnetTypeBinaryOutput": "Sortie Binaire",
+  "bacnetTypeBinaryValue": "Valeur Binaire",
+  "bacnetTypeMultiStateInput": "Entrée Multi-états",
+  "bacnetTypeMultiStateOutput": "Sortie Multi-états",
+  "bacnetTypeMultiStateValue": "Valeur Multi-états",
+  "bacnetTypeSchedule": "Horaire",
+  "bacnetTypeCalendar": "Calendrier",
+  "bacnetTypeTrendLog": "Historique",
+  "bacnetTypeNotificationClass": "Classe de notification",
+  "bacnetTypeDevice": "Appareil",
+  "scheduleDayShortMonday": "Lun",
+  "scheduleDayShortTuesday": "Mar",
+  "scheduleDayShortWednesday": "Mer",
+  "scheduleDayShortThursday": "Jeu",
+  "scheduleDayShortFriday": "Ven",
+  "scheduleDayShortSaturday": "Sam",
+  "scheduleDayShortSunday": "Dim",
+  "scheduleNewSlot": "Nouveau créneau",
+  "scheduleEditSlot": "Modifier le créneau",
+  "scheduleNewTransition": "Nouvelle transition",
+  "scheduleAllDay": "Toute la journée",
+  "scheduleStartTime": "Heure de début",
+  "scheduleEndTime": "Heure de fin",
+  "scheduleTime": "Heure",
+  "scheduleEndAfterStartError": "L'heure de fin doit être après l'heure de début",
+  "scheduleDuration": "Durée: {duration}",
+  "@scheduleDuration": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleSelectTime": "Sélectionner l'heure",
+  "scheduleMidnightEndOfDay": "Minuit (fin de journée)",
+  "scheduleCopyDay": "Copier ce jour",
+  "schedulePasteHereFrom": "Coller ici (depuis {day})",
+  "@schedulePasteHereFrom": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "schedulePasteFrom": "Coller depuis {day}",
+  "@schedulePasteFrom": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "schedulePasteToWorkDays": "Coller sur jours ouvrés",
+  "scheduleWorkDaysRange": "Lun-Ven",
+  "schedulePasteToAllDays": "Coller sur tous les jours",
+  "scheduleClearDay": "Effacer ce jour",
+  "scheduleDayCopied": "{day} copié",
+  "@scheduleDayCopied": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "schedulePastedToWorkDays": "Collé sur les jours ouvrés",
+  "schedulePastedToAllDays": "Collé sur tous les jours",
+  "scheduleMoreActions": "Plus d'actions",
+  "scheduleSaveConfirmTitle": "Sauvegarder le planning ?",
+  "scheduleSaveConfirmMessage": "Les modifications seront envoyées à l'automate et prendront effet immédiatement.",
+  "scheduleDiscardConfirmTitle": "Annuler les modifications ?",
+  "scheduleDiscardConfirmMessage": "Toutes les modifications non sauvegardées seront perdues.",
+  "scheduleContinueEditing": "Continuer l'édition",
+  "scheduleDeleteTransitionTitle": "Supprimer cette transition ?",
+  "scheduleDeleteSlotTitle": "Supprimer ce créneau ?",
+  "scheduleNoTransition": "Aucune transition",
+  "scheduleNoScheduledTransition": "Aucune transition programmée",
+  "scheduleTapPlusToAdd": "Appuyez sur + pour ajouter",
+  "scheduleAddSlot": "Ajouter un créneau",
+  "scheduleFullDay": "Journée",
+  "scheduleEditDayTitle": "Modifier - {day}",
+  "@scheduleEditDayTitle": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleAddDayTitle": "Ajouter - {day}",
+  "@scheduleAddDayTitle": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "connectionsSearchHint": "Rechercher une connexion (nom, adresse, modèle)…",
+  "connectionsNoMatch": "Aucune connexion ne correspond à la recherche",
+  "homeModulesTitle": "Modules",
+  "homeFavoritesDesc": "Vos points suivis, regroupés par dossier",
+  "homePointsDesc": "Entrées, sorties et variables de l'automate",
+  "homeDashboardDesc": "Courbes, comparaisons et statistiques",
+  "homeSchedulesDesc": "Programmes horaires et calendriers",
+  "homeAlarmsDesc": "Événements et défauts en cours",
+  "homeOverridesDesc": "Points forcés et dérogations actives",
+  "homeSynopticDesc": "Vues graphiques de l'installation",
+  "homeEnvysionDesc": "Ouvrir le synoptique dans le navigateur",
+  "homeDeviceInfoDesc": "Identité, réseau et inventaire des objets",
+  "homeNoAlarm": "Aucune alarme",
+  "homeNoOverride": "Aucun forçage",
+  "homeFromCache": "Données en cache",
+  "frmSectionAddress": "Adresse de l'automate",
+  "frmSectionAuth": "Authentification",
+  "frmSectionBacnet": "Identification BACnet"
 }

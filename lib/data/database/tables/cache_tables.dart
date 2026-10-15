@@ -86,7 +86,7 @@ class CachedTrendLogMapping extends Table {
   /// Connexion associée (clé primaire)
   IntColumn get connectionId => integer().references(Connections, #id)();
 
-  /// Mapping JSON sérialisé (Map<String, int> : pointKey -> trendLogInstance)
+  /// Mapping JSON sérialisé (`Map<String, int>` : pointKey -> trendLogInstance)
   TextColumn get mappingJson => text()();
 
   /// Nombre d'entrées dans le mapping

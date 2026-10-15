@@ -153,6 +153,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get retry => 'Retry';
 
   @override
+  String get bacnetReadingDeviceName => 'Reading name…';
+
+  @override
+  String get bacnetDeviceNameUnavailable =>
+      'Name not read (the device does not answer)';
+
+  @override
   String get noData => 'No data';
 
   @override
@@ -457,6 +464,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get state => 'State';
 
   @override
+  String scheduleStateN(int value) {
+    return 'State $value';
+  }
+
+  @override
   String get enterState => 'Enter a state';
 
   @override
@@ -618,6 +630,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scheduleNotFound => 'Schedule not found';
+
+  @override
+  String get weeklyScheduleUnreadable =>
+      'Weekly program unreadable: editing disabled so as not to overwrite the controller';
 
   @override
   String get errorLoadingSchedule => 'Error loading schedule';
@@ -809,7 +825,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addFavoritesHint =>
-      'Add points to favorites by clicking\\nthe star in the points list';
+      'Add points to favorites by clicking\nthe star in the points list';
 
   @override
   String get viewPoints => 'View points';
@@ -869,7 +885,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String deleteFolderMessage(Object name) {
-    return 'The folder \"$name\" will be deleted.\\n\\nFavorites in it won\'t be deleted, they will be moved to \"No folder\".';
+    return 'The folder \"$name\" will be deleted.\n\nFavorites in it won\'t be deleted, they will be moved to \"No folder\".';
   }
 
   @override
@@ -1278,4 +1294,1165 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get envysionLoadErrorMessage =>
       'Unable to load Envysion synoptic. Check the URL and your connection.';
+
+  @override
+  String get certificateChangedTitle => 'Controller certificate changed';
+
+  @override
+  String get trustNewCertificate => 'Trust the new certificate';
+
+  @override
+  String trustNewCertificateMessage(String expected, String received) {
+    return 'The certificate presented by the controller differs from the one saved on the first connection.\n\nThis may come from a certificate renewal (firmware update, controller reset) or from traffic interception. Only trust the new certificate if you are sure it is legitimate.\n\nExpected fingerprint:\n$expected\n\nNew fingerprint:\n$received';
+  }
+
+  @override
+  String get trust => 'Trust';
+
+  @override
+  String get backToConnections => 'Back to connections';
+
+  @override
+  String get certificateFingerprintLabel => 'Certificate fingerprint (SHA-256)';
+
+  @override
+  String get certificateFingerprintDiffers =>
+      'Differs from the saved fingerprint: the controller certificate changed.';
+
+  @override
+  String get certificateFingerprintPinnedInfo =>
+      'It will be saved and checked on every connection.';
+
+  @override
+  String get httpCleartextWarning =>
+      'Unencrypted HTTP: the password is sent in clear text on the network. Prefer HTTPS if the controller supports it.';
+
+  @override
+  String get passwordMissingBadge => 'Password required';
+
+  @override
+  String get apiVersionBadgeTooltip =>
+      'Distech REST API version used for this controller';
+
+  @override
+  String get apiVersionUnknownTooltip =>
+      'API version not detected yet: it will be on the next connection';
+
+  @override
+  String get redetectApiVersion => 'Re-detect API version';
+
+  @override
+  String get redetectingApiVersion => 'Detecting the API version…';
+
+  @override
+  String redetectApiVersionDone(String version) {
+    return 'API version detected: $version';
+  }
+
+  @override
+  String get redetectApiVersionFailed =>
+      'Controller unreachable: API version not detected';
+
+  @override
+  String get overrideDuration => 'Override duration';
+
+  @override
+  String get overridePermanent => 'Permanent';
+
+  @override
+  String durationMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String durationHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String get timedOverrideHint =>
+      'The automatic release is done by the app: it must be open when the time is up (otherwise it happens the next time it opens).';
+
+  @override
+  String forcedAtTime(String time) {
+    return 'Overridden from the app at $time';
+  }
+
+  @override
+  String autoReleaseAtTime(String time) {
+    return 'Automatic release at $time';
+  }
+
+  @override
+  String autoReleaseFailed(String error) {
+    return 'Automatic release failed, retrying: $error';
+  }
+
+  @override
+  String get overrideOriginUnknown =>
+      'Overridden outside the app (time unknown)';
+
+  @override
+  String overridesSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points selected',
+      one: '1 point selected',
+      zero: 'No point selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get releaseSelection => 'Release selection';
+
+  @override
+  String releaseSelectionMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Release the override of $count points?',
+      one: 'Release the override of 1 point?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String releaseSelectionDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points released',
+      one: '1 point released',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String releaseSelectionFailed(int failed, int total) {
+    return '$failed of $total release(s) failed';
+  }
+
+  @override
+  String invalidCredentialsMessage(String status) {
+    return 'Invalid credentials ($status). Check the connection user name and password.';
+  }
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get add => 'Add';
+
+  @override
+  String get rename => 'Rename';
+
+  @override
+  String get create => 'Create';
+
+  @override
+  String get apply => 'Apply';
+
+  @override
+  String get yes => 'Yes';
+
+  @override
+  String get no => 'No';
+
+  @override
+  String get back => 'Back';
+
+  @override
+  String get copy => 'Copy';
+
+  @override
+  String get clearAction => 'Clear';
+
+  @override
+  String get validate => 'Validate';
+
+  @override
+  String get details => 'Details';
+
+  @override
+  String get unknown => 'Unknown';
+
+  @override
+  String errorWithMessage(String error) {
+    return 'Error: $error';
+  }
+
+  @override
+  String get trendColorBlue => 'Blue';
+
+  @override
+  String get trendColorGreen => 'Green';
+
+  @override
+  String get trendColorOrange => 'Orange';
+
+  @override
+  String get trendColorPurple => 'Purple';
+
+  @override
+  String get trendColorRed => 'Red';
+
+  @override
+  String get trendColorCyan => 'Cyan';
+
+  @override
+  String get trendColorTeal => 'Teal';
+
+  @override
+  String get trendColorIndigo => 'Indigo';
+
+  @override
+  String get trendPeriodHour => '1h';
+
+  @override
+  String get trendPeriodDay => '24h';
+
+  @override
+  String get trendPeriodWeek => '7d';
+
+  @override
+  String get trendPeriodMonth => '30d';
+
+  @override
+  String get trendPeriodAll => 'All';
+
+  @override
+  String get trendPeriodCustom => 'Custom';
+
+  @override
+  String get trendChangeColor => 'Change color';
+
+  @override
+  String get trendAnnotations => 'Annotations';
+
+  @override
+  String get trendMinMaxMarkers => 'Min/Max markers';
+
+  @override
+  String get trendAverageLine => 'Average line';
+
+  @override
+  String get trendMinLine => 'Minimum line';
+
+  @override
+  String get trendMaxLine => 'Maximum line';
+
+  @override
+  String get trendHideAll => 'Hide all';
+
+  @override
+  String get trendNoDataForPeriod => 'No data for this period';
+
+  @override
+  String get trendDateTime => 'Date/Time';
+
+  @override
+  String get trendHistory => 'History';
+
+  @override
+  String get trendFullscreen => 'Full screen';
+
+  @override
+  String get trendShowChart => 'Show chart';
+
+  @override
+  String get trendShowTable => 'Show table';
+
+  @override
+  String get trendExportCsv => 'Export CSV';
+
+  @override
+  String trendExportSubject(String name) {
+    return 'History export $name';
+  }
+
+  @override
+  String get trendPortraitMode => 'Portrait mode';
+
+  @override
+  String get trendLandscapeMode => 'Landscape mode';
+
+  @override
+  String get trendNoNumericData => 'No numeric data';
+
+  @override
+  String get trendNoDataToDisplay => 'No data to display';
+
+  @override
+  String get trendInvalidData => 'Invalid data';
+
+  @override
+  String trendAvgLineLabel(String value) {
+    return 'Avg: $value';
+  }
+
+  @override
+  String chartComparisonTitle(int count) {
+    return 'Comparison ($count curves)';
+  }
+
+  @override
+  String get chartAddCurve => 'Add a curve';
+
+  @override
+  String chartCurvesNotLoaded(int count) {
+    return '$count curve(s) not loaded';
+  }
+
+  @override
+  String get chartNoVisibleCurve =>
+      'No visible curve\nTap the legend to show one';
+
+  @override
+  String get chartNoCurveSelected =>
+      'No curve selected\nAdd trend logs to compare';
+
+  @override
+  String get chartSelectCurves => 'Select curves';
+
+  @override
+  String chartSelectCurvesHint(int min, int max) {
+    return 'Select $min to $max trend logs to compare';
+  }
+
+  @override
+  String chartCurvesCount(int selected, int max) {
+    return '$selected/$max curves';
+  }
+
+  @override
+  String get chartNoTrendLogAvailable => 'No trend log available';
+
+  @override
+  String get chartSelectedCurves => 'Selected curves:';
+
+  @override
+  String chartValidateCount(int count) {
+    return 'Confirm ($count)';
+  }
+
+  @override
+  String get widgetPromoteSuperFavorite => 'Promote to super favorite';
+
+  @override
+  String get widgetDemoteToFavorite => 'Demote to favorite';
+
+  @override
+  String get widgetNoFolder => 'No folder';
+
+  @override
+  String get widgetCreateFolder => 'Create a folder';
+
+  @override
+  String get widgetNewFolderEllipsis => 'New folder...';
+
+  @override
+  String get widgetEditFolder => 'Edit folder';
+
+  @override
+  String get widgetFolderName => 'Folder name';
+
+  @override
+  String get widgetColor => 'Color';
+
+  @override
+  String get widgetIcon => 'Icon';
+
+  @override
+  String get widgetConnecting => 'Connecting';
+
+  @override
+  String get widgetStepAuth => 'Auth';
+
+  @override
+  String get widgetPumpLabel => 'PUMP';
+
+  @override
+  String get synopticsTitle => 'Synoptics';
+
+  @override
+  String get synopticCreate => 'Create a synoptic';
+
+  @override
+  String get synopticEmptyTitle => 'No synoptics';
+
+  @override
+  String get synopticEmptyHint =>
+      'Create your first synoptic to display\nyour points on a graphical diagram';
+
+  @override
+  String get synopticDeleteTitle => 'Delete synoptic?';
+
+  @override
+  String synopticDeleteMessage(String name) {
+    return 'Are you sure you want to delete \"$name\"?\nThis action cannot be undone.';
+  }
+
+  @override
+  String synopticBindingsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count bindings',
+      one: '1 binding',
+      zero: '0 bindings',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get synopticBindingsUnknown => '-- bindings';
+
+  @override
+  String get synopticGlobal => 'Global';
+
+  @override
+  String get synopticEditBindings => 'Edit bindings';
+
+  @override
+  String get synopticNew => 'New synoptic';
+
+  @override
+  String get synopticSvgModel => 'SVG template';
+
+  @override
+  String synopticConfigurableElementsCount(int count) {
+    return '$count configurable elements';
+  }
+
+  @override
+  String get synopticNameLabel => 'Synoptic name';
+
+  @override
+  String get synopticNameHint => 'E.g.: Ground floor heating circuit';
+
+  @override
+  String get synopticDescriptionOptional => 'Description (optional)';
+
+  @override
+  String get synopticDefaultName => 'Synoptic';
+
+  @override
+  String get synopticResetZoom => 'Reset zoom';
+
+  @override
+  String get synopticNotFound => 'Synoptic not found';
+
+  @override
+  String synopticUpdateError(String error) {
+    return 'Update error: $error';
+  }
+
+  @override
+  String synopticActivePointsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count active points',
+      one: '1 active point',
+      zero: '0 active points',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get synopticPinchToZoom => 'Pinch to zoom';
+
+  @override
+  String get synopticSvgElement => 'SVG element';
+
+  @override
+  String get synopticBindingType => 'Binding type';
+
+  @override
+  String get synopticCurrentValue => 'Current value';
+
+  @override
+  String get synopticViewPoint => 'View point';
+
+  @override
+  String get synopticNumericValue => 'Numeric value';
+
+  @override
+  String get synopticColorIndicator => 'Color indicator';
+
+  @override
+  String get synopticAnimation => 'Animation';
+
+  @override
+  String synopticEditTitle(String name) {
+    return 'Edit: $name';
+  }
+
+  @override
+  String get synopticHelp => 'Help';
+
+  @override
+  String get synopticPreview => 'Synoptic preview';
+
+  @override
+  String get synopticConfigurableElements => 'Configurable elements';
+
+  @override
+  String get synopticNoConfigurableElements =>
+      'No configurable elements detected';
+
+  @override
+  String get synopticHowToConfigure => 'How to configure';
+
+  @override
+  String get synopticHelpSteps =>
+      '1. Select an element in the list\n2. Choose the BACnet point to bind\n3. Configure the binding type:\n   • Value: displays the point value\n   • Color: changes the color based on the state\n   • Animation: enables/disables an animation\n4. Customize the format if needed';
+
+  @override
+  String get synopticStateIndicator => 'State indicator';
+
+  @override
+  String get synopticElement => 'Element';
+
+  @override
+  String get synopticConfigureBinding => 'Configure binding';
+
+  @override
+  String get synopticDeleteBinding => 'Delete binding';
+
+  @override
+  String get synopticColor => 'Color';
+
+  @override
+  String get synopticDisplayFormat => 'Display format';
+
+  @override
+  String synopticFormatHint(String placeholder) {
+    return 'E.g.: $placeholder°C or $placeholder%';
+  }
+
+  @override
+  String synopticFormatHelper(String placeholder) {
+    return 'Use $placeholder for the point value';
+  }
+
+  @override
+  String get synopticColors => 'Colors';
+
+  @override
+  String get synopticAnimationConfig => 'Animation settings';
+
+  @override
+  String get synopticAnimationOnOff => 'Animation ON/OFF';
+
+  @override
+  String get synopticAnimationExplanation =>
+      'The animation is visible when the point value is > threshold (active), and hidden otherwise.';
+
+  @override
+  String get synopticThreshold => 'ON/OFF threshold';
+
+  @override
+  String get synopticThresholdHelper =>
+      'Value > threshold = ON, otherwise OFF (for boolean: 0.5)';
+
+  @override
+  String get synopticBacnetPoint => 'BACnet point';
+
+  @override
+  String get synopticNoPointFound => 'No point found';
+
+  @override
+  String get synopticDeleteBindingTitle => 'Delete binding?';
+
+  @override
+  String get synopticIrreversible => 'This action cannot be undone.';
+
+  @override
+  String get envysionConnectionNotFound => 'Connection not found';
+
+  @override
+  String get envysionAuthFailed => 'Authentication failed (401)';
+
+  @override
+  String get envysionPageNotFound => 'Page not found (404)';
+
+  @override
+  String get dashboardNotFound => 'Dashboard not found';
+
+  @override
+  String get dashboardDeleteWidgetConfirm => 'Delete widget?';
+
+  @override
+  String get dashboardDeleteWidgetMessage =>
+      'This widget will be removed from the dashboard.';
+
+  @override
+  String get dashboardEditTitle => 'Edit title';
+
+  @override
+  String get dashboardTitleLabel => 'Title';
+
+  @override
+  String get dashboardTitleHint => 'Leave empty for the default title';
+
+  @override
+  String get dashboardSettingsTitle => 'Dashboard settings';
+
+  @override
+  String get dashboardColumnsWithColon => 'Columns: ';
+
+  @override
+  String get dashboardRowsWithColon => 'Rows: ';
+
+  @override
+  String get dashboardDeletePermanentMessage =>
+      'This dashboard and all its widgets will be permanently deleted.';
+
+  @override
+  String get dashboardSearchHint => 'Search...';
+
+  @override
+  String get dashboardNewShort => 'New';
+
+  @override
+  String get dashboardEmptyHint =>
+      'Create your first dashboard to view\nseveral charts on a single page.';
+
+  @override
+  String dashboardGridSize(int columns, int rows) {
+    return 'Grid ${columns}x$rows';
+  }
+
+  @override
+  String get dashboardNameHint => 'E.g. Heating, Ventilation...';
+
+  @override
+  String get dashboardGridLayout => 'Grid layout';
+
+  @override
+  String get dashboardColumns => 'Columns';
+
+  @override
+  String get dashboardRows => 'Rows';
+
+  @override
+  String get dashboardChartDefault => 'Chart';
+
+  @override
+  String dashboardComparisonTitle(int count) {
+    return 'Comparison ($count curves)';
+  }
+
+  @override
+  String get dashboardNotConfigured => 'Not configured';
+
+  @override
+  String get dashboardConfigure => 'Configure';
+
+  @override
+  String get deviceInfoProtocol => 'Protocol';
+
+  @override
+  String get deviceInfoUser => 'User';
+
+  @override
+  String get deviceInfoLastConnection => 'Last connection';
+
+  @override
+  String get deviceInfoNetwork => 'Network';
+
+  @override
+  String deviceInfoInterfacesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count interfaces',
+      one: '1 interface',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get deviceInfoIpAddress => 'IP address';
+
+  @override
+  String get deviceInfoSubnetMask => 'Subnet mask';
+
+  @override
+  String get deviceInfoGateway => 'Gateway';
+
+  @override
+  String get deviceInfoPrimaryDns => 'Primary DNS';
+
+  @override
+  String get deviceInfoMacAddress => 'MAC address';
+
+  @override
+  String deviceInfoCopied(String label) {
+    return '$label copied';
+  }
+
+  @override
+  String get deviceInfoBacnetObjects => 'BACnet objects';
+
+  @override
+  String deviceInfoTotalObjects(int count) {
+    return 'Total: $count objects';
+  }
+
+  @override
+  String get deviceInfoNoDataAvailable => 'No data available';
+
+  @override
+  String get deviceInfoTechnical => 'Technical information';
+
+  @override
+  String get deviceInfoHostName => 'Host name';
+
+  @override
+  String get homeAuthenticating => 'Authenticating...';
+
+  @override
+  String get homeFetchingData => 'Fetching data...';
+
+  @override
+  String get homeSynoptic => 'Synoptic';
+
+  @override
+  String homeControllerTimeTooltip(String time) {
+    return 'Controller time: $time';
+  }
+
+  @override
+  String homeTimeOffsetTooltip(String offset) {
+    return 'Offset: $offset';
+  }
+
+  @override
+  String get homeControllerTimeTitle => 'Controller time';
+
+  @override
+  String get homeControllerDateTime => 'Controller date/time';
+
+  @override
+  String get homeLocalTime => 'Local time';
+
+  @override
+  String get homeTimeOffset => 'Offset';
+
+  @override
+  String get homeTimeOffsetWarning =>
+      'The controller clock is off. Schedules may not run at the expected times.';
+
+  @override
+  String get homeSyncV2Info =>
+      'API V2: use the EC-NetAX web interface or configure NTP to synchronize the time.';
+
+  @override
+  String get homeSyncSuccess => 'Time synchronized successfully!';
+
+  @override
+  String get homeSyncFailed => 'Synchronization failed.';
+
+  @override
+  String get homeSyncing => 'Synchronizing...';
+
+  @override
+  String get homeSync => 'Synchronize';
+
+  @override
+  String routerPageNotFound(String path) {
+    return 'Page not found: $path';
+  }
+
+  @override
+  String routerInvalidId(String id) {
+    return 'Invalid identifier: \"$id\"';
+  }
+
+  @override
+  String connectionsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count connections',
+      one: '1 connection',
+      zero: '0 connections',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get connectionsEmptyFolder => 'Empty folder';
+
+  @override
+  String get connectionsFolderName => 'Folder name';
+
+  @override
+  String get connectionsEditFolder => 'Edit folder';
+
+  @override
+  String get connectionsDeleteFolder => 'Delete folder';
+
+  @override
+  String connectionsDeleteFolderMessage(String name) {
+    return 'Do you want to delete the folder \"$name\"?\n\nThe connections it contains will be moved to the root.';
+  }
+
+  @override
+  String connectionsFolderDeleted(String name) {
+    return 'Folder \"$name\" deleted';
+  }
+
+  @override
+  String connectionsDeleteConfirm(String name) {
+    return 'Do you want to delete \"$name\"?';
+  }
+
+  @override
+  String connectionsDeleted(String name) {
+    return 'Connection \"$name\" deleted';
+  }
+
+  @override
+  String get connectionsMoveTo => 'Move to';
+
+  @override
+  String get connectionsMoved => 'Connection moved';
+
+  @override
+  String get connectionsAddToStart => 'Add a connection to get started';
+
+  @override
+  String get connectionsMove => 'Move';
+
+  @override
+  String get connectionsRefreshFolderTooltip =>
+      'Refresh all super favorites in the folder';
+
+  @override
+  String get connectionsRefreshValuesTooltip => 'Refresh values';
+
+  @override
+  String addConnSelected(String name) {
+    return '$name selected';
+  }
+
+  @override
+  String get addConnUseSecure => 'Use a secure connection';
+
+  @override
+  String get addConnConnectionType => 'Connection type';
+
+  @override
+  String addConnBacnetSuccess(String deviceId) {
+    return 'BACnet connection successful! Device ID: $deviceId';
+  }
+
+  @override
+  String get addConnNotDiscovered => 'not discovered';
+
+  @override
+  String get addConnBacnetFailed => 'BACnet connection failed';
+
+  @override
+  String get addConnUpdated => 'Connection updated';
+
+  @override
+  String get addConnSaved => 'Connection saved';
+
+  @override
+  String get discoverMdnsError => 'mDNS error';
+
+  @override
+  String get discoverSearchingEclypse =>
+      'Searching for ECLYPSE controllers on the network...';
+
+  @override
+  String get discoverNoEclypseFoundMessage =>
+      'No ECLYPSE was found on the network.\nCheck that you are connected to the same network as the controller.';
+
+  @override
+  String get discoverProbing => 'Detecting API…';
+
+  @override
+  String discoverApiAdvertised(String version) {
+    return 'API $version advertised';
+  }
+
+  @override
+  String get discoverApiUnknown => 'API detected on connection';
+
+  @override
+  String get discoverUnreachable => 'Unreachable';
+
+  @override
+  String discoverModel(String model) {
+    return 'Model: $model';
+  }
+
+  @override
+  String discoverFirmware(String version) {
+    return 'Firmware: $version';
+  }
+
+  @override
+  String get discoverFirmwareAfterLogin => 'Firmware shown after login';
+
+  @override
+  String get discoverCreateConnection => 'Create connection';
+
+  @override
+  String discoverDeviceIdConflictWithId(String deviceId) {
+    return 'Device ID conflict $deviceId';
+  }
+
+  @override
+  String get alarmsSortNewest => 'Newest first';
+
+  @override
+  String get alarmsSortOldest => 'Oldest first';
+
+  @override
+  String get bacnetTypeAnalogInput => 'Analog Input';
+
+  @override
+  String get bacnetTypeAnalogOutput => 'Analog Output';
+
+  @override
+  String get bacnetTypeAnalogValue => 'Analog Value';
+
+  @override
+  String get bacnetTypeBinaryInput => 'Binary Input';
+
+  @override
+  String get bacnetTypeBinaryOutput => 'Binary Output';
+
+  @override
+  String get bacnetTypeBinaryValue => 'Binary Value';
+
+  @override
+  String get bacnetTypeMultiStateInput => 'Multi-state Input';
+
+  @override
+  String get bacnetTypeMultiStateOutput => 'Multi-state Output';
+
+  @override
+  String get bacnetTypeMultiStateValue => 'Multi-state Value';
+
+  @override
+  String get bacnetTypeSchedule => 'Schedule';
+
+  @override
+  String get bacnetTypeCalendar => 'Calendar';
+
+  @override
+  String get bacnetTypeTrendLog => 'Trend log';
+
+  @override
+  String get bacnetTypeNotificationClass => 'Notification class';
+
+  @override
+  String get bacnetTypeDevice => 'Device';
+
+  @override
+  String get scheduleDayShortMonday => 'Mon';
+
+  @override
+  String get scheduleDayShortTuesday => 'Tue';
+
+  @override
+  String get scheduleDayShortWednesday => 'Wed';
+
+  @override
+  String get scheduleDayShortThursday => 'Thu';
+
+  @override
+  String get scheduleDayShortFriday => 'Fri';
+
+  @override
+  String get scheduleDayShortSaturday => 'Sat';
+
+  @override
+  String get scheduleDayShortSunday => 'Sun';
+
+  @override
+  String get scheduleNewSlot => 'New time slot';
+
+  @override
+  String get scheduleEditSlot => 'Edit time slot';
+
+  @override
+  String get scheduleNewTransition => 'New transition';
+
+  @override
+  String get scheduleAllDay => 'All day';
+
+  @override
+  String get scheduleStartTime => 'Start time';
+
+  @override
+  String get scheduleEndTime => 'End time';
+
+  @override
+  String get scheduleTime => 'Time';
+
+  @override
+  String get scheduleEndAfterStartError => 'End time must be after start time';
+
+  @override
+  String scheduleDuration(String duration) {
+    return 'Duration: $duration';
+  }
+
+  @override
+  String get scheduleSelectTime => 'Select time';
+
+  @override
+  String get scheduleMidnightEndOfDay => 'Midnight (end of day)';
+
+  @override
+  String get scheduleCopyDay => 'Copy this day';
+
+  @override
+  String schedulePasteHereFrom(String day) {
+    return 'Paste here (from $day)';
+  }
+
+  @override
+  String schedulePasteFrom(String day) {
+    return 'Paste from $day';
+  }
+
+  @override
+  String get schedulePasteToWorkDays => 'Paste to weekdays';
+
+  @override
+  String get scheduleWorkDaysRange => 'Mon-Fri';
+
+  @override
+  String get schedulePasteToAllDays => 'Paste to all days';
+
+  @override
+  String get scheduleClearDay => 'Clear this day';
+
+  @override
+  String scheduleDayCopied(String day) {
+    return '$day copied';
+  }
+
+  @override
+  String get schedulePastedToWorkDays => 'Pasted to weekdays';
+
+  @override
+  String get schedulePastedToAllDays => 'Pasted to all days';
+
+  @override
+  String get scheduleMoreActions => 'More actions';
+
+  @override
+  String get scheduleSaveConfirmTitle => 'Save schedule?';
+
+  @override
+  String get scheduleSaveConfirmMessage =>
+      'Changes will be sent to the controller and take effect immediately.';
+
+  @override
+  String get scheduleDiscardConfirmTitle => 'Discard changes?';
+
+  @override
+  String get scheduleDiscardConfirmMessage =>
+      'All unsaved changes will be lost.';
+
+  @override
+  String get scheduleContinueEditing => 'Keep editing';
+
+  @override
+  String get scheduleDeleteTransitionTitle => 'Delete this transition?';
+
+  @override
+  String get scheduleDeleteSlotTitle => 'Delete this time slot?';
+
+  @override
+  String get scheduleNoTransition => 'No transition';
+
+  @override
+  String get scheduleNoScheduledTransition => 'No scheduled transition';
+
+  @override
+  String get scheduleTapPlusToAdd => 'Tap + to add';
+
+  @override
+  String get scheduleAddSlot => 'Add time slot';
+
+  @override
+  String get scheduleFullDay => 'All day';
+
+  @override
+  String scheduleEditDayTitle(String day) {
+    return 'Edit - $day';
+  }
+
+  @override
+  String scheduleAddDayTitle(String day) {
+    return 'Add - $day';
+  }
+
+  @override
+  String get connectionsSearchHint =>
+      'Search connections (name, address, model)…';
+
+  @override
+  String get connectionsNoMatch => 'No connection matches the search';
+
+  @override
+  String get homeModulesTitle => 'Modules';
+
+  @override
+  String get homeFavoritesDesc => 'Your watched points, grouped by folder';
+
+  @override
+  String get homePointsDesc => 'Controller inputs, outputs and values';
+
+  @override
+  String get homeDashboardDesc => 'Charts, comparisons and statistics';
+
+  @override
+  String get homeSchedulesDesc => 'Time schedules and calendars';
+
+  @override
+  String get homeAlarmsDesc => 'Active events and faults';
+
+  @override
+  String get homeOverridesDesc => 'Forced points and active overrides';
+
+  @override
+  String get homeSynopticDesc => 'Graphic views of the plant';
+
+  @override
+  String get homeEnvysionDesc => 'Open the graphics in the browser';
+
+  @override
+  String get homeDeviceInfoDesc => 'Identity, network and object inventory';
+
+  @override
+  String get homeNoAlarm => 'No alarm';
+
+  @override
+  String get homeNoOverride => 'No override';
+
+  @override
+  String get homeFromCache => 'Cached data';
+
+  @override
+  String get frmSectionAddress => 'Controller address';
+
+  @override
+  String get frmSectionAuth => 'Authentication';
+
+  @override
+  String get frmSectionBacnet => 'BACnet identification';
 }

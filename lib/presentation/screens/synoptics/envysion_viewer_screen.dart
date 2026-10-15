@@ -9,8 +9,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../application/providers/connection_providers.dart';
 import '../../../data/database/app_database.dart';
+import '../../../data/services/certificate_pinning.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Ecran d'affichage du synoptique Envysion via WebView
 class EnvysionViewerScreen extends ConsumerStatefulWidget {
@@ -37,16 +39,6 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
   void initState() {
     super.initState();
     _loadConnectionData();
-    _initCookieManager();
-  }
-
-  Future<void> _initCookieManager() async {
-    // Activer la persistence des cookies pour garder la session OIDC
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      final cookieManager = CookieManager.instance();
-      // Les cookies seront persistes automatiquement
-      debugPrint('Cookie manager initialized');
-    }
   }
 
   Future<void> _loadConnectionData() async {
@@ -64,7 +56,7 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
     } else {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Connection not found';
+          _errorMessage = AppLocalizations.of(context)!.envysionConnectionNotFound;
           _isLoading = false;
         });
       }
@@ -92,6 +84,42 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
     return url;
   }
 
+  /// True only if the HTTP auth challenge targets the configured controller
+  /// (same host, and same port when the challenge reports one).
+  bool _isChallengeFromController(URLProtectionSpace space) {
+    final connection = _connection;
+    if (connection == null) return false;
+    if (space.host.toLowerCase() != connection.host.toLowerCase()) return false;
+    final port = space.port;
+    if (port != null && port > 0 && port != connection.port) return false;
+    return true;
+  }
+
+  /// TOFU check of an untrusted (self-signed) certificate: without a pinned
+  /// fingerprint, keep the historical behaviour (accept); otherwise accept
+  /// only the controller itself presenting the pinned certificate.
+  ServerTrustAuthResponseAction _serverTrustAction(URLProtectionSpace space) {
+    final pinned = _connection?.certificateFingerprint;
+    if (pinned == null || pinned.trim().isEmpty) {
+      return ServerTrustAuthResponseAction.PROCEED;
+    }
+    if (!_isChallengeFromController(space)) {
+      debugPrint('SSL Trust refused: ${space.host} is not the controller');
+      return ServerTrustAuthResponseAction.CANCEL;
+    }
+    final der = space.sslCertificate?.x509Certificate?.encoded;
+    if (der == null) {
+      debugPrint('SSL Trust refused: no certificate data');
+      return ServerTrustAuthResponseAction.CANCEL;
+    }
+    final presented = certificateFingerprintOfDer(der);
+    if (checkCertificate(pinned, presented) != CertificateCheck.match) {
+      debugPrint('SSL Trust refused: certificate fingerprint mismatch ($presented)');
+      return ServerTrustAuthResponseAction.CANCEL;
+    }
+    return ServerTrustAuthResponseAction.PROCEED;
+  }
+
   String _getBasicAuthHeader() {
     if (_connection == null || _password == null) return '';
     final credentials = '${_connection!.username}:$_password';
@@ -117,73 +145,34 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
     }
   }
 
-  void _showUnsupportedPlatformDialog() {
-    final l10n = AppLocalizations.of(context)!;
-    String platformName = 'Unknown';
-    if (kIsWeb) {
-      platformName = 'Web';
-    } else if (Platform.isLinux) {
-      platformName = 'Linux';
-    } else if (Platform.isMacOS) {
-      platformName = 'macOS';
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.webViewNotSupported),
-        content: Text(l10n.webViewNotSupportedMessage(platformName)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(l10n.cancel),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _openInExternalBrowser();
-            },
-            child: Text(l10n.openInBrowser),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
+    final dc = context.dc;
 
     // Attendre le chargement des donnees de connexion
     if (_connection == null && _errorMessage == null) {
       return Scaffold(
         appBar: GradientAppBar(title: l10n.synopticEnvysion),
-        body: const Center(child: CircularProgressIndicator()),
+        body: DcLoading(message: l10n.loadingEnvysion),
       );
     }
+
+    final openButton = FilledButton.icon(
+      onPressed: _openInExternalBrowser,
+      icon: const Icon(Icons.open_in_new_rounded),
+      label: Text(l10n.openInBrowser),
+    );
 
     // Erreur de chargement
     if (_errorMessage != null) {
       return Scaffold(
         appBar: GradientAppBar(title: l10n.synopticEnvysion),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
-              const SizedBox(height: 16),
-              Text(l10n.envysionLoadError, style: theme.textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(_errorMessage!, style: theme.textTheme.bodyMedium),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _openInExternalBrowser,
-                icon: const Icon(Icons.open_in_browser),
-                label: Text(l10n.openInBrowser),
-              ),
-            ],
-          ),
+        body: DcEmptyState.error(
+          context,
+          title: l10n.envysionLoadError,
+          message: _errorMessage,
+          action: openButton,
         ),
       );
     }
@@ -191,30 +180,18 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
     // Plateforme non supportee
     if (!_isWebViewSupported()) {
       return Scaffold(
-        appBar: GradientAppBar(title: l10n.synopticEnvysion),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.web_asset_off, size: 64, color: Colors.orange),
-              const SizedBox(height: 16),
-              Text(l10n.webViewNotSupported, style: theme.textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(
-                l10n.webViewNotSupportedMessage(//
-                  kIsWeb ? 'Web' : Platform.operatingSystem,
-                ),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _openInExternalBrowser,
-                icon: const Icon(Icons.open_in_browser),
-                label: Text(l10n.openInBrowser),
-              ),
-            ],
+        appBar: GradientAppBar(
+          title: l10n.synopticEnvysion,
+          subtitle: _connection?.name,
+        ),
+        body: DcEmptyState(
+          icon: Icons.web_asset_off_rounded,
+          tone: dc.warning,
+          title: l10n.webViewNotSupported,
+          message: l10n.webViewNotSupportedMessage(
+            kIsWeb ? 'Web' : Platform.operatingSystem,
           ),
+          action: openButton,
         ),
       );
     }
@@ -229,13 +206,13 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
         actions: [
           // Bouton refresh
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: () => _webViewController?.reload(),
             tooltip: l10n.refresh,
           ),
           // Bouton ouvrir dans navigateur
           IconButton(
-            icon: const Icon(Icons.open_in_browser),
+            icon: const Icon(Icons.open_in_new_rounded),
             onPressed: _openInExternalBrowser,
             tooltip: l10n.openInBrowser,
           ),
@@ -258,36 +235,24 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               // Mode desktop pour meilleur rendu
               preferredContentMode: UserPreferredContentMode.DESKTOP,
               // Autoriser le contenu mixte (HTTP dans HTTPS)
-              mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+              mixedContentMode: MixedContentMode.MIXED_CONTENT_COMPATIBILITY_MODE,
               // Cache
               cacheEnabled: true,
-              // Permettre l'acces aux fichiers
-              allowFileAccessFromFileURLs: true,
-              allowUniversalAccessFromFileURLs: true,
-              // Activer l'interception des requetes pour injecter l'auth
-              useShouldInterceptRequest: true,
+              // Aucun contenu file:// n'est charge : acces fichiers desactive
+              allowFileAccessFromFileURLs: false,
+              allowUniversalAccessFromFileURLs: false,
               // Permettre le stockage local (cookies, localStorage)
               domStorageEnabled: true,
               databaseEnabled: true,
               // Cookies tiers pour OIDC
               thirdPartyCookiesEnabled: true,
-              // Sauvegarder les credentials dans le formulaire
-              saveFormData: true,
+              saveFormData: false,
               // Garder les donnees entre sessions
               clearCache: false,
               clearSessionCache: false,
             ),
             onWebViewCreated: (controller) {
               _webViewController = controller;
-            },
-            shouldInterceptRequest: (controller, request) async {
-              // Injecter le header Authorization pour toutes les requetes vers le meme host
-              final requestUrl = request.url.toString();
-              if (requestUrl.contains(_connection!.host)) {
-                debugPrint('Intercepting request: $requestUrl');
-              }
-              // Retourner null - l'auth sera geree par onReceivedHttpAuthRequest
-              return null;
             },
             shouldOverrideUrlLoading: (controller, navigationAction) async {
               // Permettre toutes les navigations vers le meme host
@@ -296,42 +261,49 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               return NavigationActionPolicy.ALLOW;
             },
             onLoadStart: (controller, url) {
+              if (!mounted) return;
               setState(() {
                 _isLoading = true;
                 _errorMessage = null;
               });
             },
             onLoadStop: (controller, url) {
+              if (!mounted) return;
               setState(() {
                 _isLoading = false;
               });
             },
             onProgressChanged: (controller, progress) {
+              if (!mounted) return;
               setState(() {
                 _progress = progress / 100;
               });
             },
             onReceivedServerTrustAuthRequest: (controller, challenge) async {
-              // Accepter les certificats auto-signes (TOFU)
+              // Certificats auto-signes : verifies contre l'empreinte TOFU
               debugPrint('SSL Trust Request for: ${challenge.protectionSpace.host}');
               return ServerTrustAuthResponse(
-                action: ServerTrustAuthResponseAction.PROCEED,
+                action: _serverTrustAction(challenge.protectionSpace),
               );
             },
             onReceivedHttpAuthRequest: (controller, challenge) async {
               // Fournir les credentials pour l'authentification HTTP Basic
               debugPrint('HTTP Auth Request for: ${challenge.protectionSpace.host} (realm: ${challenge.protectionSpace.realm})');
+              // Only answer challenges coming from the configured controller
+              if (!_isChallengeFromController(challenge.protectionSpace)) {
+                return HttpAuthResponse(action: HttpAuthResponseAction.CANCEL);
+              }
               return HttpAuthResponse(
                 username: _connection!.username,
                 password: _password ?? '',
                 action: HttpAuthResponseAction.PROCEED,
-                permanentPersistence: true,
+                permanentPersistence: false,
               );
             },
             onReceivedError: (controller, request, error) {
               debugPrint('WebView Error: ${error.type} - ${error.description} for ${request.url}');
               // Ne pas afficher d'erreur pour les sous-ressources, seulement la page principale
-              if (request.url.toString() == _buildFullUrl()) {
+              if (mounted && request.url.toString() == _buildFullUrl()) {
                 setState(() {
                   _isLoading = false;
                   _errorMessage = '${error.type}: ${error.description}';
@@ -339,13 +311,15 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               }
             },
             onReceivedHttpError: (controller, request, response) {
+              // Ignore sub-resources (favicon, assets...): main frame only
+              if (!mounted || request.isForMainFrame != true) return;
               if (response.statusCode == 401) {
                 setState(() {
-                  _errorMessage = 'Authentification echouee (401)';
+                  _errorMessage = AppLocalizations.of(context)!.envysionAuthFailed;
                 });
               } else if (response.statusCode == 404) {
                 setState(() {
-                  _errorMessage = 'Page non trouvee (404)';
+                  _errorMessage = AppLocalizations.of(context)!.envysionPageNotFound;
                 });
               }
             },
@@ -359,77 +333,41 @@ class _EnvysionViewerScreenState extends ConsumerState<EnvysionViewerScreen> {
               child: LinearProgressIndicator(
                 value: _progress > 0 ? _progress : null,
                 backgroundColor: Colors.transparent,
+                minHeight: 2,
               ),
             ),
           // Message de chargement
           if (_isLoading && _progress == 0)
             Center(
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 16),
-                      Text(l10n.loadingEnvysion),
-                    ],
-                  ),
-                ),
+              child: DcCard(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                child: DcLoading(message: l10n.loadingEnvysion),
               ),
             ),
           // Message d'erreur overlay
           if (_errorMessage != null && !_isLoading)
             Center(
-              child: Card(
-                color: theme.colorScheme.errorContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.error_outline,
-                        size: 48,
-                        color: theme.colorScheme.onErrorContainer,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        l10n.envysionLoadError,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.onErrorContainer,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _errorMessage!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onErrorContainer,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _errorMessage = null;
-                                _isLoading = true;
-                              });
-                              _webViewController?.reload();
-                            },
-                            icon: const Icon(Icons.refresh),
-                            label: Text(l10n.retry),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: _openInExternalBrowser,
-                            icon: const Icon(Icons.open_in_browser),
-                            label: Text(l10n.openInBrowser),
-                          ),
-                        ],
-                      ),
-                    ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: DcCard(
+                  margin: const EdgeInsets.all(24),
+                  padding: EdgeInsets.zero,
+                  child: DcEmptyState.error(
+                    context,
+                    title: l10n.envysionLoadError,
+                    message: _errorMessage,
+                    action: OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _errorMessage = null;
+                          _isLoading = true;
+                        });
+                        _webViewController?.reload();
+                      },
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: Text(l10n.retry),
+                    ),
+                    secondaryAction: openButton,
                   ),
                 ),
               ),

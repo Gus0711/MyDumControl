@@ -67,7 +67,7 @@ lib/
 
 ## API Integration
 
-Two Distech API versions must be supported (see `docs_API_Distech/`):
+Two Distech API versions must be supported. Reference: start with `docs/docs_API_Distech/INDEX.md` (conventions + one Markdown file per API domain in `v1/` and `v2/`); do not read the Postman JSON files directly (V2 is ~850k tokens). Regenerate the Markdown with `python3 docs/docs_API_Distech/postman_to_md.py`.
 
 - **API V1**: Legacy controllers, Basic Auth, BACnet object endpoints
 - **API V2**: Modern controllers, Token/OAuth2 auth, batch operations
@@ -93,8 +93,8 @@ Flutter Web cannot directly connect to controllers (CORS). Requires Node.js prox
 ## Key Files
 
 - `plan_init.md` - Detailed architecture blueprint (French, 1600+ lines)
-- `docs_API_Distech/API-V1.postman_collection.json` - Legacy API reference
-- `docs_API_Distech/API-V2.postman_collection.json` - Modern API reference
+- `docs/docs_API_Distech/INDEX.md` - Distech API reference (Markdown, generated from the Postman collections)
+- `docs/docs_API_Distech/API-V{1,2}.postman_collection.json` - Source Postman collections
 - `pubspec.yaml` - Dependencies (currently minimal, planned deps in plan_init.md)
 
 ## Platform Targets

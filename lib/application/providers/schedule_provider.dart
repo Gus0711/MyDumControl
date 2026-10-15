@@ -1,31 +1,44 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../domain/models/schedule.dart';
+import '../../data/services/api_service.dart';
 import '../../data/services/bacnet_service.dart';
 import 'active_connection_provider.dart';
 import 'bacnet_provider.dart';
 
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
+/// Ne surveille que les champs de la connexion active utiles aux schedules,
+/// pour ne pas relancer les lectures à chaque mise à jour de deviceInfo,
+/// objectsSummary, controllerTime, etc.
+void _watchScheduleConnectionKey(Ref ref) {
+  ref.watch(activeConnectionProvider.select((s) => (
+        s.connection?.id,
+        s.isConnected,
+        s.isBacnetConnection,
+        s.client,
+      )));
+}
 
 /// Provider pour récupérer la liste des schedules
 /// Supporte les connexions API (V1/V2) et BACnet natives
 final schedulesListProvider = FutureProvider<List<ScheduleSummary>>((ref) async {
-  final state = ref.watch(activeConnectionProvider);
+  _watchScheduleConnectionKey(ref);
+  final state = ref.read(activeConnectionProvider);
   if (!state.isConnected) {
-    _logger.w('schedulesListProvider: not connected');
+    logger.w('schedulesListProvider: not connected');
     return [];
   }
 
-  _logger.i('schedulesListProvider: loading schedules (isBacnet=${state.isBacnetConnection}, hasClient=${state.client != null})');
+  logger.i('schedulesListProvider: loading schedules (isBacnet=${state.isBacnetConnection}, hasClient=${state.client != null})');
 
   // ========================================
   // CONNEXION BACNET NATIVE
   // ========================================
   if (state.isBacnetConnection) {
-    _logger.i('schedulesListProvider: using BACnet native mode');
+    logger.i('schedulesListProvider: using BACnet native mode');
     final bacnetConnection = ref.read(activeBacnetConnectionProvider);
     if (bacnetConnection == null) {
-      _logger.e('schedulesListProvider: no active BACnet connection');
+      logger.e('schedulesListProvider: no active BACnet connection');
       return [];
     }
 
@@ -47,21 +60,44 @@ final schedulesListProvider = FutureProvider<List<ScheduleSummary>>((ref) async 
         valueType: _detectValueType(info.presentValue),
       )).toList();
 
-      _logger.i('schedulesListProvider: loaded ${summaries.length} schedules via BACnet');
+      logger.i('schedulesListProvider: loaded ${summaries.length} schedules via BACnet');
       return summaries;
     } catch (e) {
-      _logger.e('schedulesListProvider: BACnet error: $e');
-      return [];
+      // Remonter l'erreur (AsyncError) pour que l'écran affiche une erreur
+      // avec "Réessayer" plutôt que "aucun planning"
+      logger.e('schedulesListProvider: BACnet error: $e');
+      rethrow;
     }
   }
 
   // ========================================
   // CONNEXION API DISTECH
   // ========================================
-  final schedules = await state.client!.getSchedules();
-  _logger.i('schedulesListProvider: loaded ${schedules.length} schedules via API');
+  final client = state.client!;
+  client.clearLastError();
+  final schedules = await client.getSchedules();
+  // An empty list caused by a 401/403 must not look like "no schedule"
+  throwIfAuthFailed(isEmpty: schedules.isEmpty, client: client);
+  logger.i('schedulesListProvider: loaded ${schedules.length} schedules via API');
   return schedules;
 });
+
+/// Throws the client's auth error when an empty API result (empty list /
+/// null) was caused by invalid credentials, so the screen shows an error
+/// (AsyncError) instead of "no data". Only failures on the BACnet objects
+/// endpoints count: a 401/403 on a parallel annex request (device info,
+/// time...) must not turn the schedules into an auth error.
+@visibleForTesting
+void throwIfAuthFailed({required bool isEmpty, required ConnectedApiClient client}) {
+  if (!isEmpty) return;
+  final error = client.objectsAccessFailure();
+  if (error != null) throw error;
+}
+
+/// Schedules just written by [ScheduleEditNotifier.save], keyed by
+/// (connection id, instance). Consumed once by [scheduleDetailProvider] so the
+/// detail screen shows the saved version without re-reading the controller.
+final _savedScheduleCacheProvider = Provider<Map<(int?, int), Schedule>>((ref) => {});
 
 /// Détecte le type de valeur depuis la presentValue
 ScheduleValueType _detectValueType(dynamic value) {
@@ -103,12 +139,12 @@ ScheduleValueType _detectValueTypeFromWeeklySchedule(DecodedWeeklySchedule? week
     // Si toutes les valeurs sont 0 ou 1 uniquement -> boolean
     // Si une valeur > 1 existe -> enumerated
     final maxValue = uniqueValues.reduce((a, b) => a > b ? a : b);
-    _logger.d('_detectValueTypeFromWeeklySchedule: uniqueValues=$uniqueValues');
+    logger.d('_detectValueTypeFromWeeklySchedule: uniqueValues=$uniqueValues');
     if (maxValue > 1) {
-      _logger.d('_detectValueTypeFromWeeklySchedule: maxValue=$maxValue -> enumerated');
+      logger.d('_detectValueTypeFromWeeklySchedule: maxValue=$maxValue -> enumerated');
       return ScheduleValueType.enumerated;
     } else {
-      _logger.d('_detectValueTypeFromWeeklySchedule: values=$uniqueValues -> boolean');
+      logger.d('_detectValueTypeFromWeeklySchedule: values=$uniqueValues -> boolean');
       return ScheduleValueType.boolean;
     }
   }
@@ -118,14 +154,25 @@ ScheduleValueType _detectValueTypeFromWeeklySchedule(DecodedWeeklySchedule? week
 
 /// Provider pour récupérer un schedule détaillé avec son planning
 /// Supporte les connexions API (V1/V2) et BACnet natives
+/// Source unique de lecture : ScheduleEditNotifier.loadSchedule lit aussi ce
+/// provider, ce qui évite une double lecture à l'ouverture de l'écran.
 final scheduleDetailProvider = FutureProvider.family<Schedule?, int>((ref, instance) async {
-  final state = ref.watch(activeConnectionProvider);
+  _watchScheduleConnectionKey(ref);
+  final connectionId = ref.read(activeConnectionProvider).connection?.id;
+  final saved = ref.read(_savedScheduleCacheProvider).remove((connectionId, instance));
+  if (saved != null) return saved;
+  return _fetchSchedule(ref, instance);
+});
+
+/// Lit un schedule complet (BACnet natif ou API). Lève en cas d'erreur réseau.
+Future<Schedule?> _fetchSchedule(Ref ref, int instance) async {
+  final state = ref.read(activeConnectionProvider);
   if (!state.isConnected) {
-    _logger.w('scheduleDetailProvider: not connected');
+    logger.w('scheduleDetailProvider: not connected');
     return null;
   }
 
-  _logger.i('scheduleDetailProvider: loading schedule $instance (isBacnet=${state.isBacnetConnection})');
+  logger.i('scheduleDetailProvider: loading schedule $instance (isBacnet=${state.isBacnetConnection})');
 
   // ========================================
   // CONNEXION BACNET NATIVE
@@ -133,7 +180,7 @@ final scheduleDetailProvider = FutureProvider.family<Schedule?, int>((ref, insta
   if (state.isBacnetConnection) {
     final bacnetConnection = ref.read(activeBacnetConnectionProvider);
     if (bacnetConnection == null) {
-      _logger.e('scheduleDetailProvider: no active BACnet connection');
+      logger.e('scheduleDetailProvider: no active BACnet connection');
       return null;
     }
 
@@ -148,35 +195,40 @@ final scheduleDetailProvider = FutureProvider.family<Schedule?, int>((ref, insta
       );
 
       if (scheduleInfo == null) {
-        _logger.e('scheduleDetailProvider: failed to read schedule $instance via BACnet');
+        logger.e('scheduleDetailProvider: failed to read schedule $instance via BACnet');
         return null;
       }
 
       // Convertir BacnetScheduleInfo en Schedule
       final schedule = _convertBacnetScheduleInfoToSchedule(scheduleInfo);
 
-      _logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via BACnet');
+      logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via BACnet');
       _logScheduleDetails(schedule);
 
       return schedule;
     } catch (e) {
-      _logger.e('scheduleDetailProvider: BACnet error: $e');
-      return null;
+      // Remonter l'erreur (AsyncError) : un timeout ne doit pas ressembler
+      // à "planning introuvable"
+      logger.e('scheduleDetailProvider: BACnet error: $e');
+      rethrow;
     }
   }
 
   // ========================================
   // CONNEXION API DISTECH
   // ========================================
-  final schedule = await state.client!.getScheduleDetail(instance);
+  final client = state.client!;
+  client.clearLastError();
+  final schedule = await client.getScheduleDetail(instance);
+  throwIfAuthFailed(isEmpty: schedule == null, client: client);
 
   if (schedule != null) {
-    _logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via API');
+    logger.i('scheduleDetailProvider: loaded ${schedule.objectName} via API');
     _logScheduleDetails(schedule);
   }
 
   return schedule;
-});
+}
 
 /// Convertit un BacnetScheduleInfo en Schedule
 Schedule _convertBacnetScheduleInfoToSchedule(BacnetScheduleInfo info) {
@@ -187,7 +239,7 @@ Schedule _convertBacnetScheduleInfoToSchedule(BacnetScheduleInfo info) {
   } else {
     valueType = _detectValueType(info.presentValue);
   }
-  _logger.d('_convertBacnetScheduleInfoToSchedule: detected valueType=$valueType');
+  logger.d('_convertBacnetScheduleInfoToSchedule: detected valueType=$valueType');
 
   // Convertir le weekly schedule
   WeeklySchedule weeklySchedule;
@@ -198,15 +250,7 @@ Schedule _convertBacnetScheduleInfoToSchedule(BacnetScheduleInfo info) {
   }
 
   // Convertir les state texts
-  // BACnet state-text: index 0 = premier état, index 1 = deuxième état, etc.
-  // Pour les booléens: 0 = inactif/false, 1 = actif/true
-  // Pour les enum: 0 = premier état, 1 = deuxième, etc.
-  final stateTexts = <ScheduleStateText>[];
-  if (info.stateTexts != null) {
-    for (int i = 0; i < info.stateTexts!.length; i++) {
-      stateTexts.add(ScheduleStateText(index: i, text: info.stateTexts![i]));
-    }
-  }
+  final stateTexts = bacnetStateTextsToScheduleStateTexts(info.stateTexts, valueType);
 
   return Schedule(
     instance: info.instance,
@@ -217,7 +261,24 @@ Schedule _convertBacnetScheduleInfoToSchedule(BacnetScheduleInfo info) {
     valueType: valueType,
     presentValue: info.presentValue,
     scheduleDefault: info.scheduleDefault,
+    weeklyScheduleReadable: info.weeklySchedule != null,
   );
+}
+
+/// Convertit la propriété BACnet state-text en ScheduleStateText.
+/// BACnet (ASHRAE 135, multi-state) : state-text[0] correspond à la valeur 1,
+/// donc pour un schedule énuméré l'index = i + 1. Pour un booléen, on garde
+/// 0 = inactif / 1 = actif.
+@visibleForTesting
+List<ScheduleStateText> bacnetStateTextsToScheduleStateTexts(
+  List<String>? texts,
+  ScheduleValueType valueType,
+) {
+  if (texts == null) return const [];
+  final offset = valueType == ScheduleValueType.enumerated ? 1 : 0;
+  return [
+    for (int i = 0; i < texts.length; i++) ScheduleStateText(index: i + offset, text: texts[i]),
+  ];
 }
 
 /// Convertit un DecodedWeeklySchedule en WeeklySchedule
@@ -230,11 +291,10 @@ WeeklySchedule _convertDecodedWeeklySchedule(DecodedWeeklySchedule decoded) {
 
     final transitions = <ScheduleTransition>[];
     for (final tv in decodedDay.timeValues) {
-      // Formater le time string: "HH:mm" (sans les secondes pour l'affichage)
-      final timeStr = '${tv.hour.toString().padLeft(2, '0')}:${tv.minute.toString().padLeft(2, '0')}';
-
+      // Conserver l'heure complète "HH:mm:ss.cc" (l'affichage n'utilise que
+      // HH:mm via formattedTime) pour ne pas perdre les secondes à la réécriture
       transitions.add(ScheduleTransition(
-        time: timeStr,
+        time: tv.timeString,
         value: tv.value,
         type: _valueTagToTypeString(tv.valueTag),
       ));
@@ -266,12 +326,12 @@ String _valueTagToTypeString(int valueTag) {
 
 /// Log les détails d'un schedule pour debug
 void _logScheduleDetails(Schedule schedule) {
-  _logger.d('scheduleDetailProvider: valueType=${schedule.valueType}, stateTexts=${schedule.stateTexts.length}');
+  logger.d('scheduleDetailProvider: valueType=${schedule.valueType}, stateTexts=${schedule.stateTexts.length}');
 
   for (final day in WeekDay.values) {
     final daySchedule = schedule.weeklySchedule.getDay(day);
     if (daySchedule.hasTransitions) {
-      _logger.d('scheduleDetailProvider: ${day.shortName}: ${daySchedule.transitionCount} transitions');
+      logger.d('scheduleDetailProvider: ${day.shortName}: ${daySchedule.transitionCount} transitions');
     }
   }
 }
@@ -344,61 +404,87 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
 
   ScheduleEditNotifier(this._ref) : super(const ScheduleEditState());
 
+  /// Jeton de la dernière demande de chargement : une réponse tardive d'un
+  /// chargement précédent (autre planning) est ignorée.
+  int _loadToken = 0;
+
+  /// Dernière instance demandée (pour récupérer le planning si le premier
+  /// chargement a échoué puis que l'écran a relu le détail avec succès)
+  int? _lastInstance;
+
+  /// Édition possible : un planning lisible est chargé et aucune sauvegarde
+  /// en cours (un weekly-schedule illisible ne doit jamais être écrasé)
+  bool get _canEdit =>
+      state.editedSchedule != null &&
+      state.editedSchedule!.weeklyScheduleReadable &&
+      !state.isSaving;
+
   /// Charge un schedule pour édition
   /// Supporte les connexions API (V1/V2) et BACnet natives
+  /// Lit [scheduleDetailProvider] (lecture partagée avec l'écran, pas de
+  /// double requête). L'état est réinitialisé immédiatement : en cas d'échec,
+  /// aucun planning précédent (périmé ou d'une autre instance) ne reste chargé.
   Future<void> loadSchedule(int instance) async {
-    final connectionState = _ref.read(activeConnectionProvider);
-    if (!connectionState.isConnected) return;
+    final token = ++_loadToken;
+    _lastInstance = instance;
+    state = const ScheduleEditState();
 
     Schedule? schedule;
-
-    // ========================================
-    // CONNEXION BACNET NATIVE
-    // ========================================
-    if (connectionState.isBacnetConnection) {
-      final bacnetConnection = _ref.read(activeBacnetConnectionProvider);
-      if (bacnetConnection == null) {
-        _logger.e('ScheduleEditNotifier.loadSchedule: no active BACnet connection');
-        return;
-      }
-
-      final bacnetService = _ref.read(bacnetServiceProvider);
-
-      try {
-        final scheduleInfo = await bacnetService.readScheduleFull(
-          host: bacnetConnection.host,
-          port: bacnetConnection.port,
-          scheduleInstance: instance,
-          deviceId: bacnetConnection.deviceId,
-        );
-
-        if (scheduleInfo != null) {
-          schedule = _convertBacnetScheduleInfoToSchedule(scheduleInfo);
-        }
-      } catch (e) {
-        _logger.e('ScheduleEditNotifier.loadSchedule: BACnet error: $e');
-        return;
-      }
-    }
-    // ========================================
-    // CONNEXION API DISTECH
-    // ========================================
-    else {
-      schedule = await connectionState.client!.getScheduleDetail(instance);
+    try {
+      schedule = await _ref.read(scheduleDetailProvider(instance).future);
+    } catch (e) {
+      if (!mounted || token != _loadToken) return;
+      logger.e('ScheduleEditNotifier.loadSchedule: error: $e');
+      state = ScheduleEditState(error: 'Erreur de chargement du planning: $e');
+      return;
     }
 
-    if (schedule != null) {
-      state = ScheduleEditState(
-        originalSchedule: schedule,
-        editedSchedule: schedule,
-        selectedDay: WeekDay.monday,
-      );
-      _logger.i('ScheduleEditNotifier: loaded schedule ${schedule.objectName}');
+    if (!mounted || token != _loadToken) return;
+
+    if (schedule == null) {
+      logger.w('ScheduleEditNotifier.loadSchedule: schedule $instance not available');
+      return;
     }
+
+    state = ScheduleEditState(
+      originalSchedule: schedule,
+      editedSchedule: schedule,
+      selectedDay: WeekDay.monday,
+    );
+    logger.i('ScheduleEditNotifier: loaded schedule ${schedule.objectName}');
+  }
+
+  /// Starts editing [schedule] (already read by [scheduleDetailProvider])
+  /// without any controller access. Cancels a pending [loadSchedule].
+  void loadFrom(Schedule schedule) {
+    _loadToken++;
+    _lastInstance = schedule.instance;
+    state = ScheduleEditState(
+      originalSchedule: schedule,
+      editedSchedule: schedule,
+      selectedDay: WeekDay.monday,
+    );
   }
 
   /// Active/désactive le mode édition
   void setEditing(bool editing) {
+    // Rien de chargé (échec précédent, puis "Réessayer" sur l'écran) :
+    // reprendre le planning déjà lu par scheduleDetailProvider s'il existe
+    if (editing && state.editedSchedule == null && _lastInstance != null) {
+      final schedule = _ref.read(scheduleDetailProvider(_lastInstance!)).valueOrNull;
+      if (schedule != null) {
+        state = ScheduleEditState(
+          originalSchedule: schedule,
+          editedSchedule: schedule,
+          selectedDay: WeekDay.monday,
+        );
+      }
+    }
+    // Weekly-schedule illisible : lecture seule
+    if (editing && state.editedSchedule?.weeklyScheduleReadable == false) {
+      logger.w('ScheduleEditNotifier.setEditing: weekly-schedule unreadable, editing refused');
+      return;
+    }
     state = state.copyWith(isEditing: editing, clearError: true, clearSuccess: true);
   }
 
@@ -410,12 +496,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   /// Copie un jour dans le presse-papier
   void copyDay(WeekDay day) {
     state = state.copyWith(clipboardSourceDay: day);
-    _logger.i('ScheduleEditNotifier: copied ${day.displayName} to clipboard');
+    logger.i('ScheduleEditNotifier: copied ${day.displayName} to clipboard');
   }
 
   /// Colle le jour du presse-papier sur un autre jour
   void pasteDay(WeekDay targetDay) {
-    if (state.clipboardSourceDay == null || state.editedSchedule == null) return;
+    if (state.clipboardSourceDay == null || !_canEdit) return;
 
     final sourceDay = state.clipboardSourceDay!;
     if (sourceDay == targetDay) return;
@@ -428,12 +514,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to ${targetDay.displayName}');
+    logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to ${targetDay.displayName}');
   }
 
   /// Colle le jour sur tous les jours ouvrés
   void pasteDayToWorkDays() {
-    if (state.clipboardSourceDay == null || state.editedSchedule == null) return;
+    if (state.clipboardSourceDay == null || !_canEdit) return;
 
     final sourceDay = state.clipboardSourceDay!;
     final newWeeklySchedule = state.editedSchedule!.weeklySchedule.copyDayTo(
@@ -447,12 +533,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to work days');
+    logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to work days');
   }
 
   /// Colle le jour sur tous les jours
   void pasteDayToAllDays() {
-    if (state.clipboardSourceDay == null || state.editedSchedule == null) return;
+    if (state.clipboardSourceDay == null || !_canEdit) return;
 
     final sourceDay = state.clipboardSourceDay!;
     final newWeeklySchedule = state.editedSchedule!.weeklySchedule.copyDayTo(
@@ -466,7 +552,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to all days');
+    logger.i('ScheduleEditNotifier: pasted ${sourceDay.displayName} to all days');
   }
 
   /// Efface le presse-papier
@@ -476,7 +562,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
 
   /// Efface un jour (supprime toutes ses transitions)
   void clearDay(WeekDay day) {
-    if (state.editedSchedule == null) return;
+    if (!_canEdit) return;
 
     final newWeeklySchedule = state.editedSchedule!.weeklySchedule.copyWithDay(
       day,
@@ -489,12 +575,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: cleared ${day.displayName}');
+    logger.i('ScheduleEditNotifier: cleared ${day.displayName}');
   }
 
   /// Ajoute une transition à un jour
   void addTransition(WeekDay day, ScheduleTransition transition) {
-    if (state.editedSchedule == null) return;
+    if (!_canEdit) return;
 
     final currentDay = state.editedSchedule!.weeklySchedule.getDay(day);
     final newTransitions = List<ScheduleTransition>.from(currentDay.transitions)..add(transition);
@@ -508,13 +594,13 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: added transition at ${transition.formattedTime} to ${day.displayName}');
+    logger.i('ScheduleEditNotifier: added transition at ${transition.formattedTime} to ${day.displayName}');
   }
 
   /// Ajoute un créneau en ajustant les créneaux existants pour éviter les chevauchements
   /// Si le nouveau créneau chevauche un existant, l'existant est ajusté (raccourci ou supprimé)
   void addTimeSlot(WeekDay day, TimeSlot newSlot) {
-    if (state.editedSchedule == null) return;
+    if (!_canEdit) return;
 
     final currentDay = state.editedSchedule!.weeklySchedule.getDay(day);
 
@@ -535,7 +621,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
 
       // Cas 1: Le nouveau créneau couvre entièrement l'existant → supprimer l'existant
       if (newSlot.startMinutes <= existing.startMinutes && newSlot.endMinutes >= existing.endMinutes) {
-        _logger.d('Slot ${existing.formattedStart}-${existing.formattedEnd} supprimé (couvert par le nouveau)');
+        logger.d('Slot ${existing.formattedStart}-${existing.formattedEnd} supprimé (couvert par le nouveau)');
         continue; // Ne pas ajouter ce créneau
       }
 
@@ -548,7 +634,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
             endMinutes: newSlot.startMinutes,
             value: existing.value,
           ));
-          _logger.d('Slot ajusté: ${existing.formattedStart}-${existing.formattedEnd} → ${existing.formattedStart}-${newSlot.formattedStart}');
+          logger.d('Slot ajusté: ${existing.formattedStart}-${existing.formattedEnd} → ${existing.formattedStart}-${newSlot.formattedStart}');
         } else {
           // Le nouveau est au milieu : couper l'existant en deux
           adjustedSlots.add(TimeSlot(
@@ -561,7 +647,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
             endMinutes: existing.endMinutes,
             value: existing.value,
           ));
-          _logger.d('Slot coupé en deux: ${existing.formattedStart}-${newSlot.formattedStart} et ${newSlot.formattedEnd}-${existing.formattedEnd}');
+          logger.d('Slot coupé en deux: ${existing.formattedStart}-${newSlot.formattedStart} et ${newSlot.formattedEnd}-${existing.formattedEnd}');
         }
         continue;
       }
@@ -573,7 +659,7 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
           endMinutes: existing.endMinutes,
           value: existing.value,
         ));
-        _logger.d('Slot ajusté: ${existing.formattedStart}-${existing.formattedEnd} → ${newSlot.formattedEnd}-${existing.formattedEnd}');
+        logger.d('Slot ajusté: ${existing.formattedStart}-${existing.formattedEnd} → ${newSlot.formattedEnd}-${existing.formattedEnd}');
         continue;
       }
 
@@ -596,12 +682,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: added slot ${newSlot.formattedStart}-${newSlot.formattedEnd} to ${day.displayName}');
+    logger.i('ScheduleEditNotifier: added slot ${newSlot.formattedStart}-${newSlot.formattedEnd} to ${day.displayName}');
   }
 
   /// Met à jour un créneau existant
   void updateTimeSlot(WeekDay day, TimeSlot oldSlot, TimeSlot newSlot) {
-    if (state.editedSchedule == null) return;
+    if (!_canEdit) return;
 
     final currentDay = state.editedSchedule!.weeklySchedule.getDay(day);
 
@@ -625,12 +711,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
     // Ajouter le nouveau créneau (qui gérera les chevauchements)
     addTimeSlot(day, newSlot);
 
-    _logger.i('ScheduleEditNotifier: updated slot on ${day.displayName}');
+    logger.i('ScheduleEditNotifier: updated slot on ${day.displayName}');
   }
 
   /// Supprime un créneau
   void removeTimeSlot(WeekDay day, TimeSlot slot) {
-    if (state.editedSchedule == null) return;
+    if (!_canEdit) return;
 
     final currentDay = state.editedSchedule!.weeklySchedule.getDay(day);
 
@@ -654,12 +740,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: removed slot ${slot.formattedStart}-${slot.formattedEnd} from ${day.displayName}');
+    logger.i('ScheduleEditNotifier: removed slot ${slot.formattedStart}-${slot.formattedEnd} from ${day.displayName}');
   }
 
   /// Modifie une transition existante
   void updateTransition(WeekDay day, int index, ScheduleTransition newTransition) {
-    if (state.editedSchedule == null) return;
+    if (!_canEdit) return;
 
     final currentDay = state.editedSchedule!.weeklySchedule.getDay(day);
     if (index < 0 || index >= currentDay.transitions.length) return;
@@ -676,12 +762,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: updated transition $index on ${day.displayName}');
+    logger.i('ScheduleEditNotifier: updated transition $index on ${day.displayName}');
   }
 
   /// Supprime une transition
   void removeTransition(WeekDay day, int index) {
-    if (state.editedSchedule == null) return;
+    if (!_canEdit) return;
 
     final currentDay = state.editedSchedule!.weeklySchedule.getDay(day);
     if (index < 0 || index >= currentDay.transitions.length) return;
@@ -697,12 +783,12 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       hasChanges: true,
     );
 
-    _logger.i('ScheduleEditNotifier: removed transition $index from ${day.displayName}');
+    logger.i('ScheduleEditNotifier: removed transition $index from ${day.displayName}');
   }
 
   /// Annule les modifications
   void revert() {
-    if (state.originalSchedule == null) return;
+    if (state.originalSchedule == null || state.isSaving) return;
 
     state = state.copyWith(
       editedSchedule: state.originalSchedule,
@@ -712,13 +798,15 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       clearSuccess: true,
     );
 
-    _logger.i('ScheduleEditNotifier: reverted changes');
+    logger.i('ScheduleEditNotifier: reverted changes');
   }
 
   /// Sauvegarde les modifications sur l'automate
   /// Supporte les connexions API (V1/V2) et BACnet natives
   Future<bool> save() async {
-    if (state.editedSchedule == null || !state.hasChanges) return false;
+    if (state.editedSchedule == null || !state.hasChanges || state.isSaving) return false;
+    // Never write a placeholder over an unreadable controller planning
+    if (!state.editedSchedule!.weeklyScheduleReadable) return false;
 
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
@@ -726,6 +814,8 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       return false;
     }
 
+    // Version effectivement envoyée (les éditions sont bloquées pendant isSaving)
+    final toWrite = state.editedSchedule!;
     state = state.copyWith(isSaving: true, clearError: true, clearSuccess: true);
 
     try {
@@ -743,17 +833,20 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
 
         final bacnetService = _ref.read(bacnetServiceProvider);
 
-        // Convertir le WeeklySchedule en BacnetWeeklySchedule
-        final bacnetWeeklySchedule = _convertToBacnetWeeklySchedule(
-          state.editedSchedule!.weeklySchedule,
-          state.editedSchedule!.valueType,
+        // Convertir le WeeklySchedule en BacnetWeeklySchedule en conservant
+        // le type de données d'origine du planning (unsigned/real/...)
+        final bacnetWeeklySchedule = convertToBacnetWeeklySchedule(
+          toWrite.weeklySchedule,
+          toWrite.valueType,
+          fallbackType: state.originalSchedule?.weeklySchedule.dominantValueType,
         );
 
         success = await bacnetService.writeWeeklySchedule(
           host: bacnetConnection.host,
           port: bacnetConnection.port,
-          scheduleInstance: state.editedSchedule!.instance,
+          scheduleInstance: toWrite.instance,
           weeklySchedule: bacnetWeeklySchedule,
+          deviceId: bacnetConnection.deviceId,
         );
       }
       // ========================================
@@ -761,78 +854,54 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
       // ========================================
       else {
         success = await connectionState.client!.writeWeeklySchedule(
-          state.editedSchedule!.instance,
-          state.editedSchedule!.weeklySchedule,
+          toWrite.instance,
+          toWrite.weeklySchedule,
         );
       }
 
+      if (!mounted) return success;
+
       if (success) {
-        // Mettre à jour l'original avec les nouvelles valeurs
+        // Mettre à jour l'original avec la version réellement envoyée
         state = state.copyWith(
-          originalSchedule: state.editedSchedule,
-          hasChanges: false,
+          originalSchedule: toWrite,
+          hasChanges: !identical(state.editedSchedule, toWrite),
           isSaving: false,
           successMessage: 'Planning sauvegardé',
         );
 
-        // Invalider le provider de détail pour forcer le rechargement
-        _ref.invalidate(scheduleDetailProvider(state.editedSchedule!.instance));
+        // Update the detail cache with the written version (no re-read of
+        // the controller): the next evaluation consumes this entry. The
+        // refresh button still re-reads the controller.
+        _ref.read(_savedScheduleCacheProvider)[
+            (connectionState.connection?.id, toWrite.instance)] = toWrite;
+        _ref.invalidate(scheduleDetailProvider(toWrite.instance));
 
-        _logger.i('ScheduleEditNotifier: saved successfully');
+        logger.i('ScheduleEditNotifier: saved successfully');
         return true;
       } else {
         state = state.copyWith(
           isSaving: false,
           error: 'Échec de la sauvegarde',
         );
-        _logger.e('ScheduleEditNotifier: save failed');
+        logger.e('ScheduleEditNotifier: save failed');
         return false;
       }
     } catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         isSaving: false,
         error: 'Erreur: $e',
       );
-      _logger.e('ScheduleEditNotifier: save error: $e');
+      logger.e('ScheduleEditNotifier: save error: $e');
       return false;
     }
   }
 
-  /// Convertit un WeeklySchedule en BacnetWeeklySchedule pour l'écriture BACnet
-  BacnetWeeklySchedule _convertToBacnetWeeklySchedule(
-    WeeklySchedule weeklySchedule,
-    ScheduleValueType valueType,
-  ) {
-    final days = <BacnetDailySchedule>[];
-
-    for (final weekDay in WeekDay.values) {
-      final daySchedule = weeklySchedule.getDay(weekDay);
-      final timeValues = <BacnetTimeValue>[];
-
-      for (final transition in daySchedule.sortedTransitions) {
-        // Déterminer le tag selon le type de valeur du schedule
-        ScheduleValueTag? tag;
-        if (valueType == ScheduleValueType.boolean) {
-          tag = ScheduleValueTag.boolean;
-        } else {
-          tag = ScheduleValueTag.enumerated;
-        }
-
-        timeValues.add(BacnetTimeValue.fromTimeString(
-          transition.time,
-          transition.value,
-          valueTag: tag,
-        ));
-      }
-
-      days.add(BacnetDailySchedule(timeValues: timeValues));
-    }
-
-    return BacnetWeeklySchedule(days: days);
-  }
-
   /// Reset complet
   void reset() {
+    _loadToken++; // ignorer un chargement en cours
+    _lastInstance = null;
     state = const ScheduleEditState();
   }
 
@@ -845,6 +914,66 @@ class ScheduleEditNotifier extends StateNotifier<ScheduleEditState> {
   void clearSuccess() {
     state = state.copyWith(clearSuccess: true);
   }
+}
+
+/// Convertit un type de valeur ("unsigned", "real"...) en tag BACnet
+ScheduleValueTag? _scheduleValueTagFromType(String? type) {
+  switch (type) {
+    case 'boolean': return ScheduleValueTag.boolean;
+    case 'unsigned': return ScheduleValueTag.unsigned;
+    case 'signed': return ScheduleValueTag.signed;
+    case 'real': return ScheduleValueTag.real;
+    case 'enumerated': return ScheduleValueTag.enumerated;
+    default: return null;
+  }
+}
+
+/// Convertit un WeeklySchedule en BacnetWeeklySchedule pour l'écriture BACnet.
+///
+/// Le tag de chaque valeur conserve le type d'origine du planning :
+/// 1. type de la transition (lu sur l'automate) ;
+/// 2. sinon type dominant du planning édité, puis [fallbackType] (planning
+///    d'origine) — cas des nouvelles transitions créées dans l'éditeur ;
+/// 3. sinon boolean/enumerated selon [valueType].
+/// Une valeur null (retour au défaut) est toujours encodée en tag Null.
+@visibleForTesting
+BacnetWeeklySchedule convertToBacnetWeeklySchedule(
+  WeeklySchedule weeklySchedule,
+  ScheduleValueType valueType, {
+  String? fallbackType,
+}) {
+  final scheduleTag = _scheduleValueTagFromType(weeklySchedule.dominantValueType) ??
+      _scheduleValueTagFromType(fallbackType) ??
+      (valueType == ScheduleValueType.boolean ? ScheduleValueTag.boolean : ScheduleValueTag.enumerated);
+
+  final days = <BacnetDailySchedule>[];
+
+  for (final weekDay in WeekDay.values) {
+    final daySchedule = weeklySchedule.getDay(weekDay);
+    final timeValues = <BacnetTimeValue>[];
+
+    for (final transition in daySchedule.sortedTransitions) {
+      if (transition.value == null) {
+        timeValues.add(BacnetTimeValue.fromTimeString(
+          transition.time,
+          null,
+          valueTag: ScheduleValueTag.nullValue,
+        ));
+        continue;
+      }
+
+      final tag = _scheduleValueTagFromType(transition.knownType) ?? scheduleTag;
+      timeValues.add(BacnetTimeValue.fromTimeString(
+        transition.time,
+        ScheduleTransition.normalizeValueForType(transition.value, tag.name),
+        valueTag: tag,
+      ));
+    }
+
+    days.add(BacnetDailySchedule(timeValues: timeValues));
+  }
+
+  return BacnetWeeklySchedule(days: days);
 }
 
 /// Provider pour l'édition d'un schedule

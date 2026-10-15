@@ -6,6 +6,11 @@ import '../../../application/providers/points_provider.dart';
 import '../../../data/database/app_database.dart';
 import '../../../data/database/tables/synoptic_bindings_table.dart';
 import '../../../domain/models/bacnet_object.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../widgets/confirm_dialog.dart';
+import '../../widgets/gradient_app_bar.dart';
+import '../../widgets/point_widgets.dart';
+import '../../widgets/ui/ui.dart';
 
 /// Écran d'édition des liaisons d'un synoptique
 class SynopticEditorScreen extends ConsumerStatefulWidget {
@@ -20,22 +25,37 @@ class SynopticEditorScreen extends ConsumerStatefulWidget {
 class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
   String? _selectedElementId;
 
+  /// Right panel: fixed width on wide screens, expanded below the preview on narrow ones.
+  Widget _sidePanel({required bool narrow, required Color borderColor, required Widget child}) {
+    final decorated = Container(
+      width: narrow ? null : 350,
+      decoration: BoxDecoration(
+        border: narrow
+            ? Border(top: BorderSide(color: borderColor))
+            : Border(left: BorderSide(color: borderColor)),
+      ),
+      child: child,
+    );
+    return narrow ? Expanded(flex: 3, child: decorated) : decorated;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final synopticAsync = ref.watch(synopticByIdProvider(widget.synopticId));
     final bindingsAsync = ref.watch(synopticBindingsProvider(widget.synopticId));
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GradientAppBar(
         title: synopticAsync.when(
-          data: (synoptic) => Text('Éditer: ${synoptic?.name ?? 'Synoptique'}'),
-          loading: () => const Text('Chargement...'),
-          error: (_, __) => const Text('Erreur'),
+          data: (synoptic) => l10n.synopticEditTitle(synoptic?.name ?? l10n.synopticDefaultName),
+          loading: () => l10n.loading,
+          error: (_, _) => l10n.error,
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.help_outline),
-            tooltip: 'Aide',
+            icon: const Icon(Icons.help_outline_rounded),
+            tooltip: l10n.synopticHelp,
             onPressed: () => _showHelp(context),
           ),
         ],
@@ -43,7 +63,7 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
       body: synopticAsync.when(
         data: (synoptic) {
           if (synoptic == null) {
-            return const Center(child: Text('Synoptique non trouvé'));
+            return DcEmptyState(icon: Icons.schema_outlined, title: l10n.synopticNotFound);
           }
 
           // Trouver les éléments disponibles pour ce SVG
@@ -57,11 +77,15 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
             ),
           );
 
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          final borderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade300;
-          final bgColor = isDark ? Colors.grey.shade900 : Colors.grey.shade100;
+          final dc = context.dc;
+          final borderColor = dc.border;
+          final bgColor = dc.surfaceSunken;
 
-          return Row(
+          // Narrow screens (phones): stack the preview above the element list
+          final narrow = MediaQuery.of(context).size.width < 700;
+
+          return Flex(
+            direction: narrow ? Axis.vertical : Axis.horizontal,
             children: [
               // Panneau gauche: SVG
               Expanded(
@@ -71,12 +95,10 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
                   child: Column(
                     children: [
                       // Header
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Aperçu du synoptique',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
+                      DcSectionHeader(
+                        l10n.synopticPreview,
+                        icon: Icons.visibility_outlined,
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
                       ),
                       // SVG
                       Expanded(
@@ -97,26 +119,36 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
               ),
 
               // Panneau droit: Liste des éléments
-              Container(
-                width: 350,
-                decoration: BoxDecoration(
-                  border: Border(left: BorderSide(color: borderColor)),
-                ),
+              _sidePanel(
+                narrow: narrow,
+                borderColor: borderColor,
                 child: Column(
                   children: [
                     // Header
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                       decoration: BoxDecoration(
+                        color: dc.surface,
                         border: Border(bottom: BorderSide(color: borderColor)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.link, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Éléments configurables',
-                            style: Theme.of(context).textTheme.titleMedium,
+                          DcIconBox(icon: Icons.link_rounded, size: 32),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              l10n.synopticConfigurableElements,
+                              style: context.text.titleMedium,
+                            ),
+                          ),
+                          bindingsAsync.maybeWhen(
+                            data: (bindings) => DcTag(
+                              '${bindings.length}/${svgAsset.elementIds.length}',
+                              tone: dc.accentTone,
+                              mono: true,
+                              dense: true,
+                            ),
+                            orElse: () => const SizedBox.shrink(),
                           ),
                         ],
                       ),
@@ -130,8 +162,12 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
                           svgAsset.elementIds,
                           bindings,
                         ),
-                        loading: () => const Center(child: CircularProgressIndicator()),
-                        error: (e, _) => Center(child: Text('Erreur: $e')),
+                        loading: () => const DcLoading(),
+                        error: (e, _) => DcEmptyState.error(
+                          context,
+                          title: l10n.error,
+                          message: e.toString(),
+                        ),
                       ),
                     ),
                   ],
@@ -140,8 +176,12 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Erreur: $error')),
+        loading: () => const DcLoading(),
+        error: (error, _) => DcEmptyState.error(
+          context,
+          title: l10n.error,
+          message: error.toString(),
+        ),
       ),
     );
   }
@@ -153,27 +193,17 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
   ) {
     // Créer une map des bindings par elementId
     final bindingsMap = {for (final b in bindings) b.svgElementId: b};
+    final l10n = AppLocalizations.of(context)!;
 
     if (elementIds.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.info_outline, size: 48, color: Colors.grey.shade400),
-              const SizedBox(height: 16),
-              const Text(
-                'Aucun élément configurable détecté',
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
+      return DcEmptyState(
+        icon: Icons.info_outline_rounded,
+        title: l10n.synopticNoConfigurableElements,
       );
     }
 
     return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: elementIds.length,
       itemBuilder: (context, index) {
         final elementId = elementIds[index];
@@ -210,35 +240,23 @@ class _SynopticEditorScreenState extends ConsumerState<SynopticEditorScreen> {
   }
 
   void _showHelp(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.help_outline),
-            SizedBox(width: 8),
-            Text('Comment configurer'),
-          ],
-        ),
-        content: const Column(
+        icon: const Icon(Icons.help_outline_rounded),
+        title: Text(l10n.synopticHowToConfigure),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '1. Sélectionnez un élément dans la liste\n'
-              '2. Choisissez le point BACnet à associer\n'
-              '3. Configurez le type de liaison:\n'
-              '   • Valeur: affiche la valeur du point\n'
-              '   • Couleur: change la couleur selon l\'état\n'
-              '   • Animation: active/désactive une animation\n'
-              '4. Personnalisez le format si nécessaire',
-            ),
+            Text(l10n.synopticHelpSteps),
           ],
         ),
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Compris'),
+            child: Text(l10n.understood),
           ),
         ],
       ),
@@ -265,107 +283,79 @@ class _ElementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasBinding = binding != null;
-    final typeInfo = _getElementTypeInfo(elementId);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final typeInfo = _getElementTypeInfo(AppLocalizations.of(context)!, elementId);
+    final dc = context.dc;
+    final tone = hasBinding ? dc.success : dc.neutral;
 
-    // Couleurs adaptées au thème
-    final iconBgColor = hasBinding
-        ? (isDark ? Colors.green.shade900 : Colors.green.shade50)
-        : (isDark ? Colors.grey.shade800 : Colors.grey.shade100);
-    final iconColor = hasBinding
-        ? (isDark ? Colors.green.shade300 : Colors.green.shade700)
-        : (isDark ? Colors.grey.shade400 : Colors.grey.shade500);
-    final subtitleColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+    return DcCard(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.all(12),
+      onTap: onTap,
+      color: isSelected ? dc.accentTone.bg : null,
+      borderColor: isSelected ? dc.accentTone.border : null,
+      child: Row(
+        children: [
+          // Icône selon le type
+          DcIconBox(icon: typeInfo.icon, tone: tone, size: 38),
+          const SizedBox(width: 12),
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // Icône selon le type
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: iconBgColor,
-                  borderRadius: BorderRadius.circular(8),
+          // Infos
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(typeInfo.label, style: context.text.titleSmall),
+                const SizedBox(height: 2),
+                Text(
+                  elementId,
+                  style: AppTextStyles.monospacedValue.copyWith(
+                    fontSize: 11,
+                    color: dc.textMuted,
+                  ),
                 ),
-                child: Icon(
-                  typeInfo.icon,
-                  color: iconColor,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // Infos
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      typeInfo.label,
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      elementId,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: subtitleColor,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                    if (hasBinding) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.link, size: 12, color: iconColor),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              binding!.pointName ?? binding!.pointRef,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: iconColor,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                if (hasBinding) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.link_rounded, size: 13, color: tone.fg),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          binding!.pointName ?? binding!.pointRef,
+                          style: context.text.bodySmall?.copyWith(
+                            color: tone.fg,
+                            fontWeight: FontWeight.w500,
                           ),
-                        ],
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-
-              // Indicateur de statut
-              Icon(
-                hasBinding ? Icons.check_circle : Icons.add_circle_outline,
-                color: hasBinding ? iconColor : (isDark ? Colors.grey.shade600 : Colors.grey.shade400),
-                size: 24,
-              ),
-            ],
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
+
+          // Indicateur de statut
+          Icon(
+            hasBinding ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
+            color: hasBinding ? tone.fg : dc.textMuted,
+            size: 22,
+          ),
+        ],
       ),
     );
   }
 
-  _ElementTypeInfo _getElementTypeInfo(String elementId) {
+  _ElementTypeInfo _getElementTypeInfo(AppLocalizations l10n, String elementId) {
     if (elementId.startsWith('val_')) {
-      return _ElementTypeInfo(Icons.numbers, 'Valeur numérique');
+      return _ElementTypeInfo(Icons.pin_outlined, l10n.synopticNumericValue);
     } else if (elementId.startsWith('ind_')) {
-      return _ElementTypeInfo(Icons.circle, 'Indicateur d\'état');
+      return _ElementTypeInfo(Icons.radio_button_checked_rounded, l10n.synopticStateIndicator);
     } else if (elementId.startsWith('anim_')) {
-      return _ElementTypeInfo(Icons.animation, 'Animation');
+      return _ElementTypeInfo(Icons.animation_rounded, l10n.synopticAnimation);
     }
-    return _ElementTypeInfo(Icons.extension, 'Élément');
+    return _ElementTypeInfo(Icons.extension_outlined, l10n.synopticElement);
   }
 }
 
@@ -439,6 +429,7 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final pointsState = ref.watch(pointsProvider);
     final filteredPoints = pointsState.points.where((p) {
       if (_searchQuery.isEmpty) return true;
@@ -454,33 +445,19 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        final sheetBgColor = Theme.of(context).colorScheme.surface;
-        final handleColor = isDark ? Colors.grey.shade600 : Colors.grey.shade300;
-        final subtitleColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
-        final borderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade300;
+        final dc = context.dc;
+        final borderColor = dc.border;
+        final sectionStyle = context.text.labelLarge?.copyWith(color: dc.textPrimary);
 
         return Container(
-          decoration: BoxDecoration(
-            color: sheetBgColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(DcRadius.xl)),
           ),
           child: Column(
             children: [
-              // Handle
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: handleColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-
               // Header
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(20, 0, 12, 16),
                 child: Row(
                   children: [
                     Expanded(
@@ -488,14 +465,14 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Configurer la liaison',
-                            style: Theme.of(context).textTheme.titleLarge,
+                            l10n.synopticConfigureBinding,
+                            style: context.text.titleLarge,
                           ),
+                          const SizedBox(height: 2),
                           Text(
                             widget.elementId,
-                            style: TextStyle(
-                              color: subtitleColor,
-                              fontFamily: 'monospace',
+                            style: AppTextStyles.monospacedValue.copyWith(
+                              color: dc.textMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -504,8 +481,8 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                     ),
                   if (widget.existingBinding != null)
                     IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      tooltip: 'Supprimer la liaison',
+                      icon: Icon(Icons.delete_outline_rounded, color: dc.danger.fg),
+                      tooltip: l10n.synopticDeleteBinding,
                       onPressed: _deleteBinding,
                     ),
                 ],
@@ -517,34 +494,31 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
             Expanded(
               child: ListView(
                 controller: scrollController,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 children: [
                   // Type de liaison
-                  const Text(
-                    'Type de liaison',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  Text(l10n.synopticBindingType, style: sectionStyle),
                   const SizedBox(height: 8),
                   SegmentedButton<BindingType>(
                     selected: {_bindingType},
                     onSelectionChanged: (set) {
                       setState(() => _bindingType = set.first);
                     },
-                    segments: const [
+                    segments: [
                       ButtonSegment(
                         value: BindingType.value,
-                        icon: Icon(Icons.numbers),
-                        label: Text('Valeur'),
+                        icon: const Icon(Icons.pin_outlined),
+                        label: Text(l10n.value),
                       ),
                       ButtonSegment(
                         value: BindingType.color,
-                        icon: Icon(Icons.palette),
-                        label: Text('Couleur'),
+                        icon: const Icon(Icons.palette_outlined),
+                        label: Text(l10n.synopticColor),
                       ),
                       ButtonSegment(
                         value: BindingType.animation,
-                        icon: Icon(Icons.animation),
-                        label: Text('Animation'),
+                        icon: const Icon(Icons.animation_rounded),
+                        label: Text(l10n.synopticAnimation),
                       ),
                     ],
                   ),
@@ -553,44 +527,30 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
 
                   // Configuration selon le type
                   if (_bindingType == BindingType.value) ...[
-                    const Text(
-                      'Format d\'affichage',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    Text(l10n.synopticDisplayFormat, style: sectionStyle),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _formatController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Ex: {value}°C ou {value}%',
-                        helperText: 'Utilisez {value} pour la valeur du point',
+                      style: AppTextStyles.monospacedValue.copyWith(fontSize: 13.5),
+                      decoration: InputDecoration(
+                        hintText: l10n.synopticFormatHint('{value}'),
+                        helperText: l10n.synopticFormatHelper('{value}'),
                       ),
                     ),
                   ],
 
                   if (_bindingType == BindingType.color) ...[
-                    const Text(
-                      'Couleurs',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    Text(l10n.synopticColors, style: sectionStyle),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         Expanded(
                           child: TextField(
                             controller: _onColorController,
+                            style: AppTextStyles.monospacedValue.copyWith(fontSize: 13.5),
                             decoration: InputDecoration(
-                              border: const OutlineInputBorder(),
                               labelText: 'ON',
-                              prefixIcon: Container(
-                                margin: const EdgeInsets.all(8),
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: _parseColor(_onColorController.text),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
+                              prefixIcon: _ColorSwatch(color: _parseColor(_onColorController.text)),
                             ),
                             onChanged: (_) => setState(() {}),
                           ),
@@ -599,18 +559,10 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                         Expanded(
                           child: TextField(
                             controller: _offColorController,
+                            style: AppTextStyles.monospacedValue.copyWith(fontSize: 13.5),
                             decoration: InputDecoration(
-                              border: const OutlineInputBorder(),
                               labelText: 'OFF',
-                              prefixIcon: Container(
-                                margin: const EdgeInsets.all(8),
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: _parseColor(_offColorController.text),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
+                              prefixIcon: _ColorSwatch(color: _parseColor(_offColorController.text)),
                             ),
                             onChanged: (_) => setState(() {}),
                           ),
@@ -620,67 +572,27 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   ],
 
                   if (_bindingType == BindingType.animation) ...[
-                    const Text(
-                      'Configuration Animation',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    Text(l10n.synopticAnimationConfig, style: sectionStyle),
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.blue.shade900.withValues(alpha: 0.3) : Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isDark ? Colors.blue.shade700 : Colors.blue.shade200,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.info_outline,
-                                size: 16,
-                                color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Animation ON/OFF',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'L\'animation sera visible quand la valeur du point est > seuil (actif), '
-                            'et masquée sinon.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.blue.shade200 : Colors.blue.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
+                    DcBanner(
+                      tone: dc.info,
+                      icon: Icons.info_outline_rounded,
+                      title: l10n.synopticAnimationOnOff,
+                      message: l10n.synopticAnimationExplanation,
                     ),
                   ],
 
                   // Seuil pour couleur et animation
                   if (_bindingType == BindingType.color || _bindingType == BindingType.animation) ...[
                     const SizedBox(height: 16),
-                    const Text(
-                      'Seuil ON/OFF',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    Text(l10n.synopticThreshold, style: sectionStyle),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _thresholdController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
+                      style: AppTextStyles.monospacedValue.copyWith(fontSize: 13.5),
+                      decoration: InputDecoration(
                         hintText: '0.5',
-                        helperText: 'Valeur > seuil = ON, sinon OFF (pour booléen: 0.5)',
+                        helperText: l10n.synopticThresholdHelper,
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     ),
@@ -689,18 +601,15 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   const SizedBox(height: 24),
 
                   // Sélection du point
-                  const Text(
-                    'Point BACnet',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  Text(l10n.synopticBacnetPoint, style: sectionStyle),
                   const SizedBox(height: 8),
 
                   // Recherche
                   TextField(
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Rechercher un point...',
-                      prefixIcon: Icon(Icons.search),
+                    decoration: InputDecoration(
+                      hintText: l10n.searchPoint,
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      isDense: true,
                     ),
                     onChanged: (value) => setState(() => _searchQuery = value),
                   ),
@@ -711,20 +620,26 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   if (pointsState.isLoading)
                     const Center(child: CircularProgressIndicator())
                   else if (filteredPoints.isEmpty)
-                    const Center(
+                    Center(
                       child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('Aucun point trouvé'),
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          l10n.synopticNoPointFound,
+                          style: context.text.bodyMedium?.copyWith(color: dc.textSecondary),
+                        ),
                       ),
                     )
                   else
                     Container(
-                      height: 200,
+                      height: 240,
+                      clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
+                        color: dc.surfaceSunken,
                         border: Border.all(color: borderColor),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(DcRadius.md),
                       ),
                       child: ListView.builder(
+                        padding: const EdgeInsets.all(4),
                         itemCount: filteredPoints.length,
                         itemBuilder: (context, index) {
                           final point = filteredPoints[index];
@@ -734,21 +649,21 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                           return ListTile(
                             dense: true,
                             selected: isSelected,
-                            selectedTileColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                             title: Text(
                               point.displayName,
                               overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
                               '${point.objectId} = ${point.formattedValue}',
-                              style: const TextStyle(fontSize: 11),
+                              style: AppTextStyles.monospacedValue.copyWith(
+                                fontSize: 11,
+                                color: dc.textMuted,
+                              ),
                             ),
-                            leading: Icon(
-                              Icons.sensors,
-                              size: 20,
-                              color: isSelected ? Theme.of(context).primaryColor : null,
-                            ),
-                            trailing: isSelected ? const Icon(Icons.check, size: 20) : null,
+                            leading: PointTypeBadge(type: point.type, size: 32),
+                            trailing: isSelected
+                                ? Icon(Icons.check_circle_rounded, size: 20, color: dc.accentTone.fg)
+                                : null,
                             onTap: () {
                               setState(() => _selectedPoint = point);
                             },
@@ -762,7 +677,7 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
 
             // Actions
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: borderColor)),
               ),
@@ -771,14 +686,14 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Annuler'),
+                      child: Text(l10n.cancel),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton(
+                    child: FilledButton(
                       onPressed: _canSave() ? _saveBinding : null,
-                      child: const Text('Enregistrer'),
+                      child: Text(l10n.save),
                     ),
                   ),
                 ],
@@ -801,7 +716,7 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
       final cleanHex = hex.replaceAll('#', '');
       return Color(int.parse('FF$cleanHex', radix: 16));
     } catch (_) {
-      return Colors.grey;
+      return context.dc.textMuted;
     }
   }
 
@@ -835,23 +750,13 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
   }
 
   Future<void> _deleteBinding() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Supprimer la liaison ?'),
-        content: const Text('Cette action est irréversible.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
+    final l10n = AppLocalizations.of(context)!;
+    final confirm = await showConfirmDialog(
+      context,
+      title: l10n.synopticDeleteBindingTitle,
+      message: l10n.synopticIrreversible,
+      confirmLabel: l10n.delete,
+      destructive: true,
     );
 
     if (confirm == true && mounted) {
@@ -861,5 +766,26 @@ class _BindingEditorSheetState extends ConsumerState<_BindingEditorSheet> {
           );
       if (mounted) Navigator.pop(context);
     }
+  }
+}
+
+/// Pastille de couleur dans un champ de saisie (ON / OFF).
+class _ColorSwatch extends StatelessWidget {
+  final Color color;
+
+  const _ColorSwatch({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(10),
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(DcRadius.sm),
+        border: Border.all(color: context.dc.borderStrong),
+      ),
+    );
   }
 }

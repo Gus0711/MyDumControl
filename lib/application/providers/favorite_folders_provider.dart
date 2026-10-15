@@ -1,34 +1,32 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:logger/logger.dart';
+import '../../core/utils/logger.dart';
 import '../../data/database/app_database.dart';
 import 'database_provider.dart';
 import 'active_connection_provider.dart';
 
-final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
-
 /// Provider pour les dossiers de favoris de la connexion active
 final favoriteFoldersProvider = StreamProvider<List<FavoriteFolder>>((ref) {
   final database = ref.watch(databaseProvider);
-  final activeConnection = ref.watch(activeConnectionProvider);
+  final connectionId = ref.watch(activeConnectionProvider.select((s) => s.connection?.id));
 
-  if (activeConnection.connection == null) {
+  if (connectionId == null) {
     return Stream.value([]);
   }
 
-  return database.watchFavoriteFoldersByConnection(activeConnection.connection!.id);
+  return database.watchFavoriteFoldersByConnection(connectionId);
 });
 
 /// Provider pour les favoris sans dossier de la connexion active
 final unassignedFavoritesProvider = StreamProvider<List<Favorite>>((ref) {
   final database = ref.watch(databaseProvider);
-  final activeConnection = ref.watch(activeConnectionProvider);
+  final connectionId = ref.watch(activeConnectionProvider.select((s) => s.connection?.id));
 
-  if (activeConnection.connection == null) {
+  if (connectionId == null) {
     return Stream.value([]);
   }
 
-  return database.watchUnassignedFavorites(activeConnection.connection!.id);
+  return database.watchUnassignedFavorites(connectionId);
 });
 
 /// Provider pour les favoris d'un dossier spécifique
@@ -44,9 +42,13 @@ final folderIdsForFavoriteProvider = StreamProvider.family<List<int>, int>((ref,
 });
 
 /// Provider pour les dossiers complets d'un favori (avec couleurs, icônes, etc.)
-final foldersForFavoriteProvider = FutureProvider.family<List<FavoriteFolder>, int>((ref, favoriteId) async {
+/// Relu à chaque changement d'assignation (stream DB) ; les modifications
+/// d'un dossier (nom, couleur, suppression) invalident la famille.
+final foldersForFavoriteProvider = StreamProvider.autoDispose.family<List<FavoriteFolder>, int>((ref, favoriteId) {
   final database = ref.watch(databaseProvider);
-  return database.getFoldersForFavorite(favoriteId);
+  return database
+      .watchFolderIdsForFavorite(favoriteId)
+      .asyncMap((_) => database.getFoldersForFavorite(favoriteId));
 });
 
 /// Notifier pour gérer les dossiers de favoris
@@ -63,7 +65,7 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
   }) async {
     final activeConnection = _ref.read(activeConnectionProvider);
     if (activeConnection.connection == null) {
-      _logger.w('createFolder: no active connection');
+      logger.w('createFolder: no active connection');
       return null;
     }
 
@@ -82,11 +84,11 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
         ),
       );
 
-      _logger.i('createFolder: created "$name" with id $id');
+      logger.i('createFolder: created "$name" with id $id');
       state = const AsyncValue.data(null);
       return id;
     } catch (e, st) {
-      _logger.e('createFolder error: $e');
+      logger.e('createFolder error: $e');
       state = AsyncValue.error(e, st);
       return null;
     }
@@ -111,11 +113,12 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
         icon: icon,
       );
 
-      _logger.i('updateFolder: updated folder $folderId');
+      _ref.invalidate(foldersForFavoriteProvider);
+      logger.i('updateFolder: updated folder $folderId');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('updateFolder error: $e');
+      logger.e('updateFolder error: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
@@ -130,11 +133,12 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
       await database.deleteFavoriteFolder(folderId);
 
-      _logger.i('deleteFolder: deleted folder $folderId');
+      _ref.invalidate(foldersForFavoriteProvider);
+      logger.i('deleteFolder: deleted folder $folderId');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('deleteFolder error: $e');
+      logger.e('deleteFolder error: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
@@ -152,10 +156,11 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
     try {
       await database.reorderFavoriteFolders(connectionId, folderIds);
-      _logger.i('reorderFolders: reordered ${folderIds.length} folders');
+      _ref.invalidate(foldersForFavoriteProvider);
+      logger.i('reorderFolders: reordered ${folderIds.length} folders');
       return true;
     } catch (e) {
-      _logger.e('reorderFolders error: $e');
+      logger.e('reorderFolders error: $e');
       return false;
     }
   }
@@ -166,10 +171,11 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
     try {
       await database.assignFavoriteToFolder(favoriteId, folderId);
-      _logger.i('assignToFolder: favorite $favoriteId -> folder $folderId');
+      _ref.invalidate(foldersForFavoriteProvider(favoriteId));
+      logger.i('assignToFolder: favorite $favoriteId -> folder $folderId');
       return true;
     } catch (e) {
-      _logger.e('assignToFolder error: $e');
+      logger.e('assignToFolder error: $e');
       return false;
     }
   }
@@ -180,10 +186,11 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
     try {
       await database.unassignFavoriteFromFolder(favoriteId, folderId);
-      _logger.i('unassignFromFolder: favorite $favoriteId removed from folder $folderId');
+      _ref.invalidate(foldersForFavoriteProvider(favoriteId));
+      logger.i('unassignFromFolder: favorite $favoriteId removed from folder $folderId');
       return true;
     } catch (e) {
-      _logger.e('unassignFromFolder error: $e');
+      logger.e('unassignFromFolder error: $e');
       return false;
     }
   }
@@ -197,11 +204,12 @@ class FavoriteFoldersNotifier extends StateNotifier<AsyncValue<void>> {
 
       await database.setFavoriteFolders(favoriteId, folderIds);
 
-      _logger.i('setFavoriteFolders: favorite $favoriteId -> ${folderIds.length} folders');
+      _ref.invalidate(foldersForFavoriteProvider(favoriteId));
+      logger.i('setFavoriteFolders: favorite $favoriteId -> ${folderIds.length} folders');
       state = const AsyncValue.data(null);
       return true;
     } catch (e, st) {
-      _logger.e('setFavoriteFolders error: $e');
+      logger.e('setFavoriteFolders error: $e');
       state = AsyncValue.error(e, st);
       return false;
     }
