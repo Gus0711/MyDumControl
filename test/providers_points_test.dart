@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myglobaldc/application/providers/active_connection_provider.dart';
 import 'package:myglobaldc/application/providers/bacnet_provider.dart';
+import 'package:myglobaldc/application/providers/database_provider.dart';
 import 'package:myglobaldc/application/providers/points_provider.dart';
 import 'package:myglobaldc/application/providers/trend_log_provider.dart';
 import 'package:myglobaldc/data/database/app_database.dart';
@@ -120,6 +122,7 @@ void main() {
     bacnet = FakeBacnetService();
     container = ProviderContainer(overrides: [
       bacnetServiceProvider.overrideWithValue(bacnet),
+      databaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
       activeConnectionProvider.overrideWith((ref) => FakeActiveConnectionNotifier(
             ref,
             ActiveConnectionState(

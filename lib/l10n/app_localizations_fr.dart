@@ -1353,6 +1353,87 @@ class AppLocalizationsFr extends AppLocalizations {
       'Automate injoignable : version d\'API non détectée';
 
   @override
+  String get overrideDuration => 'Durée du forçage';
+
+  @override
+  String get overridePermanent => 'Permanent';
+
+  @override
+  String durationMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String durationHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String get timedOverrideHint =>
+      'Le relâchement automatique est fait par l\'application : elle doit être ouverte à l\'échéance (sinon il a lieu à sa prochaine ouverture).';
+
+  @override
+  String forcedAtTime(String time) {
+    return 'Forcé depuis l\'app à $time';
+  }
+
+  @override
+  String autoReleaseAtTime(String time) {
+    return 'Relâchement automatique à $time';
+  }
+
+  @override
+  String autoReleaseFailed(String error) {
+    return 'Relâchement automatique en échec, nouvel essai en cours : $error';
+  }
+
+  @override
+  String get overrideOriginUnknown =>
+      'Forcé hors de l\'application (heure inconnue)';
+
+  @override
+  String overridesSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points sélectionnés',
+      one: '1 point sélectionné',
+      zero: 'Aucun point sélectionné',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get releaseSelection => 'Relâcher la sélection';
+
+  @override
+  String releaseSelectionMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Relâcher le forçage de $count points ?',
+      one: 'Relâcher le forçage de 1 point ?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String releaseSelectionDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points relâchés',
+      one: '1 point relâché',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String releaseSelectionFailed(int failed, int total) {
+    return '$failed relâchement(s) sur $total en échec';
+  }
+
+  @override
   String invalidCredentialsMessage(String status) {
     return 'Identifiants invalides ($status). Vérifiez le nom d\'utilisateur et le mot de passe de la connexion.';
   }

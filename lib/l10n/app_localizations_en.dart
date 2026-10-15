@@ -1347,6 +1347,87 @@ class AppLocalizationsEn extends AppLocalizations {
       'Controller unreachable: API version not detected';
 
   @override
+  String get overrideDuration => 'Override duration';
+
+  @override
+  String get overridePermanent => 'Permanent';
+
+  @override
+  String durationMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String durationHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String get timedOverrideHint =>
+      'The automatic release is done by the app: it must be open when the time is up (otherwise it happens the next time it opens).';
+
+  @override
+  String forcedAtTime(String time) {
+    return 'Overridden from the app at $time';
+  }
+
+  @override
+  String autoReleaseAtTime(String time) {
+    return 'Automatic release at $time';
+  }
+
+  @override
+  String autoReleaseFailed(String error) {
+    return 'Automatic release failed, retrying: $error';
+  }
+
+  @override
+  String get overrideOriginUnknown =>
+      'Overridden outside the app (time unknown)';
+
+  @override
+  String overridesSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points selected',
+      one: '1 point selected',
+      zero: 'No point selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get releaseSelection => 'Release selection';
+
+  @override
+  String releaseSelectionMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Release the override of $count points?',
+      one: 'Release the override of 1 point?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String releaseSelectionDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points released',
+      one: '1 point released',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String releaseSelectionFailed(int failed, int total) {
+    return '$failed of $total release(s) failed';
+  }
+
+  @override
   String invalidCredentialsMessage(String status) {
     return 'Invalid credentials ($status). Check the connection user name and password.';
   }

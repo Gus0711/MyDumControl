@@ -11,6 +11,7 @@ import 'tables/cache_tables.dart';
 import 'tables/synoptics_table.dart';
 import 'tables/synoptic_bindings_table.dart';
 import 'tables/dashboard_tables.dart';
+import 'tables/app_overrides_table.dart';
 
 part 'app_database.g.dart';
 
@@ -34,12 +35,13 @@ bool isCacheFresh(DateTime cachedAt, Duration maxAge, {DateTime? now}) {
   SynopticBindings,
   Dashboards,
   DashboardWidgets,
+  AppOverrides,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -107,6 +109,11 @@ class AppDatabase extends _$AppDatabase {
             await m.createIndex(idxDashboardWidgetsDashboardId);
             await m.createIndex(idxSynopticsConnectionId);
           }
+          if (from < 14) {
+            // Migration de v13 à v14 : forçages posés depuis l'application
+            // (heure, échéance des forçages temporisés) - purement additive
+            await m.createTable(appOverrides);
+          }
         },
         beforeOpen: (details) async {
           // Cache maintenance: drop expired cache rows so they don't stay forever.
@@ -118,6 +125,79 @@ class AppDatabase extends _$AppDatabase {
           }
         },
       );
+
+  // ==========================================================================
+  // === Forçages posés depuis l'application ===
+  // ==========================================================================
+
+  /// Enregistre (ou remplace) le forçage d'un point posé depuis l'app.
+  Future<void> recordAppOverride({
+    required int connectionId,
+    required String objectType,
+    required int objectInstance,
+    required String kind,
+    int? priority,
+    Object? value,
+    required DateTime forcedAt,
+    DateTime? expiresAt,
+  }) {
+    final row = AppOverridesCompanion.insert(
+      connectionId: connectionId,
+      objectType: objectType,
+      objectInstance: objectInstance,
+      kind: kind,
+      priority: Value(priority),
+      valueJson: Value(value == null ? null : jsonEncode(value)),
+      forcedAt: forcedAt,
+      expiresAt: Value(expiresAt),
+    );
+    return into(appOverrides).insert(
+      row,
+      onConflict: DoUpdate(
+        (_) => row.copyWith(lastError: const Value(null)),
+        target: [appOverrides.connectionId, appOverrides.objectType, appOverrides.objectInstance],
+      ),
+    );
+  }
+
+  /// Supprime le forçage enregistré d'un point (point relâché).
+  Future<int> deleteAppOverride(int connectionId, String objectType, int objectInstance) {
+    return (delete(appOverrides)
+          ..where((o) =>
+              o.connectionId.equals(connectionId) &
+              o.objectType.equals(objectType) &
+              o.objectInstance.equals(objectInstance)))
+        .go();
+  }
+
+  /// Forçages enregistrés d'une connexion (flux mis à jour en continu).
+  Stream<List<AppOverride>> watchAppOverrides(int connectionId) {
+    return (select(appOverrides)..where((o) => o.connectionId.equals(connectionId))).watch();
+  }
+
+  /// Forçages temporisés arrivés à échéance à [now], toutes connexions.
+  Future<List<AppOverride>> getExpiredAppOverrides(DateTime now) {
+    return (select(appOverrides)
+          ..where((o) => o.expiresAt.isNotNull() & o.expiresAt.isSmallerOrEqualValue(now))
+          ..orderBy([(o) => OrderingTerm.asc(o.expiresAt)]))
+        .get();
+  }
+
+  /// Mémorise l'échec du relâchement automatique d'un forçage.
+  Future<void> setAppOverrideError(int id, String? error) {
+    return (update(appOverrides)..where((o) => o.id.equals(id)))
+        .write(AppOverridesCompanion(lastError: Value(error)));
+  }
+
+  /// Supprime les forçages enregistrés d'une connexion dont le point n'est
+  /// plus forcé sur l'automate ([stillForced] : clés "type:instance"),
+  /// par exemple relâchés depuis un autre outil.
+  Future<int> purgeReleasedAppOverrides(int connectionId, Set<String> stillForced) async {
+    final rows = await (select(appOverrides)..where((o) => o.connectionId.equals(connectionId))).get();
+    final released = rows.where((o) => !stillForced.contains('${o.objectType}:${o.objectInstance}'));
+    if (released.isEmpty) return 0;
+    return (delete(appOverrides)..where((o) => o.id.isIn(released.map((o) => o.id)))).go();
+  }
 
   static QueryExecutor _openConnection() {
     return driftDatabase(name: 'mydumcontrol.db');
@@ -189,6 +269,8 @@ class AppDatabase extends _$AppDatabase {
             ..where((b) => b.synopticId.isInQuery(synopticIds)))
           .go();
       await (delete(synoptics)..where((s) => s.connectionId.equals(id))).go();
+
+      await (delete(appOverrides)..where((o) => o.connectionId.equals(id))).go();
 
       return (delete(connections)..where((c) => c.id.equals(id))).go();
     });

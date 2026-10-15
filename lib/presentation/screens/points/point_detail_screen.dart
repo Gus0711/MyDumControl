@@ -9,6 +9,7 @@ import '../../../domain/models/display_preferences.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
 import '../../widgets/trend_log_viewer.dart';
+import '../../widgets/app_override_info.dart';
 import '../../widgets/favorite_button.dart';
 
 /// Écran de détail d'un point BACnet
@@ -31,6 +32,9 @@ enum WriteMode {
 class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
   bool _isEditing = false;
   WriteMode _writeMode = WriteMode.regler;
+
+  /// Durée du forçage (null = permanent)
+  Duration? _overrideDuration;
   final _formKey = GlobalKey<FormState>();
   dynamic _editValue;
   bool _isWriting = false;
@@ -343,6 +347,15 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               ],
             ),
           ),
+        if (point.type.isInput ||
+            !point.type.canWriteSimple ||
+            _writeMode == WriteMode.forcage) ...[
+          const SizedBox(height: 12),
+          OverrideDurationSelector(
+            value: _overrideDuration,
+            onChanged: (d) => setState(() => _overrideDuration = d),
+          ),
+        ],
         const SizedBox(height: 16),
 
         // Éditeur selon le type
@@ -822,7 +835,9 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
     // Les entrées utilisent une méthode différente (out-of-service)
     if (point.type.isInput) {
-      success = await _safe(() => ref.read(pointsProvider.notifier).forceInput(point, value));
+      success = await _safe(() => ref
+          .read(pointsProvider.notifier)
+          .forceInput(point, value, duration: _overrideDuration));
       successMessage = l10n.inputForced;
     } else {
       // Déterminer le mode d'écriture effectif
@@ -838,7 +853,9 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
         case WriteMode.forcage:
           // Forçage avec priorité 1
-          success = await _safe(() => ref.read(pointsProvider.notifier).writeOverride(point, value, priority: 1));
+          success = await _safe(() => ref
+              .read(pointsProvider.notifier)
+              .writeOverride(point, value, priority: 1, duration: _overrideDuration));
           successMessage = l10n.valueForcedPriority1;
           break;
 
@@ -970,6 +987,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
             const SizedBox(height: 16),
             _buildInfoRow(l10n.priority, l10n.level(point.overridePriority ?? 0)),
             _buildInfoRow(l10n.forcedValue, _formatOverrideValue(point, l10n)),
+            AppOverrideInfo(point: point),
             const SizedBox(height: 16),
             // Boutons de libération
             Row(
@@ -1034,6 +1052,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
               l10n.inputForcedMessage,
               style: TextStyle(color: Colors.orange.shade800),
             ),
+            AppOverrideInfo(point: point),
             const SizedBox(height: 16),
             // Bouton pour libérer l'entrée
             SizedBox(

@@ -5,6 +5,8 @@ import '../../../application/providers/points_provider.dart';
 import '../../../core/router/routes.dart';
 import '../../../domain/models/bacnet_object.dart';
 import '../../shared/utils/bacnet_type_utils.dart';
+import '../../widgets/app_override_info.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/gradient_app_bar.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -17,6 +19,12 @@ class OverridesScreen extends ConsumerStatefulWidget {
 }
 
 class _OverridesScreenState extends ConsumerState<OverridesScreen> {
+  /// Points sélectionnés ("type:instance")
+  final Set<String> _selected = {};
+  bool _releasing = false;
+
+  static String _key(BacnetObject p) => '${p.type.apiName}:${p.instance}';
+
   @override
   void initState() {
     super.initState();
@@ -70,7 +78,87 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
         ],
       ),
       body: _buildBody(context, l10n, state, overriddenPoints),
+      bottomNavigationBar: overriddenPoints.isEmpty ? null : _buildReleaseBar(context, l10n, overriddenPoints),
     );
+  }
+
+  /// Barre de relâchement groupé : tout sélectionner, relâcher la sélection
+  Widget _buildReleaseBar(BuildContext context, AppLocalizations l10n, List<BacnetObject> points) {
+    final keys = points.map(_key).toSet();
+    _selected.retainAll(keys); // points relâchés entre-temps
+    final allSelected = _selected.length == keys.length;
+    return SafeArea(
+      child: Material(
+        elevation: 8,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              Checkbox(
+                value: _selected.isEmpty ? false : (allSelected ? true : null),
+                tristate: true,
+                onChanged: _releasing
+                    ? null
+                    : (_) => setState(() {
+                          if (allSelected) {
+                            _selected.clear();
+                          } else {
+                            _selected.addAll(keys);
+                          }
+                        }),
+              ),
+              Expanded(child: Text(l10n.overridesSelected(_selected.length))),
+              FilledButton.icon(
+                onPressed: _selected.isEmpty || _releasing
+                    ? null
+                    : () => _releaseSelected(context, l10n, points),
+                icon: _releasing
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.lock_open),
+                label: Text(l10n.releaseSelection),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _releaseSelected(BuildContext context, AppLocalizations l10n, List<BacnetObject> points) async {
+    final selection = points.where((p) => _selected.contains(_key(p))).toList();
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.releaseSelection,
+      message: l10n.releaseSelectionMessage(selection.length),
+      confirmLabel: l10n.release,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _releasing = true);
+    final failed = await ref.read(pointsProvider.notifier).releaseMany(selection);
+    if (!mounted) return;
+    setState(() {
+      _releasing = false;
+      _selected
+        ..clear()
+        ..addAll(failed.map(_key)); // garder les échecs sélectionnés
+    });
+    final messenger = ScaffoldMessenger.of(this.context);
+    if (failed.isEmpty) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(l10n.releaseSelectionDone(selection.length)),
+        backgroundColor: Colors.green,
+      ));
+    } else {
+      final detail = ref.read(pointsProvider.notifier).lastActionError;
+      messenger.showSnackBar(SnackBar(
+        content: Text([
+          l10n.releaseSelectionFailed(failed.length, selection.length),
+          if (detail != null) detail,
+        ].join('\n')),
+        backgroundColor: Colors.red,
+      ));
+    }
   }
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n, PointsState state, List<BacnetObject> overriddenPoints) {
@@ -221,9 +309,21 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
     final isInputForced = point.type.isInput && point.outOfService == true;
     final tileColor = isInputForced ? Colors.orange : Colors.red;
 
+    final key = _key(point);
+    final appSummary = appOverrideSummary(l10n, watchAppOverride(ref, point));
     return ListTile(
       onTap: () => context.push(Routes.pointDetailPath('${point.type.name}:${point.instance}')),
-      leading: Container(
+      onLongPress: () => setState(() => _selected.contains(key) ? _selected.remove(key) : _selected.add(key)),
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Checkbox(
+            value: _selected.contains(key),
+            onChanged: _releasing
+                ? null
+                : (checked) => setState(() => checked == true ? _selected.add(key) : _selected.remove(key)),
+          ),
+          Container(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
@@ -236,6 +336,8 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
           color: tileColor.shade700,
           size: 20,
         ),
+          ),
+        ],
       ),
       title: Text(
         point.displayName,
@@ -244,9 +346,12 @@ class _OverridesScreenState extends ConsumerState<OverridesScreen> {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        isInputForced
-            ? '${l10n.outOfServiceLabel} • ${point.type.shortName}:${point.instance}'
-            : '${l10n.priorityLabel(point.overridePriority ?? 0)} • ${point.type.shortName}:${point.instance}',
+        [
+          isInputForced
+              ? '${l10n.outOfServiceLabel} • ${point.type.shortName}:${point.instance}'
+              : '${l10n.priorityLabel(point.overridePriority ?? 0)} • ${point.type.shortName}:${point.instance}',
+          ?appSummary,
+        ].join('\n'),
         style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
       ),
       trailing: Row(

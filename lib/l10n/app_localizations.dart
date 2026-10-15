@@ -2540,6 +2540,90 @@ abstract class AppLocalizations {
   /// **'Automate injoignable : version d\'API non détectée'**
   String get redetectApiVersionFailed;
 
+  /// No description provided for @overrideDuration.
+  ///
+  /// In fr, this message translates to:
+  /// **'Durée du forçage'**
+  String get overrideDuration;
+
+  /// No description provided for @overridePermanent.
+  ///
+  /// In fr, this message translates to:
+  /// **'Permanent'**
+  String get overridePermanent;
+
+  /// No description provided for @durationMinutes.
+  ///
+  /// In fr, this message translates to:
+  /// **'{minutes} min'**
+  String durationMinutes(int minutes);
+
+  /// No description provided for @durationHours.
+  ///
+  /// In fr, this message translates to:
+  /// **'{hours} h'**
+  String durationHours(int hours);
+
+  /// No description provided for @timedOverrideHint.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le relâchement automatique est fait par l\'application : elle doit être ouverte à l\'échéance (sinon il a lieu à sa prochaine ouverture).'**
+  String get timedOverrideHint;
+
+  /// No description provided for @forcedAtTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Forcé depuis l\'app à {time}'**
+  String forcedAtTime(String time);
+
+  /// No description provided for @autoReleaseAtTime.
+  ///
+  /// In fr, this message translates to:
+  /// **'Relâchement automatique à {time}'**
+  String autoReleaseAtTime(String time);
+
+  /// No description provided for @autoReleaseFailed.
+  ///
+  /// In fr, this message translates to:
+  /// **'Relâchement automatique en échec, nouvel essai en cours : {error}'**
+  String autoReleaseFailed(String error);
+
+  /// No description provided for @overrideOriginUnknown.
+  ///
+  /// In fr, this message translates to:
+  /// **'Forcé hors de l\'application (heure inconnue)'**
+  String get overrideOriginUnknown;
+
+  /// No description provided for @overridesSelected.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =0{Aucun point sélectionné} =1{1 point sélectionné} other{{count} points sélectionnés}}'**
+  String overridesSelected(int count);
+
+  /// No description provided for @releaseSelection.
+  ///
+  /// In fr, this message translates to:
+  /// **'Relâcher la sélection'**
+  String get releaseSelection;
+
+  /// No description provided for @releaseSelectionMessage.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =1{Relâcher le forçage de 1 point ?} other{Relâcher le forçage de {count} points ?}}'**
+  String releaseSelectionMessage(int count);
+
+  /// No description provided for @releaseSelectionDone.
+  ///
+  /// In fr, this message translates to:
+  /// **'{count, plural, =1{1 point relâché} other{{count} points relâchés}}'**
+  String releaseSelectionDone(int count);
+
+  /// No description provided for @releaseSelectionFailed.
+  ///
+  /// In fr, this message translates to:
+  /// **'{failed} relâchement(s) sur {total} en échec'**
+  String releaseSelectionFailed(int failed, int total);
+
   /// No description provided for @invalidCredentialsMessage.
   ///
   /// In fr, this message translates to:

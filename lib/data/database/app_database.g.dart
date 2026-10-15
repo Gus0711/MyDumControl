@@ -4456,7 +4456,7 @@ class CachedTrendLogMappingData extends DataClass
   /// Connexion associée (clé primaire)
   final int connectionId;
 
-  /// Mapping JSON sérialisé (Map<String, int> : pointKey -> trendLogInstance)
+  /// Mapping JSON sérialisé (`Map<String, int>` : pointKey -> trendLogInstance)
   final String mappingJson;
 
   /// Nombre d'entrées dans le mapping
@@ -7430,6 +7430,652 @@ class DashboardWidgetsCompanion extends UpdateCompanion<DashboardWidget> {
   }
 }
 
+class $AppOverridesTable extends AppOverrides
+    with TableInfo<$AppOverridesTable, AppOverride> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AppOverridesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _connectionIdMeta = const VerificationMeta(
+    'connectionId',
+  );
+  @override
+  late final GeneratedColumn<int> connectionId = GeneratedColumn<int>(
+    'connection_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES connections (id)',
+    ),
+  );
+  static const VerificationMeta _objectTypeMeta = const VerificationMeta(
+    'objectType',
+  );
+  @override
+  late final GeneratedColumn<String> objectType = GeneratedColumn<String>(
+    'object_type',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 50,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _objectInstanceMeta = const VerificationMeta(
+    'objectInstance',
+  );
+  @override
+  late final GeneratedColumn<int> objectInstance = GeneratedColumn<int>(
+    'object_instance',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 20,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _priorityMeta = const VerificationMeta(
+    'priority',
+  );
+  @override
+  late final GeneratedColumn<int> priority = GeneratedColumn<int>(
+    'priority',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _valueJsonMeta = const VerificationMeta(
+    'valueJson',
+  );
+  @override
+  late final GeneratedColumn<String> valueJson = GeneratedColumn<String>(
+    'value_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _forcedAtMeta = const VerificationMeta(
+    'forcedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> forcedAt = GeneratedColumn<DateTime>(
+    'forced_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _expiresAtMeta = const VerificationMeta(
+    'expiresAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> expiresAt = GeneratedColumn<DateTime>(
+    'expires_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
+    'lastError',
+  );
+  @override
+  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
+    'last_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    connectionId,
+    objectType,
+    objectInstance,
+    kind,
+    priority,
+    valueJson,
+    forcedAt,
+    expiresAt,
+    lastError,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'app_overrides';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AppOverride> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('connection_id')) {
+      context.handle(
+        _connectionIdMeta,
+        connectionId.isAcceptableOrUnknown(
+          data['connection_id']!,
+          _connectionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_connectionIdMeta);
+    }
+    if (data.containsKey('object_type')) {
+      context.handle(
+        _objectTypeMeta,
+        objectType.isAcceptableOrUnknown(data['object_type']!, _objectTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_objectTypeMeta);
+    }
+    if (data.containsKey('object_instance')) {
+      context.handle(
+        _objectInstanceMeta,
+        objectInstance.isAcceptableOrUnknown(
+          data['object_instance']!,
+          _objectInstanceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_objectInstanceMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('priority')) {
+      context.handle(
+        _priorityMeta,
+        priority.isAcceptableOrUnknown(data['priority']!, _priorityMeta),
+      );
+    }
+    if (data.containsKey('value_json')) {
+      context.handle(
+        _valueJsonMeta,
+        valueJson.isAcceptableOrUnknown(data['value_json']!, _valueJsonMeta),
+      );
+    }
+    if (data.containsKey('forced_at')) {
+      context.handle(
+        _forcedAtMeta,
+        forcedAt.isAcceptableOrUnknown(data['forced_at']!, _forcedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_forcedAtMeta);
+    }
+    if (data.containsKey('expires_at')) {
+      context.handle(
+        _expiresAtMeta,
+        expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta),
+      );
+    }
+    if (data.containsKey('last_error')) {
+      context.handle(
+        _lastErrorMeta,
+        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {connectionId, objectType, objectInstance},
+  ];
+  @override
+  AppOverride map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AppOverride(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      connectionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}connection_id'],
+      )!,
+      objectType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}object_type'],
+      )!,
+      objectInstance: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}object_instance'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      priority: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}priority'],
+      ),
+      valueJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value_json'],
+      ),
+      forcedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}forced_at'],
+      )!,
+      expiresAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}expires_at'],
+      ),
+      lastError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error'],
+      ),
+    );
+  }
+
+  @override
+  $AppOverridesTable createAlias(String alias) {
+    return $AppOverridesTable(attachedDatabase, alias);
+  }
+}
+
+class AppOverride extends DataClass implements Insertable<AppOverride> {
+  final int id;
+
+  /// Connexion (automate) du point forcé
+  final int connectionId;
+
+  /// Type d'objet BACnet ([BacnetObjectType.apiName], ex: "binary-value")
+  final String objectType;
+
+  /// Instance de l'objet
+  final int objectInstance;
+
+  /// Nature du forçage : [AppOverrideKind.priority] (priority-array) ou
+  /// [AppOverrideKind.outOfService] (entrée forcée)
+  final String kind;
+
+  /// Priorité de commande (forçage priority-array uniquement)
+  final int? priority;
+
+  /// Valeur forcée (JSON), pour l'affichage
+  final String? valueJson;
+
+  /// Heure du forçage
+  final DateTime forcedAt;
+
+  /// Relâchement automatique à cette heure (null = forçage permanent)
+  final DateTime? expiresAt;
+
+  /// Dernier échec du relâchement automatique (affiché à l'utilisateur)
+  final String? lastError;
+  const AppOverride({
+    required this.id,
+    required this.connectionId,
+    required this.objectType,
+    required this.objectInstance,
+    required this.kind,
+    this.priority,
+    this.valueJson,
+    required this.forcedAt,
+    this.expiresAt,
+    this.lastError,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['connection_id'] = Variable<int>(connectionId);
+    map['object_type'] = Variable<String>(objectType);
+    map['object_instance'] = Variable<int>(objectInstance);
+    map['kind'] = Variable<String>(kind);
+    if (!nullToAbsent || priority != null) {
+      map['priority'] = Variable<int>(priority);
+    }
+    if (!nullToAbsent || valueJson != null) {
+      map['value_json'] = Variable<String>(valueJson);
+    }
+    map['forced_at'] = Variable<DateTime>(forcedAt);
+    if (!nullToAbsent || expiresAt != null) {
+      map['expires_at'] = Variable<DateTime>(expiresAt);
+    }
+    if (!nullToAbsent || lastError != null) {
+      map['last_error'] = Variable<String>(lastError);
+    }
+    return map;
+  }
+
+  AppOverridesCompanion toCompanion(bool nullToAbsent) {
+    return AppOverridesCompanion(
+      id: Value(id),
+      connectionId: Value(connectionId),
+      objectType: Value(objectType),
+      objectInstance: Value(objectInstance),
+      kind: Value(kind),
+      priority: priority == null && nullToAbsent
+          ? const Value.absent()
+          : Value(priority),
+      valueJson: valueJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(valueJson),
+      forcedAt: Value(forcedAt),
+      expiresAt: expiresAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(expiresAt),
+      lastError: lastError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastError),
+    );
+  }
+
+  factory AppOverride.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AppOverride(
+      id: serializer.fromJson<int>(json['id']),
+      connectionId: serializer.fromJson<int>(json['connectionId']),
+      objectType: serializer.fromJson<String>(json['objectType']),
+      objectInstance: serializer.fromJson<int>(json['objectInstance']),
+      kind: serializer.fromJson<String>(json['kind']),
+      priority: serializer.fromJson<int?>(json['priority']),
+      valueJson: serializer.fromJson<String?>(json['valueJson']),
+      forcedAt: serializer.fromJson<DateTime>(json['forcedAt']),
+      expiresAt: serializer.fromJson<DateTime?>(json['expiresAt']),
+      lastError: serializer.fromJson<String?>(json['lastError']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'connectionId': serializer.toJson<int>(connectionId),
+      'objectType': serializer.toJson<String>(objectType),
+      'objectInstance': serializer.toJson<int>(objectInstance),
+      'kind': serializer.toJson<String>(kind),
+      'priority': serializer.toJson<int?>(priority),
+      'valueJson': serializer.toJson<String?>(valueJson),
+      'forcedAt': serializer.toJson<DateTime>(forcedAt),
+      'expiresAt': serializer.toJson<DateTime?>(expiresAt),
+      'lastError': serializer.toJson<String?>(lastError),
+    };
+  }
+
+  AppOverride copyWith({
+    int? id,
+    int? connectionId,
+    String? objectType,
+    int? objectInstance,
+    String? kind,
+    Value<int?> priority = const Value.absent(),
+    Value<String?> valueJson = const Value.absent(),
+    DateTime? forcedAt,
+    Value<DateTime?> expiresAt = const Value.absent(),
+    Value<String?> lastError = const Value.absent(),
+  }) => AppOverride(
+    id: id ?? this.id,
+    connectionId: connectionId ?? this.connectionId,
+    objectType: objectType ?? this.objectType,
+    objectInstance: objectInstance ?? this.objectInstance,
+    kind: kind ?? this.kind,
+    priority: priority.present ? priority.value : this.priority,
+    valueJson: valueJson.present ? valueJson.value : this.valueJson,
+    forcedAt: forcedAt ?? this.forcedAt,
+    expiresAt: expiresAt.present ? expiresAt.value : this.expiresAt,
+    lastError: lastError.present ? lastError.value : this.lastError,
+  );
+  AppOverride copyWithCompanion(AppOverridesCompanion data) {
+    return AppOverride(
+      id: data.id.present ? data.id.value : this.id,
+      connectionId: data.connectionId.present
+          ? data.connectionId.value
+          : this.connectionId,
+      objectType: data.objectType.present
+          ? data.objectType.value
+          : this.objectType,
+      objectInstance: data.objectInstance.present
+          ? data.objectInstance.value
+          : this.objectInstance,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      priority: data.priority.present ? data.priority.value : this.priority,
+      valueJson: data.valueJson.present ? data.valueJson.value : this.valueJson,
+      forcedAt: data.forcedAt.present ? data.forcedAt.value : this.forcedAt,
+      expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
+      lastError: data.lastError.present ? data.lastError.value : this.lastError,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppOverride(')
+          ..write('id: $id, ')
+          ..write('connectionId: $connectionId, ')
+          ..write('objectType: $objectType, ')
+          ..write('objectInstance: $objectInstance, ')
+          ..write('kind: $kind, ')
+          ..write('priority: $priority, ')
+          ..write('valueJson: $valueJson, ')
+          ..write('forcedAt: $forcedAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('lastError: $lastError')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    connectionId,
+    objectType,
+    objectInstance,
+    kind,
+    priority,
+    valueJson,
+    forcedAt,
+    expiresAt,
+    lastError,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AppOverride &&
+          other.id == this.id &&
+          other.connectionId == this.connectionId &&
+          other.objectType == this.objectType &&
+          other.objectInstance == this.objectInstance &&
+          other.kind == this.kind &&
+          other.priority == this.priority &&
+          other.valueJson == this.valueJson &&
+          other.forcedAt == this.forcedAt &&
+          other.expiresAt == this.expiresAt &&
+          other.lastError == this.lastError);
+}
+
+class AppOverridesCompanion extends UpdateCompanion<AppOverride> {
+  final Value<int> id;
+  final Value<int> connectionId;
+  final Value<String> objectType;
+  final Value<int> objectInstance;
+  final Value<String> kind;
+  final Value<int?> priority;
+  final Value<String?> valueJson;
+  final Value<DateTime> forcedAt;
+  final Value<DateTime?> expiresAt;
+  final Value<String?> lastError;
+  const AppOverridesCompanion({
+    this.id = const Value.absent(),
+    this.connectionId = const Value.absent(),
+    this.objectType = const Value.absent(),
+    this.objectInstance = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.priority = const Value.absent(),
+    this.valueJson = const Value.absent(),
+    this.forcedAt = const Value.absent(),
+    this.expiresAt = const Value.absent(),
+    this.lastError = const Value.absent(),
+  });
+  AppOverridesCompanion.insert({
+    this.id = const Value.absent(),
+    required int connectionId,
+    required String objectType,
+    required int objectInstance,
+    required String kind,
+    this.priority = const Value.absent(),
+    this.valueJson = const Value.absent(),
+    required DateTime forcedAt,
+    this.expiresAt = const Value.absent(),
+    this.lastError = const Value.absent(),
+  }) : connectionId = Value(connectionId),
+       objectType = Value(objectType),
+       objectInstance = Value(objectInstance),
+       kind = Value(kind),
+       forcedAt = Value(forcedAt);
+  static Insertable<AppOverride> custom({
+    Expression<int>? id,
+    Expression<int>? connectionId,
+    Expression<String>? objectType,
+    Expression<int>? objectInstance,
+    Expression<String>? kind,
+    Expression<int>? priority,
+    Expression<String>? valueJson,
+    Expression<DateTime>? forcedAt,
+    Expression<DateTime>? expiresAt,
+    Expression<String>? lastError,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (connectionId != null) 'connection_id': connectionId,
+      if (objectType != null) 'object_type': objectType,
+      if (objectInstance != null) 'object_instance': objectInstance,
+      if (kind != null) 'kind': kind,
+      if (priority != null) 'priority': priority,
+      if (valueJson != null) 'value_json': valueJson,
+      if (forcedAt != null) 'forced_at': forcedAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      if (lastError != null) 'last_error': lastError,
+    });
+  }
+
+  AppOverridesCompanion copyWith({
+    Value<int>? id,
+    Value<int>? connectionId,
+    Value<String>? objectType,
+    Value<int>? objectInstance,
+    Value<String>? kind,
+    Value<int?>? priority,
+    Value<String?>? valueJson,
+    Value<DateTime>? forcedAt,
+    Value<DateTime?>? expiresAt,
+    Value<String?>? lastError,
+  }) {
+    return AppOverridesCompanion(
+      id: id ?? this.id,
+      connectionId: connectionId ?? this.connectionId,
+      objectType: objectType ?? this.objectType,
+      objectInstance: objectInstance ?? this.objectInstance,
+      kind: kind ?? this.kind,
+      priority: priority ?? this.priority,
+      valueJson: valueJson ?? this.valueJson,
+      forcedAt: forcedAt ?? this.forcedAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+      lastError: lastError ?? this.lastError,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (connectionId.present) {
+      map['connection_id'] = Variable<int>(connectionId.value);
+    }
+    if (objectType.present) {
+      map['object_type'] = Variable<String>(objectType.value);
+    }
+    if (objectInstance.present) {
+      map['object_instance'] = Variable<int>(objectInstance.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (priority.present) {
+      map['priority'] = Variable<int>(priority.value);
+    }
+    if (valueJson.present) {
+      map['value_json'] = Variable<String>(valueJson.value);
+    }
+    if (forcedAt.present) {
+      map['forced_at'] = Variable<DateTime>(forcedAt.value);
+    }
+    if (expiresAt.present) {
+      map['expires_at'] = Variable<DateTime>(expiresAt.value);
+    }
+    if (lastError.present) {
+      map['last_error'] = Variable<String>(lastError.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AppOverridesCompanion(')
+          ..write('id: $id, ')
+          ..write('connectionId: $connectionId, ')
+          ..write('objectType: $objectType, ')
+          ..write('objectInstance: $objectInstance, ')
+          ..write('kind: $kind, ')
+          ..write('priority: $priority, ')
+          ..write('valueJson: $valueJson, ')
+          ..write('forcedAt: $forcedAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('lastError: $lastError')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -7457,6 +8103,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DashboardWidgetsTable dashboardWidgets = $DashboardWidgetsTable(
     this,
   );
+  late final $AppOverridesTable appOverrides = $AppOverridesTable(this);
   late final Index idxFavoriteFolderAssignmentsFolderId = Index(
     'idx_favorite_folder_assignments_folder_id',
     'CREATE INDEX idx_favorite_folder_assignments_folder_id ON favorite_folder_assignments (folder_id)',
@@ -7491,6 +8138,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     synopticBindings,
     dashboards,
     dashboardWidgets,
+    appOverrides,
     idxFavoriteFolderAssignmentsFolderId,
     idxSynopticsConnectionId,
     idxDashboardsConnectionId,
@@ -8039,6 +8687,27 @@ final class $$ConnectionsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$AppOverridesTable, List<AppOverride>>
+  _appOverridesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.appOverrides,
+    aliasName: $_aliasNameGenerator(
+      db.connections.id,
+      db.appOverrides.connectionId,
+    ),
+  );
+
+  $$AppOverridesTableProcessedTableManager get appOverridesRefs {
+    final manager = $$AppOverridesTableTableManager(
+      $_db,
+      $_db.appOverrides,
+    ).filter((f) => f.connectionId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_appOverridesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ConnectionsTableFilterComposer
@@ -8320,6 +8989,31 @@ class $$ConnectionsTableFilterComposer
           }) => $$DashboardsTableFilterComposer(
             $db: $db,
             $table: $db.dashboards,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> appOverridesRefs(
+    Expression<bool> Function($$AppOverridesTableFilterComposer f) f,
+  ) {
+    final $$AppOverridesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.appOverrides,
+      getReferencedColumn: (t) => t.connectionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AppOverridesTableFilterComposer(
+            $db: $db,
+            $table: $db.appOverrides,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -8713,6 +9407,31 @@ class $$ConnectionsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> appOverridesRefs<T extends Object>(
+    Expression<T> Function($$AppOverridesTableAnnotationComposer a) f,
+  ) {
+    final $$AppOverridesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.appOverrides,
+      getReferencedColumn: (t) => t.connectionId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AppOverridesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.appOverrides,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ConnectionsTableTableManager
@@ -8737,6 +9456,7 @@ class $$ConnectionsTableTableManager
             bool cachedTrendLogMappingRefs,
             bool cachedObjectsSummaryRefs,
             bool dashboardsRefs,
+            bool appOverridesRefs,
           })
         > {
   $$ConnectionsTableTableManager(_$AppDatabase db, $ConnectionsTable table)
@@ -8844,6 +9564,7 @@ class $$ConnectionsTableTableManager
                 cachedTrendLogMappingRefs = false,
                 cachedObjectsSummaryRefs = false,
                 dashboardsRefs = false,
+                appOverridesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -8855,6 +9576,7 @@ class $$ConnectionsTableTableManager
                     if (cachedTrendLogMappingRefs) db.cachedTrendLogMapping,
                     if (cachedObjectsSummaryRefs) db.cachedObjectsSummary,
                     if (dashboardsRefs) db.dashboards,
+                    if (appOverridesRefs) db.appOverrides,
                   ],
                   addJoins:
                       <
@@ -9039,6 +9761,27 @@ class $$ConnectionsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (appOverridesRefs)
+                        await $_getPrefetchedData<
+                          Connection,
+                          $ConnectionsTable,
+                          AppOverride
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ConnectionsTableReferences
+                              ._appOverridesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ConnectionsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).appOverridesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.connectionId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -9068,6 +9811,7 @@ typedef $$ConnectionsTableProcessedTableManager =
         bool cachedTrendLogMappingRefs,
         bool cachedObjectsSummaryRefs,
         bool dashboardsRefs,
+        bool appOverridesRefs,
       })
     >;
 typedef $$FavoritesTableCreateCompanionBuilder =
@@ -13769,6 +14513,418 @@ typedef $$DashboardWidgetsTableProcessedTableManager =
       DashboardWidget,
       PrefetchHooks Function({bool dashboardId})
     >;
+typedef $$AppOverridesTableCreateCompanionBuilder =
+    AppOverridesCompanion Function({
+      Value<int> id,
+      required int connectionId,
+      required String objectType,
+      required int objectInstance,
+      required String kind,
+      Value<int?> priority,
+      Value<String?> valueJson,
+      required DateTime forcedAt,
+      Value<DateTime?> expiresAt,
+      Value<String?> lastError,
+    });
+typedef $$AppOverridesTableUpdateCompanionBuilder =
+    AppOverridesCompanion Function({
+      Value<int> id,
+      Value<int> connectionId,
+      Value<String> objectType,
+      Value<int> objectInstance,
+      Value<String> kind,
+      Value<int?> priority,
+      Value<String?> valueJson,
+      Value<DateTime> forcedAt,
+      Value<DateTime?> expiresAt,
+      Value<String?> lastError,
+    });
+
+final class $$AppOverridesTableReferences
+    extends BaseReferences<_$AppDatabase, $AppOverridesTable, AppOverride> {
+  $$AppOverridesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ConnectionsTable _connectionIdTable(_$AppDatabase db) =>
+      db.connections.createAlias(
+        $_aliasNameGenerator(db.appOverrides.connectionId, db.connections.id),
+      );
+
+  $$ConnectionsTableProcessedTableManager get connectionId {
+    final $_column = $_itemColumn<int>('connection_id')!;
+
+    final manager = $$ConnectionsTableTableManager(
+      $_db,
+      $_db.connections,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_connectionIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$AppOverridesTableFilterComposer
+    extends Composer<_$AppDatabase, $AppOverridesTable> {
+  $$AppOverridesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get objectType => $composableBuilder(
+    column: $table.objectType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get objectInstance => $composableBuilder(
+    column: $table.objectInstance,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get valueJson => $composableBuilder(
+    column: $table.valueJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get forcedAt => $composableBuilder(
+    column: $table.forcedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ConnectionsTableFilterComposer get connectionId {
+    final $$ConnectionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.connectionId,
+      referencedTable: $db.connections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConnectionsTableFilterComposer(
+            $db: $db,
+            $table: $db.connections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AppOverridesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AppOverridesTable> {
+  $$AppOverridesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get objectType => $composableBuilder(
+    column: $table.objectType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get objectInstance => $composableBuilder(
+    column: $table.objectInstance,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get priority => $composableBuilder(
+    column: $table.priority,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get valueJson => $composableBuilder(
+    column: $table.valueJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get forcedAt => $composableBuilder(
+    column: $table.forcedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ConnectionsTableOrderingComposer get connectionId {
+    final $$ConnectionsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.connectionId,
+      referencedTable: $db.connections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConnectionsTableOrderingComposer(
+            $db: $db,
+            $table: $db.connections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AppOverridesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AppOverridesTable> {
+  $$AppOverridesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get objectType => $composableBuilder(
+    column: $table.objectType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get objectInstance => $composableBuilder(
+    column: $table.objectInstance,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<int> get priority =>
+      $composableBuilder(column: $table.priority, builder: (column) => column);
+
+  GeneratedColumn<String> get valueJson =>
+      $composableBuilder(column: $table.valueJson, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get forcedAt =>
+      $composableBuilder(column: $table.forcedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get expiresAt =>
+      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+
+  GeneratedColumn<String> get lastError =>
+      $composableBuilder(column: $table.lastError, builder: (column) => column);
+
+  $$ConnectionsTableAnnotationComposer get connectionId {
+    final $$ConnectionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.connectionId,
+      referencedTable: $db.connections,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConnectionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.connections,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AppOverridesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AppOverridesTable,
+          AppOverride,
+          $$AppOverridesTableFilterComposer,
+          $$AppOverridesTableOrderingComposer,
+          $$AppOverridesTableAnnotationComposer,
+          $$AppOverridesTableCreateCompanionBuilder,
+          $$AppOverridesTableUpdateCompanionBuilder,
+          (AppOverride, $$AppOverridesTableReferences),
+          AppOverride,
+          PrefetchHooks Function({bool connectionId})
+        > {
+  $$AppOverridesTableTableManager(_$AppDatabase db, $AppOverridesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AppOverridesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AppOverridesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AppOverridesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> connectionId = const Value.absent(),
+                Value<String> objectType = const Value.absent(),
+                Value<int> objectInstance = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<int?> priority = const Value.absent(),
+                Value<String?> valueJson = const Value.absent(),
+                Value<DateTime> forcedAt = const Value.absent(),
+                Value<DateTime?> expiresAt = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+              }) => AppOverridesCompanion(
+                id: id,
+                connectionId: connectionId,
+                objectType: objectType,
+                objectInstance: objectInstance,
+                kind: kind,
+                priority: priority,
+                valueJson: valueJson,
+                forcedAt: forcedAt,
+                expiresAt: expiresAt,
+                lastError: lastError,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int connectionId,
+                required String objectType,
+                required int objectInstance,
+                required String kind,
+                Value<int?> priority = const Value.absent(),
+                Value<String?> valueJson = const Value.absent(),
+                required DateTime forcedAt,
+                Value<DateTime?> expiresAt = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+              }) => AppOverridesCompanion.insert(
+                id: id,
+                connectionId: connectionId,
+                objectType: objectType,
+                objectInstance: objectInstance,
+                kind: kind,
+                priority: priority,
+                valueJson: valueJson,
+                forcedAt: forcedAt,
+                expiresAt: expiresAt,
+                lastError: lastError,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$AppOverridesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({connectionId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (connectionId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.connectionId,
+                                referencedTable: $$AppOverridesTableReferences
+                                    ._connectionIdTable(db),
+                                referencedColumn: $$AppOverridesTableReferences
+                                    ._connectionIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$AppOverridesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AppOverridesTable,
+      AppOverride,
+      $$AppOverridesTableFilterComposer,
+      $$AppOverridesTableOrderingComposer,
+      $$AppOverridesTableAnnotationComposer,
+      $$AppOverridesTableCreateCompanionBuilder,
+      $$AppOverridesTableUpdateCompanionBuilder,
+      (AppOverride, $$AppOverridesTableReferences),
+      AppOverride,
+      PrefetchHooks Function({bool connectionId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -13802,4 +14958,6 @@ class $AppDatabaseManager {
       $$DashboardsTableTableManager(_db, _db.dashboards);
   $$DashboardWidgetsTableTableManager get dashboardWidgets =>
       $$DashboardWidgetsTableTableManager(_db, _db.dashboardWidgets);
+  $$AppOverridesTableTableManager get appOverrides =>
+      $$AppOverridesTableTableManager(_db, _db.appOverrides);
 }

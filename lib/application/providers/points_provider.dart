@@ -6,6 +6,8 @@ import 'active_connection_provider.dart';
 import 'cache_provider.dart';
 import 'bacnet_provider.dart';
 import 'bacnet_type_codes.dart';
+import 'database_provider.dart';
+import '../../data/database/tables/app_overrides_table.dart';
 import '../../data/services/api_exceptions.dart';
 import '../../data/services/api_service.dart' show ConnectedApiClient;
 import '../../data/services/api_type_names.dart';
@@ -372,6 +374,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       }
 
       final failure = points.isEmpty ? client.lastError : null;
+      _syncAppOverrides(connectionId, points);
       state = state.copyWith(
         points: points,
         isLoading: false,
@@ -517,6 +520,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
         return;
       }
       _sortByTypeThenName(points);
+      _syncAppOverrides(connectionId, points);
       state = state.copyWith(points: points, fromCache: false, clearError: true);
     } catch (e) {
       logger.e('_refreshValuesApi error: $e');
@@ -745,7 +749,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
   /// Force une valeur sur un point avec une priorité
   /// Utilisable sur les Outputs et Values (AO, BO, MSO, AV, BV, MSV)
-  Future<bool> writeOverride(BacnetObject point, dynamic value, {int priority = 8}) async {
+  Future<bool> _writeOverrideImpl(BacnetObject point, dynamic value, {int priority = 8}) async {
     _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
@@ -832,7 +836,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
   }
 
   /// Libère le forçage d'un point (retour en mode auto)
-  Future<bool> releaseOverride(BacnetObject point, {int priority = 8}) async {
+  Future<bool> _releaseOverrideImpl(BacnetObject point, {int priority = 8}) async {
     _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
@@ -909,7 +913,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
   }
 
   /// Libération d'urgence - libère TOUTES les priorités
-  Future<bool> emergencyRelease(BacnetObject point) async {
+  Future<bool> _emergencyReleaseImpl(BacnetObject point) async {
     _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
@@ -999,7 +1003,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
   }
 
   /// Force une entrée (AI, BI, MSI) via out-of-service + present-value
-  Future<bool> forceInput(BacnetObject point, dynamic value) async {
+  Future<bool> _forceInputImpl(BacnetObject point, dynamic value) async {
     _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
@@ -1124,7 +1128,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
   }
 
   /// Libère une entrée forcée (remet out-of-service à false)
-  Future<bool> releaseInput(BacnetObject point) async {
+  Future<bool> _releaseInputImpl(BacnetObject point) async {
     _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
@@ -1190,8 +1194,9 @@ class PointsNotifier extends StateNotifier<PointsState> {
         return false;
       }
 
-      // Mettre à jour localement
+      // Mettre à jour localement, puis relire la valeur mesurée
       _updatePointLocally(point, outOfService: false);
+      await _rereadPoint(point);
       return true;
     } catch (e) {
       logger.e('_releaseInputBacnet error: $e');
@@ -1285,6 +1290,121 @@ class PointsNotifier extends StateNotifier<PointsState> {
   void _recordApiFailure(ConnectedApiClient client) {
     final error = client.lastError;
     _lastActionError = error != null ? describeError(error) : null;
+  }
+
+  // ========================================
+  // FORÇAGES (avec suivi des forçages posés depuis l'application)
+  // ========================================
+
+  /// Force une valeur avec priorité. Avec [duration], le forçage est
+  /// relâché automatiquement à l'échéance ([TimedOverrideService]).
+  Future<bool> writeOverride(BacnetObject point, dynamic value, {int priority = 8, Duration? duration}) async {
+    final ok = await _writeOverrideImpl(point, value, priority: priority);
+    if (ok) {
+      await _recordAppOverride(point, AppOverrideKind.priority,
+          priority: priority, value: value, duration: duration);
+    }
+    return ok;
+  }
+
+  /// Libère le forçage d'un point (retour en mode auto)
+  Future<bool> releaseOverride(BacnetObject point, {int priority = 8}) async {
+    final ok = await _releaseOverrideImpl(point, priority: priority);
+    if (ok) await _forgetAppOverride(point);
+    return ok;
+  }
+
+  /// Libération d'urgence - libère TOUTES les priorités
+  Future<bool> emergencyRelease(BacnetObject point) async {
+    final ok = await _emergencyReleaseImpl(point);
+    if (ok) await _forgetAppOverride(point);
+    return ok;
+  }
+
+  /// Force une entrée (AI, BI, MSI) via out-of-service + present-value.
+  /// Avec [duration], l'entrée est relâchée automatiquement à l'échéance.
+  Future<bool> forceInput(BacnetObject point, dynamic value, {Duration? duration}) async {
+    final ok = await _forceInputImpl(point, value);
+    if (ok) {
+      await _recordAppOverride(point, AppOverrideKind.outOfService, value: value, duration: duration);
+    }
+    return ok;
+  }
+
+  /// Libère une entrée forcée
+  Future<bool> releaseInput(BacnetObject point) async {
+    final ok = await _releaseInputImpl(point);
+    if (ok) await _forgetAppOverride(point);
+    return ok;
+  }
+
+  /// Relâche plusieurs points (écran des forçages). Retourne les points dont
+  /// le relâchement a échoué.
+  Future<List<BacnetObject>> releaseMany(List<BacnetObject> points) async {
+    final failed = <BacnetObject>[];
+    for (final point in points) {
+      final bool ok;
+      if (point.type.isInput && point.outOfService == true) {
+        ok = await releaseInput(point);
+      } else {
+        ok = await releaseOverride(point, priority: point.overridePriority ?? 8);
+      }
+      if (!ok) failed.add(point);
+    }
+    return failed;
+  }
+
+  int? get _connectionId => _ref.read(activeConnectionProvider).connection?.id;
+
+  Future<void> _recordAppOverride(
+    BacnetObject point,
+    String kind, {
+    int? priority,
+    dynamic value,
+    Duration? duration,
+  }) async {
+    final connectionId = _connectionId;
+    if (connectionId == null) return;
+    final now = DateTime.now();
+    try {
+      await _ref.read(databaseProvider).recordAppOverride(
+            connectionId: connectionId,
+            objectType: point.type.apiName,
+            objectInstance: point.instance,
+            kind: kind,
+            priority: priority,
+            value: value is num || value is String || value is bool ? value : value?.toString(),
+            forcedAt: now,
+            expiresAt: duration == null ? null : now.add(duration),
+          );
+    } catch (e) {
+      logger.w('_recordAppOverride failed: $e');
+    }
+  }
+
+  Future<void> _forgetAppOverride(BacnetObject point) async {
+    final connectionId = _connectionId;
+    if (connectionId == null) return;
+    try {
+      await _ref.read(databaseProvider).deleteAppOverride(connectionId, point.type.apiName, point.instance);
+    } catch (e) {
+      logger.w('_forgetAppOverride failed: $e');
+    }
+  }
+
+  /// Oublie les forçages enregistrés dont le point n'est plus forcé sur
+  /// l'automate (relâchés depuis un autre outil). Appelé seulement avec des
+  /// points dont l'état de forçage a été lu.
+  void _syncAppOverrides(int? connectionId, List<BacnetObject> points) {
+    if (connectionId == null || points.isEmpty) return;
+    final stillForced = {
+      for (final p in points)
+        if (p.isOverridden == true || p.outOfService == true) '${p.type.apiName}:${p.instance}',
+    };
+    _ref.read(databaseProvider).purgeReleasedAppOverrides(connectionId, stillForced).catchError((Object e) {
+      logger.w('_syncAppOverrides failed: $e');
+      return 0;
+    });
   }
 
   /// Relit un point sur l'automate après une écriture, un forçage ou une
