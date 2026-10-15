@@ -716,9 +716,9 @@ class BacnetService {
   /// - Détection des conflits de Device ID
   Future<List<IAmInfo>> discoverLocalDevices({
     int port = 47808,
-    Duration timeout = const Duration(seconds: 5),
-    int sendCount = 3, // Nombre d'envois Who-Is
-    Duration sendInterval = const Duration(milliseconds: 800), // Délai entre envois
+    Duration timeout = const Duration(seconds: 2), // Écoute après le dernier envoi
+    int sendCount = 2, // Nombre d'envois Who-Is
+    Duration sendInterval = const Duration(milliseconds: 600), // Délai entre envois
   }) async {
     await init();
 
@@ -768,35 +768,27 @@ class BacnetService {
       // interface is selected on a 0.0.0.0 socket, stick to its broadcast
       final sendGlobalBroadcast = _boundInterface == null || Platform.isWindows;
 
-      // === PHASE 1: Découverte des routeurs BACnet ===
-      logger.i('Phase 1: Discovering BACnet routers...');
+      void broadcast(List<int> packet) {
+        for (final broadcastAddr in broadcastAddresses) {
+          try {
+            send(packet, InternetAddress(broadcastAddr));
+          } catch (e) {
+            logger.w('Failed to send to $broadcastAddr: $e');
+          }
+        }
+        if (sendGlobalBroadcast) {
+          try {
+            send(packet, InternetAddress('255.255.255.255'));
+          } catch (e) {
+            logger.w('Failed to send global broadcast: $e');
+          }
+        }
+      }
+
+      // Who-Is et Who-Is-Router-To-Network partent ensemble dès le début :
+      // les I-Am arrivent en quelques centaines de ms (comme YABE), les
+      // routeurs répondent en parallèle.
       final whoIsRouterPacket = BacnetEncoder.encodeWhoIsRouterToNetwork();
-
-      for (final broadcastAddr in broadcastAddresses) {
-        try {
-          final address = InternetAddress(broadcastAddr);
-          send(whoIsRouterPacket, address);
-        } catch (e) {
-          // Ignorer les erreurs
-        }
-      }
-      if (sendGlobalBroadcast) {
-        try {
-          final globalBroadcast = InternetAddress('255.255.255.255');
-          send(whoIsRouterPacket, globalBroadcast);
-        } catch (e) {
-          // Ignorer
-        }
-      }
-
-      // Attendre les réponses des routeurs
-      await Future.delayed(const Duration(milliseconds: 500));
-      logger.i('Found ${discoveredNetworks.length} remote BACnet networks: $discoveredNetworks');
-
-      // === PHASE 2: Who-Is broadcasts locaux ===
-      logger.i('Phase 2: Local Who-Is broadcasts...');
-
-      // Construire les paquets Who-Is
       final packetGlobal = BacnetEncoder.encodeWhoIsRequest(broadcast: true);
       final packetWithRange = BacnetEncoder.encodeWhoIsRequest(
         broadcast: true,
@@ -804,34 +796,16 @@ class BacnetService {
         highLimit: 4194303, // Max device ID BACnet
       );
 
-      // Envoyer plusieurs fois avec délai
+      // Envois répétés (perte UDP), le premier avec la recherche des routeurs
       for (int i = 0; i < sendCount; i++) {
         if (i > 0) {
           await Future.delayed(sendInterval);
         }
-
         logger.d('Who-Is broadcast round ${i + 1}/$sendCount');
-
-        final packet = (i % 2 == 0) ? packetGlobal : packetWithRange;
-
-        for (final broadcastAddr in broadcastAddresses) {
-          try {
-            final address = InternetAddress(broadcastAddr);
-            send(packet, address);
-          } catch (e) {
-            logger.w('Failed to send to $broadcastAddr: $e');
-          }
-        }
-
-        if (sendGlobalBroadcast) {
-          try {
-            final globalBroadcast = InternetAddress('255.255.255.255');
-            send(packet, globalBroadcast);
-          } catch (e) {
-            logger.w('Failed to send global broadcast: $e');
-          }
-        }
+        if (i == 0) broadcast(whoIsRouterPacket);
+        broadcast((i % 2 == 0) ? packetGlobal : packetWithRange);
       }
+      logger.i('Found ${discoveredNetworks.length} remote BACnet networks: $discoveredNetworks');
 
       // === PHASE 3: Who-Is vers les réseaux distants découverts ===
       if (discoveredNetworks.isNotEmpty) {
@@ -851,7 +825,7 @@ class BacnetService {
           }
 
           // Petit délai entre chaque réseau
-          await Future.delayed(const Duration(milliseconds: 200));
+          await Future.delayed(const Duration(milliseconds: 50));
         }
       }
 

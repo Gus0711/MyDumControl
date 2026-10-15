@@ -180,9 +180,6 @@ class _DiscoverBacnetScreenState extends ConsumerState<DiscoverBacnetScreen> {
       try {
         await bacnetService.discoverLocalDevices(
           port: ref.read(settingsProvider).defaultBacnetPort,
-          timeout: const Duration(seconds: 5),
-          sendCount: 3,
-          sendInterval: const Duration(milliseconds: 800),
         );
       } finally {
         await subscription.cancel();
