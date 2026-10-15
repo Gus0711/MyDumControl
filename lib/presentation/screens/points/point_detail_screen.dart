@@ -800,6 +800,12 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
 
   /// Runs a write action; any exception counts as a failure so that
   /// `_isWriting` is always reset by the caller.
+  /// Ajoute au message d'échec la raison donnée par l'automate, si connue.
+  String _withFailureDetail(String message) {
+    final detail = ref.read(pointsProvider.notifier).lastActionError;
+    return detail == null || detail.isEmpty ? message : '$message\n$detail';
+  }
+
   Future<bool> _safe(Future<bool> Function() action) async {
     try {
       return await action();
@@ -868,7 +874,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.writeError),
+            content: Text(_withFailureDetail(l10n.writeError)),
             backgroundColor: Colors.red,
           ),
         );
@@ -1065,7 +1071,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.inputReleaseError),
+            content: Text(_withFailureDetail(l10n.inputReleaseError)),
             backgroundColor: Colors.red,
           ),
         );
@@ -1093,7 +1099,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.releaseError),
+            content: Text(_withFailureDetail(l10n.releaseError)),
             backgroundColor: Colors.red,
           ),
         );
@@ -1149,7 +1155,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.emergencyReleaseError),
+            content: Text(_withFailureDetail(l10n.emergencyReleaseError)),
             backgroundColor: Colors.red,
           ),
         );
@@ -1292,7 +1298,7 @@ class _PointDetailScreenState extends ConsumerState<PointDetailScreen> {
       if (mounted) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(success ? l10n.descriptionUpdated : l10n.descriptionUpdateError),
+            content: Text(success ? l10n.descriptionUpdated : _withFailureDetail(l10n.descriptionUpdateError)),
             backgroundColor: success ? Colors.green : Colors.red,
           ),
         );

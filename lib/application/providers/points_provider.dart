@@ -6,6 +6,8 @@ import 'active_connection_provider.dart';
 import 'cache_provider.dart';
 import 'bacnet_provider.dart';
 import 'bacnet_type_codes.dart';
+import '../../data/services/api_exceptions.dart';
+import '../../data/services/api_service.dart' show ConnectedApiClient;
 import '../../data/services/api_type_names.dart';
 
 /// État des points BACnet avec cache des valeurs calculées
@@ -369,10 +371,12 @@ class PointsNotifier extends StateNotifier<PointsState> {
         cacheService.cacheStaticPoints(connectionId, points);
       }
 
+      final failure = points.isEmpty ? client.lastError : null;
       state = state.copyWith(
         points: points,
         isLoading: false,
         fromCache: false, // Données fraîches
+        error: failure != null ? describeError(failure) : null,
       );
     } catch (e) {
       logger.e('loadPoints error: $e');
@@ -382,12 +386,12 @@ class PointsNotifier extends StateNotifier<PointsState> {
       if (state.points.isNotEmpty && state.fromCache) {
         logger.w('loadPoints: keeping cached data due to API error');
         state = state.copyWith(
-          error: 'Erreur API (données du cache affichées): $e',
+          error: 'Données du cache affichées : ${describeError(e)}',
           isLoading: false,
         );
       } else {
         state = state.copyWith(
-          error: 'Erreur: $e',
+          error: describeError(e),
           isLoading: false,
         );
       }
@@ -453,7 +457,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       logger.e('_loadPointsBacnet error: $e');
       if (!_isCurrent(generation, connectionId)) return;
       state = state.copyWith(
-        error: 'Erreur BACnet: $e',
+        error: 'BACnet : ${describeError(e)}',
         isLoading: false,
       );
     }
@@ -668,6 +672,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
   /// Écrit une valeur simple sur un point (sans priorité)
   /// Utilisable uniquement sur les Values (AV, BV, MSV)
   Future<bool> writeValue(BacnetObject point, dynamic value) async {
+    _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
       return false;
@@ -687,6 +692,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return false;
     }
 
+    connectionState.client!.clearLastError();
     try {
       final success = await connectionState.client!.writeValue(
         point.type,
@@ -699,9 +705,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
         _updatePointLocally(point, presentValue: value, isOverridden: false);
       }
 
+      if (!success) _recordApiFailure(connectionState.client!);
       return success;
     } catch (e) {
       logger.e('writeValue (API) error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
@@ -728,6 +736,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return true;
     } catch (e) {
       logger.e('_writeValueBacnet error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
@@ -735,6 +744,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
   /// Force une valeur sur un point avec une priorité
   /// Utilisable sur les Outputs et Values (AO, BO, MSO, AV, BV, MSV)
   Future<bool> writeOverride(BacnetObject point, dynamic value, {int priority = 8}) async {
+    _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
       return false;
@@ -754,6 +764,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return false;
     }
 
+    connectionState.client!.clearLastError();
     try {
       final success = await connectionState.client!.writeOverride(
         point.type,
@@ -773,9 +784,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
         );
       }
 
+      if (!success) _recordApiFailure(connectionState.client!);
       return success;
     } catch (e) {
       logger.e('writeOverride (API) error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
@@ -809,12 +822,14 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return true;
     } catch (e) {
       logger.e('_writeOverrideBacnet error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
 
   /// Libère le forçage d'un point (retour en mode auto)
   Future<bool> releaseOverride(BacnetObject point, {int priority = 8}) async {
+    _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
       return false;
@@ -834,6 +849,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return false;
     }
 
+    connectionState.client!.clearLastError();
     try {
       final success = await connectionState.client!.releaseOverride(
         point.type,
@@ -849,9 +865,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
         await _rereadPointAfterRelease(point);
       }
 
+      if (!success) _recordApiFailure(connectionState.client!);
       return success;
     } catch (e) {
       logger.e('releaseOverride (API) error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
@@ -881,12 +899,14 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return true;
     } catch (e) {
       logger.e('_releaseOverrideBacnet error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
 
   /// Libération d'urgence - libère TOUTES les priorités
   Future<bool> emergencyRelease(BacnetObject point) async {
+    _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
       return false;
@@ -906,6 +926,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return false;
     }
 
+    connectionState.client!.clearLastError();
     try {
       final success = await connectionState.client!.emergencyRelease(
         point.type,
@@ -920,9 +941,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
         await _rereadPointAfterRelease(point);
       }
 
+      if (!success) _recordApiFailure(connectionState.client!);
       return success;
     } catch (e) {
       logger.e('emergencyRelease (API) error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
@@ -973,6 +996,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
 
   /// Force une entrée (AI, BI, MSI) via out-of-service + present-value
   Future<bool> forceInput(BacnetObject point, dynamic value) async {
+    _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
       return false;
@@ -992,6 +1016,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return false;
     }
 
+    connectionState.client!.clearLastError();
     try {
       final success = await connectionState.client!.forceInput(
         point.type,
@@ -1009,9 +1034,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
         );
       }
 
+      if (!success) _recordApiFailure(connectionState.client!);
       return success;
     } catch (e) {
       logger.e('forceInput (API) error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
@@ -1085,12 +1112,14 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return true;
     } catch (e) {
       logger.e('_forceInputBacnet error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
 
   /// Libère une entrée forcée (remet out-of-service à false)
   Future<bool> releaseInput(BacnetObject point) async {
+    _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
       return false;
@@ -1110,6 +1139,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return false;
     }
 
+    connectionState.client!.clearLastError();
     try {
       final success = await connectionState.client!.releaseInput(
         point.type,
@@ -1122,9 +1152,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
         await _rereadPointAfterRelease(point);
       }
 
+      if (!success) _recordApiFailure(connectionState.client!);
       return success;
     } catch (e) {
       logger.e('releaseInput (API) error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
@@ -1157,12 +1189,14 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return true;
     } catch (e) {
       logger.e('_releaseInputBacnet error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
 
   /// Modifie la description d'un point
   Future<bool> writeDescription(BacnetObject point, String description) async {
+    _lastActionError = null;
     final connectionState = _ref.read(activeConnectionProvider);
     if (!connectionState.isConnected) {
       return false;
@@ -1182,6 +1216,7 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return false;
     }
 
+    connectionState.client!.clearLastError();
     try {
       final success = await connectionState.client!.writeDescription(
         point.type,
@@ -1194,9 +1229,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
         _updatePointLocally(point, description: description);
       }
 
+      if (!success) _recordApiFailure(connectionState.client!);
       return success;
     } catch (e) {
       logger.e('writeDescription error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
@@ -1228,11 +1265,22 @@ class PointsNotifier extends StateNotifier<PointsState> {
       return true;
     } catch (e) {
       logger.e('_writeDescriptionBacnet error: $e');
+      _lastActionError = describeError(e);
       return false;
     }
   }
 
   /// Met à jour un point localement dans le state
+  /// Explication du dernier échec d'écriture / forçage / libération, pour
+  /// l'affichage (null si la dernière action a réussi ou sans détail).
+  String? _lastActionError;
+  String? get lastActionError => _lastActionError;
+
+  void _recordApiFailure(ConnectedApiClient client) {
+    final error = client.lastError;
+    _lastActionError = error != null ? describeError(error) : null;
+  }
+
   /// Relit un point après une libération (forçage ou entrée forcée) : sans
   /// cela l'interface garderait la valeur forcée alors que l'automate est
   /// revenu à la valeur de la priorité suivante.

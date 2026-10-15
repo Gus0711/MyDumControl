@@ -199,23 +199,7 @@ class ApiService {
   }
 
   /// Formate une erreur pour l'affichage
-  String _formatError(dynamic error) {
-    if (error is DioException) {
-      switch (error.type) {
-        case DioExceptionType.connectionTimeout:
-          return 'Délai de connexion dépassé';
-        case DioExceptionType.connectionError:
-          return 'Impossible de se connecter à l\'hôte';
-        case DioExceptionType.receiveTimeout:
-          return 'Délai de réponse dépassé';
-        case DioExceptionType.badResponse:
-          return 'Réponse invalide du serveur';
-        default:
-          return error.message ?? 'Erreur de connexion';
-      }
-    }
-    return error.toString();
-  }
+  String _formatError(dynamic error) => describeError(error as Object);
 
   /// Ferme le client HTTP
   void dispose() {
