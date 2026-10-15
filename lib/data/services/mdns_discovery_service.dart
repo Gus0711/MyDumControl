@@ -141,15 +141,34 @@ class MdnsDiscoveryService {
     void onDatagram(Datagram datagram) {
       try {
         final device = _parseMdnsResponse(datagram.data, datagram.address);
-        if (device != null && !deviceNames.contains(device.name)) {
+        if (device == null) return;
+        if (!deviceNames.contains(device.name)) {
           deviceNames.add(device.name);
           devices.add(device);
           logger.i('Discovered ECLYPSE: ${device.name} at ${device.ipAddress}');
           onDeviceFound?.call(device);
+        } else if (device.txtRecords.isNotEmpty) {
+          // Une réponse partielle (PTR seul) a pu arriver en premier
+          final index = devices.indexWhere((d) => d.name == device.name);
+          if (index != -1 && devices[index].txtRecords.isEmpty) {
+            devices[index] = device;
+            onDeviceFound?.call(device);
+          }
         }
       } catch (e) {
         // Ignorer les paquets non parsables
       }
+    }
+
+    void listenOn(RawDatagramSocket socket) {
+      _sockets.add(socket);
+      _subscriptions.add(socket.listen((event) {
+        if (event != RawSocketEvent.read) return;
+        Datagram? datagram;
+        while ((datagram = socket.receive()) != null) {
+          onDatagram(datagram!);
+        }
+      }));
     }
 
     try {
@@ -176,21 +195,34 @@ class MdnsDiscoveryService {
         buildMdnsQuery('_dcconf._udp.local'),
       ];
 
+      // Écoute du groupe multicast sur 5353 (port partagé avec le service
+      // mDNS du système) : malgré le bit QU, un ECLYPSE qui n'a pas annoncé
+      // ses enregistrements récemment répond en multicast (RFC 6762 §5.4),
+      // et cette réponse n'arrive jamais au port source de la requête.
+      try {
+        final group = InternetAddress(mdnsAddress);
+        final listener = await RawDatagramSocket.bind(InternetAddress.anyIPv4, mdnsPort, reuseAddress: true);
+        listenOn(listener);
+        var joined = false;
+        try {
+          for (final iface in await NetworkInterface.list(type: InternetAddressType.IPv4)) {
+            try {
+              listener.joinMulticast(group, iface);
+              joined = true;
+            } catch (_) {
+              // Interface sans multicast (VPN...)
+            }
+          }
+        } catch (_) {}
+        if (!joined) listener.joinMulticast(group);
+      } catch (e) {
+        logger.w('mDNS: could not listen on port $mdnsPort: $e');
+      }
+
       for (final address in addresses) {
         try {
           final socket = await RawDatagramSocket.bind(address, 0, reuseAddress: true);
-          _sockets.add(socket);
-          try {
-            socket.joinMulticast(InternetAddress(mdnsAddress));
-          } catch (e) {
-            // Non bloquant : les réponses QU arrivent en unicast
-          }
-          _subscriptions.add(socket.listen((event) {
-            if (event == RawSocketEvent.read) {
-              final datagram = socket.receive();
-              if (datagram != null) onDatagram(datagram);
-            }
-          }));
+          listenOn(socket);
           for (final query in queries) {
             socket.send(query, InternetAddress(mdnsAddress), mdnsPort);
           }

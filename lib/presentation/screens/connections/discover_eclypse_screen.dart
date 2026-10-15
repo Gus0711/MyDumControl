@@ -57,9 +57,18 @@ class _DiscoverEclypseScreenState extends ConsumerState<DiscoverEclypseScreen> {
         timeout: const Duration(seconds: 5),
         onDeviceFound: (device) {
           if (mounted && generation == _generation) {
-            if (!_discoveredDevices.any((d) => d.name == device.name)) {
+            final index = _discoveredDevices.indexWhere((d) => d.name == device.name);
+            if (index == -1) {
               setState(() => _discoveredDevices.add(device));
               _scheduleProbe(device, generation);
+            } else {
+              // Réponse plus complète (TXT) du même appareil
+              final previous = _discoveredDevices[index];
+              setState(() => _discoveredDevices[index] = device);
+              if (previous.connectionPort != device.connectionPort ||
+                  previous.prefersHttps != device.prefersHttps) {
+                _scheduleProbe(device, generation);
+              }
             }
           }
         },
