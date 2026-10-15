@@ -6,6 +6,7 @@ import 'active_connection_provider.dart';
 import 'cache_provider.dart';
 import 'bacnet_provider.dart';
 import 'bacnet_type_codes.dart';
+import '../../data/services/api_type_names.dart';
 
 /// État des points BACnet avec cache des valeurs calculées
 class PointsState {
@@ -841,8 +842,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
       );
 
       if (success) {
-        // Mettre à jour localement (plus de forçage)
+        // Mettre à jour localement (plus de forçage), puis relire la valeur
+        // réelle : la présente valeur repasse à la priorité suivante ou au
+        // relinquish-default, elle n'est plus la valeur forcée.
         _updatePointLocally(point, isOverridden: false);
+        await _rereadPointAfterRelease(point);
       }
 
       return success;
@@ -871,8 +875,9 @@ class PointsNotifier extends StateNotifier<PointsState> {
         priority: priority,
       );
 
-      // Mettre à jour localement (plus de forçage)
+      // Mettre à jour localement (plus de forçage), puis relire la valeur réelle
       _updatePointLocally(point, isOverridden: false);
+      await _rereadPointAfterRelease(point);
       return true;
     } catch (e) {
       logger.e('_releaseOverrideBacnet error: $e');
@@ -908,8 +913,11 @@ class PointsNotifier extends StateNotifier<PointsState> {
       );
 
       if (success) {
-        // Mettre à jour localement (plus de forçage)
+        // Mettre à jour localement (plus de forçage), puis relire la valeur
+        // réelle : la présente valeur repasse à la priorité suivante ou au
+        // relinquish-default, elle n'est plus la valeur forcée.
         _updatePointLocally(point, isOverridden: false);
+        await _rereadPointAfterRelease(point);
       }
 
       return success;
@@ -1109,8 +1117,9 @@ class PointsNotifier extends StateNotifier<PointsState> {
       );
 
       if (success) {
-        // Mettre à jour localement
+        // Mettre à jour localement, puis relire la valeur mesurée
         _updatePointLocally(point, outOfService: false);
+        await _rereadPointAfterRelease(point);
       }
 
       return success;
@@ -1224,6 +1233,31 @@ class PointsNotifier extends StateNotifier<PointsState> {
   }
 
   /// Met à jour un point localement dans le state
+  /// Relit un point après une libération (forçage ou entrée forcée) : sans
+  /// cela l'interface garderait la valeur forcée alors que l'automate est
+  /// revenu à la valeur de la priorité suivante.
+  Future<void> _rereadPointAfterRelease(BacnetObject point) async {
+    final connectionState = _ref.read(activeConnectionProvider);
+    try {
+      if (connectionState.isBacnetConnection) {
+        await _refreshPointValueBacnet(point);
+        return;
+      }
+      final client = connectionState.client;
+      if (client == null) return;
+      final pointRef = ApiTypeNames.objectKey(point.type, point.instance);
+      final fresh = (await client.readMultiplePoints([pointRef]))[pointRef];
+      if (fresh == null) return;
+      _updatePointLocally(
+        point,
+        presentValue: fresh.presentValue,
+        outOfService: fresh.outOfService,
+      );
+    } catch (e) {
+      logger.w('_rereadPointAfterRelease: ${point.type.apiName}:${point.instance}: $e');
+    }
+  }
+
   void _updatePointLocally(
     BacnetObject point, {
     dynamic presentValue,
