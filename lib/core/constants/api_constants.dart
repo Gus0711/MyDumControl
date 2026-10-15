@@ -15,6 +15,10 @@ class ApiConstants {
   /// short so that an unreachable host fails fast.
   static const Duration testConnectionTimeout = Duration(seconds: 10);
 
+  /// Maximum number of HTTP requests in flight towards one controller: the
+  /// ECLYPSE answers 401 to valid credentials when it receives bursts.
+  static const int maxConcurrentRequests = 4;
+
   // Ports par défaut
   static const int defaultHttpsPort = 443;
   static const int defaultHttpPort = 80;

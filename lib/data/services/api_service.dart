@@ -9,6 +9,7 @@ import '../../domain/models/schedule.dart';
 import 'api_exceptions.dart';
 import 'api_type_names.dart';
 import 'certificate_pinning.dart';
+import 'request_limiter.dart';
 
 export 'api_exceptions.dart';
 
@@ -345,6 +346,8 @@ class ConnectedApiClient {
       };
       return client;
     };
+    // Limiter en premier : les requêtes en attente n'ont pas encore été émises
+    _dio.interceptors.add(RequestLimiterInterceptor(RequestLimiter(ApiConstants.maxConcurrentRequests)));
     _dio.interceptors.add(InterceptorsWrapper(
       onResponse: (response, handler) {
         _recordStatus(response.statusCode, response.requestOptions.uri.toString());
